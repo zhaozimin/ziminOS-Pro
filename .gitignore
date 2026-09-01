@@ -1,2 +1,36 @@
 node_modules/
 .DS_Store
+/ziminOS-*.zip
+/ziminOS-*.zip.sha256
+
+# 本地凭据与环境文件
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# 开发库运行时私有状态。data.json 可能装着微信读书 Cookie，
+# recent-files.json 与 cursor-positions.json 装着每一篇笔记的完整本机路径 ——
+# 三者都不许随公开仓库出门
+/vault/.obsidian/workspace*.json
+/vault/.obsidian/plugins/ziminos/data.json
+/vault/.obsidian/plugins/ziminos/holiday-cache.json
+/vault/.obsidian/plugins/ziminos/recent-files.json
+/vault/.obsidian/plugins/ziminos/cursor-positions.json
+/vault/.obsidian/plugins/dataview/data.json
+
+# 三库的运行时私有状态，与 vault/ 同理
+/vault-pro/*/.obsidian/workspace*.json
+/vault-pro/*/.obsidian/plugins/*/data.json
+/vault-pro/*/.obsidian/plugins/*/holiday-cache.json
+/vault-pro/*/.obsidian/plugins/*/recent-files.json
+/vault-pro/*/.obsidian/plugins/*/cursor-positions.json
+
+# 开发垃圾，打包时也会被剔除
+.impeccable/
+__pycache__/
