@@ -27,6 +27,7 @@ import type { BookContainerCreator } from './createBook';
 import { doubanFetcher, fetchBookDetail, searchBooks } from './douban';
 import type { DoubanBook, DoubanCandidate } from './douban';
 import { mergeHighlights } from './importHighlights';
+import type { MergeOutcome } from './importHighlights';
 import { isbnUid } from './isbn';
 import { bookTags } from './tags';
 import { availableSourceLabels, collectHighlightsFor } from './sources';
@@ -207,10 +208,18 @@ export async function pullHighlights(
         return;
     }
 
-    ctx.guard.mark(moc.path);
-    await ctx.app.vault.process(moc, (content) => mergeHighlights(content, all).content);
+    const mergeRun: { outcome?: MergeOutcome } = {};
 
-    const outcome = mergeHighlights(await ctx.app.vault.read(moc), all);
+    ctx.guard.mark(moc.path);
+    await ctx.app.vault.process(moc, (content) => {
+        mergeRun.outcome = mergeHighlights(content, all);
+
+        return mergeRun.outcome.content;
+    });
+
+    const outcome = mergeRun.outcome;
+
+    if (!outcome) throw new Error('划线合并没有返回结果');
     // 只报真的交了东西的来源：一个只带着一句交代、零条划线的来源
     // 出现在「已从 微信读书 0 条 取回划线」里，读起来像在邀功
     const from = hits
@@ -220,10 +229,15 @@ export async function pullHighlights(
 
     const tail = notes.length ? `\n${notes.join('\n')}` : '';
 
+    const result = !outcome.added && !outcome.attachedThoughts
+        ? `划线已是最新（${from}）。`
+        : !outcome.added
+          ? `已从 ${from} 补进 ${outcome.attachedThoughts} 条想法。`
+          : `已从 ${from} 取回划线，写进《${title}》。` +
+            (outcome.attachedThoughts ? `另补进 ${outcome.attachedThoughts} 条想法。` : '');
+
     new Notice(
-        (outcome.skipped && !outcome.added
-            ? `划线已是最新（${from}）。`
-            : `已从 ${from} 取回划线，写进《${title}》。`) + tail,
+        result + tail,
         notes.length ? 12000 : 6000,
     );
 }

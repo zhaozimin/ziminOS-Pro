@@ -10,7 +10,8 @@
  *        其一，UID 在 `.obsidian/types.json` 里登记为 **number**，属性类型是全库共享的一张表，
  *        某一篇写成字符串就与其余笔记不同构，而这种不同构既不报错也没有任何视图会挡下；
  *        因此本文件的产出必须是数字，拿不出数字就交 null 让调用方回落到时间戳。
- *        其二，ISBN 有两代：13 位纯数字（2007 年之后）与 10 位、末位可能是字母 X（老书）。
+ *        其二，ISBN 有两代：13 位纯数字（2007 年之后）与 10 位、末位可能是字母 X（老书），
+ *        两代都先验证国际标准校验位，错误号码绝不能进入全库主键。
  *        后者直接当数字是不可能的，所以按国际标准换算成 978 开头的 13 位——
  *        这是一次无损转换（同一本书的两种写法），不是猜测，因此老书也照样拿得到它的真号
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -28,10 +29,36 @@ export function isbnUid(raw: string): number | null {
     // 豆瓣的 ISBN 字段偶尔带连字符或空格，先剥成裸串再论长短
     const compact = raw.replace(/[^0-9Xx]/g, '').toUpperCase();
 
-    if (/^\d{13}$/.test(compact)) return Number(compact);
-    if (/^\d{9}[\dX]$/.test(compact)) return Number(toIsbn13(compact));
+    if (/^\d{13}$/.test(compact) && validIsbn13(compact)) return Number(compact);
+    if (/^\d{9}[\dX]$/.test(compact) && validIsbn10(compact)) return Number(toIsbn13(compact));
 
     return null;
+}
+
+/** ISBN-13：978/979 前缀，前十二位按 1、3 交替加权后能推出末位校验码 */
+function validIsbn13(isbn: string): boolean {
+    if (!/^97[89]/.test(isbn)) return false;
+
+    let sum = 0;
+
+    for (let index = 0; index < 12; index += 1) {
+        sum += Number(isbn[index]) * (index % 2 === 0 ? 1 : 3);
+    }
+
+    return (10 - (sum % 10)) % 10 === Number(isbn[12]);
+}
+
+/** ISBN-10：十位按 10 到 1 递减加权，总和必须能被 11 整除 */
+function validIsbn10(isbn: string): boolean {
+    let sum = 0;
+
+    for (let index = 0; index < isbn.length; index += 1) {
+        const digit = isbn[index] === 'X' ? 10 : Number(isbn[index]);
+
+        sum += digit * (10 - index);
+    }
+
+    return sum % 11 === 0;
 }
 
 /**

@@ -168,7 +168,7 @@ export interface MocContentOptions extends MocFrontmatterOptions {
 export interface ProjectRelation {
     /** FIELDS.client 或 FIELDS.with */
     readonly field: string;
-    /** 目标笔记名，落盘写成整值 wikilink */
+    /** 目标笔记的全路径与显示别名，落盘写成整值 wikilink，避免跨目录同名歧义 */
     readonly target: string;
 }
 

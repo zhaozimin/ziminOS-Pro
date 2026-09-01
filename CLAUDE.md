@@ -4,18 +4,27 @@ TypeScript 7.0 + esbuild 0.28 + Obsidian API 1.13（manifest minAppVersion 1.13.
 
 三条红线贯穿全仓库：人主导（一切写入由用户命令或用户建的文件触发，无定时器、无轮询）、脚本驱动（插件内零 AI 调用，同输入同结果）、只用官方公开 API。
 
+**第二条红线的措辞在 v0.16.0 被改写为「写入用户原话的路径上零 AI」。** 旧措辞的实际含义一直是「插件内零 AI」，而第一版还能同时宣称「AI 装完就退场」；第二版有了口述入口与知识提炼，AI 成了日常输入口与常驻加工工，那句话作废。改写不是放宽而是**说准**：真正要守的从来不是「系统里没有 AI」，而是**用户说的那句话，一个字都不许被改**——不润色、不总结、不换措辞、不补主语、不加标签。落地上，口述捕获里 LLM 只回答「这句话是灵感、剪藏还是日记」，其余（清洗、链接搬运、人名双链、插入位置、日记骨架）全部交给 `skill-pro/scripts/notectl.py` 这个零依赖的确定性脚本，并由 31 条回归测试钉住。插件那一半仍然逐字成立：`main.js` 里没有一次 AI 调用。对外说明也照这条改口——**把「哪里有 AI」画出来，比声称「没有 AI」更让人放心。**
+
 **第二条红线在 v0.13.0 被用户明令放宽：允许联网、允许登录。** 原文是「零网络请求」，代价是学员为了一本书要操作三步——豆瓣插件建档、划线插件导出、再手工把划线复制粘贴进 MOC。用户的判决是：那三步里有两步是机器该干的活儿，把它们留给人不是克制，是失职。放宽最初只对读书笔记生效，用于查书目（豆瓣）与取本人划线（微信读书）；v0.15.0 同样按「机器查得到的就不该问人」将它放宽到中国日历，仅用于在视图打开或切年时核验国务院节假日与调休数据。日历不设定时器、不轮询，24 小时内复用本地缓存，联网失败时继续用上一份可验证数据。其余模块仍然零网络；「同输入同结果」在本机来源（苹果图书 SQLite、Kindle 的 My Clippings）上原样成立，网络来源则有明确降级语义。v0.14.0 沿同一条判据将书的 UID 收口为 ISBN，标签收口为豆瓣分类（`#书籍/{分类}`）。
 
 读书笔记经历过一次有意保留的路线修正：v0.12.0 只认三家官方纯文本导出，以复制、粘贴、确认守住当时的零网络红线；v0.13.0 经用户明确授权后把它降为兜底，主路改成豆瓣自动查书目、本机读取 Apple Books 与 Kindle、扫码连接微信读书。两版并存不是两套系统：自动取数失手时，粘贴导入仍复用同一个解析与合并内核，最终都只增不删地写进书的 MOC。
 
+**本仓库自 v0.16.0 起同时交付两个版次，两版共用同一份 `main.js`。** 第一版（免费·单库）是已经在外面流传的那套：一本笔记库，安装契约 `skill/SKILL.md`，README 首页那段一键指令指向它。第二版（付费）是三库系统——《兼收并蓄》收一切还没消化的东西、《以人为本》就是第一版那本工作台、《赛博永生》按卡帕西 LLM wiki 把已完成的项目编译成知识——外加一个口述入口，安装契约 `skill-pro/SKILL.md`。
+
+两版的隔离不是配置开关而是**装配期开关**：第二版安装器写下一个第一版永远没有的版次标记 `edition.json`，`src/core/edition.ts` 在 onload 最前面读它，main 拿到 free 就根本不接第二版那条线——没有命令、没有视图、没有监听，免费库的行为与第二版出现之前逐字节相同。标记可删，删了就退回第一版。失败方向是刻意的：文件缺席、读不动、JSON 坏了、字段不认识，一律回落 free，因为坏标记把付费功能塞进免费库（用户看不见）比坏标记让付费库退化（用户会来问）严重得多。`skill/SKILL.md` 与 `vault/` 的既有内容一个字都不许因为第二版而改动。
+
 <directory>
 docs/ - 设计规格与第三方组件锁定记录；代码、交付物与规格必须同步
 fonts/ - 四款阅读字体的锁定资产 (4子目录: 文楷 GB 屏幕版＝默认正文、思源宋体 CN、朱雀仿宋、新晰黑＋)；OFL×3 + IPA×1 许可随行，安装时装进用户级字体目录，笔记库内零字节
-skill/ - SKILL.md 桌面智能体交付契约；当前工作区就是用户已命名的笔记库，源码只在外部临时目录施工
-vault/ - 笔记库成品模板；同一交付物内独立放置 ziminOS、Dataview、Minimal、Style Settings、默认配色与自有 CSS
+skill/ - **第一版**交付契约；当前工作区就是用户已命名的笔记库，源码只在外部临时目录施工。不因第二版改动一个字
+skill-pro/ - **第二版**交付契约 (3子目录: SKILL.md 三库安装/升级、capture 口述捕获语义层、distill 搬运与提炼、scripts 确定性引擎 notectl.py 与全仓库第一个自动化测试)；工作区在这里是系统根而不是笔记库
+vault/ - 笔记库成品模板，同时是**两版共享的程序与外观资产唯一出处**；ziminOS、Dataview、Minimal、Style Settings、默认配色与自有 CSS 只存这一份，第二版安装时由契约分发给另外两本库
+vault-pro/ - 第二版特有的笔记库成品 (3子目录: 兼收并蓄 进料口、以人为本 只放一个版次标记叠加件、赛博永生 卡帕西三层结构与它的 Schema)；子目录名就是三本库的目录名，是「那本库叫什么」的事实源
 vault/.obsidian/plugins/ziminos/ - 插件安装位；manifest.json 是版本号事实源，main.js 是刻意入库的构建产物（三十枚命令图标、一枚设置页边栏图标与五个品牌 logo 的 SVG 也在里面），styles.css 服务二十二个笔记内视图、中国日历 ItemView、外观开关浮层、七张设置页与作者名片（手工维护，不经 esbuild）
 vault/.obsidian/snippets/ - 十二个 CSS 片段，外观包的可拆装部分；十个默认启用，全部由右下角外观开关逐个开关。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源
-src/ - 插件源码 (2子目录: core 无业务的基础设施、命令注册台与视图引擎、modules 含 setup 开荒、projects 项目领域与容器流程、books 读书笔记与划线导入、inspiration 灵感收集、calendar 中国日历与节假日缓存、review 五级复盘、contacts 人脉与客户、appearance 外观开关、format 排版整理、ribbon 左侧边栏命令、about 作者名片)
+src/ - 插件源码 (2子目录: core 无业务的基础设施、命令注册台、视图引擎与版次闸门 edition.ts、modules 含 setup 开荒、projects 项目领域与容器流程、books 读书笔记与划线导入、inspiration 灵感收集、calendar 中国日历与节假日缓存、review 五级复盘、contacts 人脉与客户、appearance 外观开关、format 排版整理、ribbon 左侧边栏命令、about 作者名片、eternal 赛博永生出库单与两张清单——最后一个是唯一默认不注册的模块)
+tests/ - 两版共用的插件审计回归入口；专业版源码存在时自动增加出库单分隔符往返校验
 </directory>
 
 <commands>
@@ -33,13 +42,14 @@ V2 起的二十二个笔记内视图由插件自渲染：笔记里只留一行 `
 <config>
 AGENTS.md - 智能体任务路由；安装请求强制进入 skill/SKILL.md，开发请求进入项目规格
 README.md - GitHub 公开首页与安装入口；「一分钟安装」以单个可复制 `text` 代码块把桌面智能体导向默认分支的 skill/SKILL.md，不在首页复制第二份安装逻辑
-package.json - 依赖与两条脚本：dev 常驻 watch，build 先 tsc 严格检查再 esbuild 打包
+package.json - 依赖与四条脚本：dev 常驻 watch，test 跑插件审计回归，build 先 tsc 严格检查再 esbuild 打包，check 串行测试与构建
+make-pro-package.sh - 第二版唯一分发出口；先跑插件与智能体两层回归，再组装、校验并产出 zip 与 SHA-256
 tsconfig.json - 严格模式 + noEmit；类型检查与代码产出彻底分工，产出只由 esbuild 负责
 esbuild.config.mjs - 唯一构建出口；产物直接写入 vault 插件目录，构建即就位，无需任何同步脚本
 .gitignore - 只忽略 node_modules 与 .DS_Store；main.js 不忽略，学员克隆即可用
 .gitattributes - 锁定 Dataview、Minimal、Style Settings 与 fonts/ 字体发布资产的原始字节，防止 Git 换行/格式化破坏 SHA-256
 docs/第三方组件.md - lunar-typescript / holiday-cn / Dataview / Minimal / Style Settings / Pikaicons / Simple Icons / 四款正文字体的版本、上游、许可与升级边界
-docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；现追记至 v0.15.0 的中国农历日历与节假日无感更新（§26），与 V1 规格并存，交集处以它为准
+docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；现追记至 v0.15.0 的中国农历日历与节假日无感更新（§26），与 V1 规格并存，交集处以它为准；§27 记录两版三库系统，§28 记录跨版本审计加固
 </config>
 
 <delivery>
@@ -47,11 +57,12 @@ docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；现追记至 v
 </delivery>
 
 <deviations>
-六处偏离，在此备案，不是疏漏：
+七处偏离，在此备案，不是疏漏（第 7 条记的是一处**没有**发生的偏离）：
 1. tsconfig 的 moduleResolution 取 bundler 而非规格书 §2 写的 node —— 实际装到的 TypeScript 7.0.2 已移除 node10 解析模式（TS5108），规格的 node 与规格的「依赖用最新稳定版」自相冲突；bundler 是 esbuild 打包场景下的等价现代取值，其余编译选项全按规格保留。
 2. src/core/time.ts 存在全仓库唯一一处类型断言 —— obsidian 把 moment 作为命名空间导出，其类型不携带调用签名，断言只还原类型不改变运行时行为。
 4. 读书笔记模块联网 —— 见开头那段：用户明令放宽第二条红线。落地上只有两个出口：`modules/books/douban.ts`（豆瓣搜索页与详情页，走 Obsidian **公开** API requestUrl）与 `modules/books/sourceWeread.ts`（微信读书：书架走 Cookie 的 /api/user/notebook，划线与想法走取数网关 i.weread.qq.com/api/agent/gateway，令牌在 /api/skills/apikeyGet 用登录态换，全部经 requestUrl）。两处都不碰账号密码；豆瓣不需要登录，微读的登录态由用户扫码后从会话里取。删掉 modules/books 即让零网络重新成立。
 5. src/modules/books/sourceWeread.ts 运行时 `require('@electron/remote')` 取 BrowserWindow —— 「只用官方公开 API」这条红线的第二处缺口，为的是让微信读书的登录是**扫码**而不是让学员去开发者工具里手抄一长串 Cookie。它按与第 3 条同样的三条纪律收窄：只有开登录窗口这一步借用（取数全走公开的 requestUrl）、探不到就整条命令降级为不可用而绝不抛异常、声明与调用同处一个文件。另注：那段登录轮询有明确起止与用户在场，与「无后台轮询」说的不是一回事。
 6. src/modules/calendar/holidays.ts 联网——日历只在视图打开或用户切年时，经 Obsidian 公开 `requestUrl` 按顺序访问 holiday-cn 的 jsDelivr / Fastly / GitHub Raw 镜像，校验年份、日期、重复与国务院公告链接后才写入 `holiday-cache.json`。这是 v0.15.0 用户明令要求「调休无感更新」的第三个网络出口；无定时器、无轮询、无凭据，失败时保留最后一份好数据，删掉 modules/calendar 即让本出口消失。
+7. 第二版的跨库拷贝**没有**成为第三处红线缺口，这条记下来是因为它差一点就是。归档时要把项目副本送进《赛博永生》，而 Obsidian 的 vault API 被沙箱锁在本库内；借 Node `fs` 写隔壁库能做到，代价是「只用官方公开 API」第三次破例，且手机上归档必炸。选择的是 `src/modules/eternal/`：插件只往本库一篇可见的 Markdown 上追加一行出库单，真正的拷贝与提炼由桌面智能体完成。判据不是保守——**提炼本来就只有 LLM 干得了**，让它一次进门把搬运与提炼一起做完，比让文件先躺过去等着更顺。代价是拷贝不是「点完立刻出现」而是「下次和智能体说话时出现」，这一点必须在对用户的说明里说实话，不许含糊成「自动同步」。
 3. src/modules/appearance/snippets.ts 借了一次 Obsidian 非公开 API，是「只用官方公开 API」这条红线唯一的缺口 —— 「让某个 CSS 片段此刻生效或失效」在 obsidian.d.ts（1.13.1，8482 行）里没有入口，全文既搜不到 customCss 也搜不到 snippet；能做到的只有 app.customCss.setCssEnabledStatus。不碰它，开关就退化成「改配置文件 + 请重启」，也就不再是开关。缺口按三条纪律收窄：其一，只有「让改动生效」这一步借用，片段清单与启用状态全部走公开的 vault.configDir + DataAdapter，因此开关显示的永远是磁盘上的事实；其二，用模块增强声明成可选成员并在运行时二次验形，TypeScript 强制判空，探不到就降级为改 appearance.json 并提示重载，功能退化但绝不抛异常；其三，声明与调用同处一个文件，不散进 .d.ts，删掉 modules/appearance 即可让红线重新完整。
 </deviations>

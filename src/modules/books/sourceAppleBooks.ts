@@ -1,6 +1,6 @@
 /**
- * [INPUT]: 依赖 obsidian 的 Platform（判断桌面端）；依赖 Node 的 child_process/os/fs
- *          （Obsidian 桌面端是 Electron，这三样在渲染进程里可用；移动端不可用，故全程 Platform 守卫）
+ * [INPUT]: 依赖 obsidian 的 Platform（判断桌面端）；桌面守卫通过后才按需 require Node 的
+ *          child_process/os/fs/path，确保移动端加载插件时不解析桌面运行时依赖
  * [OUTPUT]: 对外提供 appleBooksAvailable、listAppleBooks、readAppleBookHighlights 与 AppleBook 契约
  * [POS]: 划线来源之一：苹果图书。它是三个来源里最确定的一个——数据就在本机两个 SQLite 里，
  *        零网络、零登录、同输入同结果，「脚本驱动」这条红线在这一支上原样成立。
@@ -13,10 +13,6 @@
  */
 
 import { Platform } from 'obsidian';
-import { spawn } from 'child_process';
-import { homedir } from 'os';
-import { existsSync, readdirSync } from 'fs';
-import { join } from 'path';
 import type { ParsedHighlight } from './parsers';
 
 // ============================================================
@@ -43,16 +39,56 @@ export interface AppleBook {
 const LIBRARY_DIR = 'Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary';
 const ANNOTATION_DIR = 'Library/Containers/com.apple.iBooksX/Data/Documents/AEAnnotation';
 
+/** 苹果图书来源用到的最小 Node 能力；只在桌面端求值，移动端连 require 都不会执行 */
+interface AppleNodeTools {
+    readonly spawn: typeof import('child_process').spawn;
+    readonly homedir: typeof import('os').homedir;
+    readonly existsSync: typeof import('fs').existsSync;
+    readonly readdirSync: typeof import('fs').readdirSync;
+    readonly join: typeof import('path').join;
+}
+
+let cachedNodeTools: AppleNodeTools | null | undefined;
+
+/** 桌面端按需取得 Node 能力；探不到即让整个来源降级为不可用 */
+function nodeTools(): AppleNodeTools | null {
+    if (!Platform.isDesktopApp) return null;
+    if (cachedNodeTools !== undefined) return cachedNodeTools;
+
+    try {
+        const childProcess = require('child_process') as typeof import('child_process');
+        const os = require('os') as typeof import('os');
+        const fs = require('fs') as typeof import('fs');
+        const path = require('path') as typeof import('path');
+
+        cachedNodeTools = {
+            spawn: childProcess.spawn,
+            homedir: os.homedir,
+            existsSync: fs.existsSync,
+            readdirSync: fs.readdirSync,
+            join: path.join,
+        };
+    } catch {
+        cachedNodeTools = null;
+    }
+
+    return cachedNodeTools;
+}
+
 /** 目录里的第一个 .sqlite；没有就返回 null（没装图书、或从没打开过） */
 function firstSqliteIn(relative: string): string | null {
-    const dir = join(homedir(), relative);
+    const tools = nodeTools();
 
-    if (!existsSync(dir)) return null;
+    if (!tools) return null;
+
+    const dir = tools.join(tools.homedir(), relative);
+
+    if (!tools.existsSync(dir)) return null;
 
     // 排除 -wal / -shm 这些同名旁支，只要主库文件
-    const found = readdirSync(dir).filter((name) => name.endsWith('.sqlite'));
+    const found = tools.readdirSync(dir).filter((name) => name.endsWith('.sqlite'));
 
-    return found.length ? join(dir, found[0]) : null;
+    return found.length ? tools.join(dir, found[0]) : null;
 }
 
 /**
@@ -104,8 +140,12 @@ async function runSqlite(
     sql: string,
     openMode: string,
 ): Promise<Record<string, unknown>[]> {
+    const tools = nodeTools();
+
+    if (!tools) throw new Error('当前平台不能读取苹果图书数据库');
+
     return new Promise((resolve, reject) => {
-        const child = spawn('sqlite3', [`file:${dbPath}?${openMode}`, sql, '-json'], {
+        const child = tools.spawn('sqlite3', [`file:${dbPath}?${openMode}`, sql, '-json'], {
             timeout: 20000,
         });
 

@@ -138,7 +138,7 @@ async function recordFavor(ctx: ZiminosContext, openDaily: DailyNoteProvider): P
             return;
         }
 
-        const line = ledgerLine(person.basename, kind, item, status);
+        const line = ledgerLine(personLink(person), kind, item, status);
 
         ctx.guard.mark(diary.path);
         await ctx.app.vault.process(diary, (content) =>
@@ -162,12 +162,16 @@ function cleanItem(raw: string): string {
     return raw.replace(/\s+/g, ' ').split(LEDGER.separator).join('|').trim();
 }
 
+/** 同名档案用全路径消歧，显示仍只露出姓名 */
+function personLink(person: TFile): string {
+    return `[[${person.path.replace(/\.md$/i, '')}|${person.basename}]]`;
+}
+
 /** 拼一条标准账本行；两清是最常见的情形，省略状态段让最常见的写法最短 */
-function ledgerLine(name: string, kind: string, item: string, status: string): string {
-    const segments = [`[[${name}]]`, kind, item];
+function ledgerLine(person: string, kind: string, item: string, status: string): string {
+    const segments = [person, kind, item];
 
     if (status !== LEDGER.defaultStatus) segments.push(status);
 
     return `- ${segments.join(LEDGER.separator)}`;
 }
-

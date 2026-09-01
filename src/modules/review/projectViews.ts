@@ -394,13 +394,13 @@ function renderActiveGroup(
 ): void {
     if (!list.length) return;
 
-    const isPastYear = end <= today();
-    const cutoff = isPastYear ? today() : end;
+    const cutoff = today();
+    const isPastYear = end <= cutoff;
     const sorted = [...list].sort((left, right) =>
         String(left.born).localeCompare(String(right.born)),
     );
 
-    renderHeading(view.el, 4, `🔥 ${isPastYear ? '截至今日' : '年末'}仍在进行（${list.length}）`);
+    renderHeading(view.el, 4, `🔥 截至今日仍在进行（${list.length}）`);
 
     if (isPastYear) {
         renderNote(

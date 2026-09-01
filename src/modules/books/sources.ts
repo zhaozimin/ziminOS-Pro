@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖同目录 sourceAppleBooks 与 sourceKindle 的探测与取数函数，
  *          以及 parsers 的 ParsedHighlight 类型
- * [OUTPUT]: 对外提供 SourceBook/SourceHit 契约、collectHighlightsFor（按书名从全部可用来源取划线）
+ * [OUTPUT]: 对外提供 SourceBook/SourceHit 契约、collectHighlightsFor（按书名从全部可用来源取划线并保留失败说明）
  *           与 availableSourceLabels（这台机器上此刻有哪些来源）
  * [POS]: 划线来源的汇流处。它存在的理由是「一步」这个目标本身：
  *        学员不该被问「你这本书的划线在哪个 App 里」——那是他刚刚做完的事，机器自己能查。
@@ -61,11 +61,23 @@ export interface SourceHit {
 export function availableSourceLabels(ctx: ZiminosContext): readonly string[] {
     const labels: string[] = [];
 
-    if (wereadAvailable(ctx)) labels.push('微信读书');
-    if (appleBooksAvailable()) labels.push('苹果图书');
-    if (kindleAvailable()) labels.push('Kindle');
+    if (probeAvailable(() => wereadAvailable(ctx))) labels.push('微信读书');
+    if (probeAvailable(appleBooksAvailable)) labels.push('苹果图书');
+    if (probeAvailable(kindleAvailable)) labels.push('Kindle');
 
     return labels;
+}
+
+/**
+ * 探测抛错不等于「来源不存在」：把它留在候选里，
+ * 后续取数层才能捕获同一个错误并向用户交代。
+ */
+function probeAvailable(probe: () => boolean): boolean {
+    try {
+        return probe();
+    } catch {
+        return true;
+    }
 }
 
 // ============================================================
@@ -100,8 +112,8 @@ export async function collectHighlightsFor(
                 }
             }
         }
-    } catch {
-        // 登录过期或接口变了：少一个来源，另两个照常
+    } catch (error) {
+        hits.push(failedHit('微信读书', names, error));
     }
 
     try {
@@ -117,8 +129,8 @@ export async function collectHighlightsFor(
                 }
             }
         }
-    } catch {
-        // 苹果图书这一支失手：少一个来源而已
+    } catch (error) {
+        hits.push(failedHit('苹果图书', names, error));
     }
 
     try {
@@ -139,11 +151,23 @@ export async function collectHighlightsFor(
                 }
             }
         }
-    } catch {
-        // 同上
+    } catch (error) {
+        hits.push(failedHit('Kindle', names, error));
     }
 
     return hits;
+}
+
+/** 来源失败仍然是一条结果：零划线加一句实话，调用方才能与“确实没有”分开 */
+function failedHit(label: string, names: readonly string[], error: unknown): SourceHit {
+    const message = error instanceof Error ? error.message : String(error);
+
+    return {
+        label,
+        title: names.find((name) => name.trim()) ?? '',
+        highlights: [],
+        note: `${label}取数失败：${message || '未知错误'}`,
+    };
 }
 
 // ============================================================

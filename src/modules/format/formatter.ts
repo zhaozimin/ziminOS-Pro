@@ -3,7 +3,8 @@
  *          core/markdownStyle 的 formatMarkdown、core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 registerFormatter（注册整理命令与自动整理）
  * [POS]: 排版模块的全部。规则本体住在 core/markdownStyle——那是一趟纯字符串变换，
- *        本文件只回答「什么时候对哪一篇跑它」，两件事分开是因为前者可测、后者只能真机验。
+ *        本文件只回答「什么时候对哪一篇跑它」，且自动写盘前以实时活动文件作最后闸门；
+ *        两件事分开是因为前者可测、后者只能真机验。
  *        它替代的是学员原本要自己装的 Linter 插件，但刻意只做那一件最基础的事：
  *        标准 Markdown 的写法，而不是一百条可配置的重排。
  *        全插件第二个常驻编辑监听（第一个是 updatedMaintainer），
@@ -80,19 +81,35 @@ export function registerFormatter(ctx: ZiminosContext): void {
      * 真要写时仍走 vault.process 重算一遍，那个回调拿到的是最新内容，
      * 于是读与写之间用户敲下的字不会被这次整理吞掉。
      */
-    const formatFile = async (file: TFile): Promise<boolean> => {
+    const formatFile = async (
+        file: TFile,
+        mayWrite: () => boolean = () => true,
+    ): Promise<boolean> => {
         const rules = ctx.settings.formatRules;
         const current = await ctx.app.vault.cachedRead(file);
 
         if (formatMarkdown(current, rules) === current) return false;
+        if (!mayWrite()) return false;
 
-        lastRun.set(file.path, Date.now());
-        // 先声明自写：这一次改动是机器干的，不该被 updatedMaintainer 记成用户的编辑
-        ctx.guard.mark(file.path);
+        let changed = false;
 
-        await ctx.app.vault.process(file, (content) => formatMarkdown(content, rules));
+        await ctx.app.vault.process(file, (content) => {
+            // 排队期间用户可能重新打开这篇；真正写盘的这一刻再问一次，人的编辑权优先
+            if (!mayWrite()) return content;
 
-        return true;
+            const next = formatMarkdown(content, rules);
+
+            if (next === content) return content;
+
+            changed = true;
+            lastRun.set(file.path, Date.now());
+            // 只在确定要写时声明自写，失败或无变化不能遮掉随后真正的用户编辑
+            ctx.guard.mark(file.path);
+
+            return next;
+        });
+
+        return changed;
     };
 
     /** 按路径取回文件并整理，文件已不在则安静放弃 */
@@ -103,7 +120,17 @@ export function registerFormatter(ctx: ZiminosContext): void {
 
         if (!(file instanceof TFile) || file.extension !== 'md') return;
 
-        await formatFile(file);
+        const mayWrite = (): boolean => ctx.app.workspace.getActiveFile()?.path !== path;
+
+        if (!mayWrite()) {
+            dirtyWhileOpen.add(path);
+            return;
+        }
+
+        const changed = await formatFile(file, mayWrite);
+
+        // 若最后一道闸关上了，这篇仍然是脏的；等用户下一次离开再整理
+        if (!changed && !mayWrite()) dirtyWhileOpen.add(path);
     };
 
     // ============================================================

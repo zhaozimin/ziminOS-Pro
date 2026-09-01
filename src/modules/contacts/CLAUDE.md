@@ -17,6 +17,10 @@ client.ts: 客户模块的开荒贡献与四条命令。它不进默认开荒—
 clientViews.ts: 客户与付费的八视图。客户身份一律从事实推断而非标注：名下有 client 指向他的项目就是客户，给谁干过活谁才算——零标注、不会撒谎，也因此身份不互斥。
 seed.ts: 人脉模块的开荒贡献（一个目录、一份模板、一张 MOC）。客户那一半在 client.ts，且只在学员运行「初始化客户模块」时落地。
 
+## 链接身份
+
+人情账本写人的双链时使用完整库内路径并以姓名作别名；姓名只是显示，路径才是身份。同名档案因此不会再由 Obsidian 的 basename 解析规则随机指向另一个人。
+
 ## 模块契约
 
 对外暴露 contactsSeed、clientSeed、pickPerson、三个 register 函数与三个视图数组，由 main.ts 调用。两个函数类型的洞（DailyNoteProvider、SeedApplier）也由 main 填——本模块因此不 import 复盘模块，也不 import 开荒模块。pickPerson 是反方向的同一件事：项目模块建项目时要问「这是谁委托的」，它不 import 本模块，只声明一个 PersonPicker 的洞，由 main 用这里的 pickPerson 填上。

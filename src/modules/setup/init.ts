@@ -43,7 +43,7 @@ const MESSAGES = {
  * 开荒笔记库：建骨架目录、落各模块的产物、开出第一个项目。
  *
  * 首次开荒与后续补齐走同一条流程，差别只有三处：空库检查、各模块的 finish、
- * 以及 initializedAt 只在首次落笔。这样「初始化」按钮永远可点——
+ * 以及 initializedAt 在确定性种子落齐后立即提交。这样「初始化」按钮永远可点——
  * 学员误删了模板、导航或人脉 MOC，再点一次就补回来，而已有笔记一个字都不会动。
  */
 export async function initializeVault(
@@ -54,7 +54,7 @@ export async function initializeVault(
         // 是否首次开荒的唯一判据，必须在写入时间戳之前取出
         const isFirstRun = ctx.settings.initializedAt === '';
 
-        if (isFirstRun && hasUserNotes(ctx)) {
+        if (isFirstRun && hasUserNotes(ctx, seeds)) {
             new Notice(MESSAGES.notEmpty);
 
             return;
@@ -85,26 +85,24 @@ export async function initializeVault(
         }
 
         // ============================================================
-        // 4. 各模块的首次收尾，例如开出第一个项目
+        // 4. 首次事实先落盘，再做可选收尾
         // ============================================================
 
         if (isFirstRun) {
+            // 确定性的骨架与种子已经落齐，此刻初始化事实已经成立。
+            // 必须在可选 finish 之前提交：否则第一个项目建成、随后设置落盘失败时，
+            // 重启后它会被空库检查当成用户笔记，整个初始化从此无法恢复。
+            ctx.settings.initializedAt = nowStamp(ctx.settings.dateTimeFormat);
+            await ctx.saveSettings();
+
             for (const seed of seeds) {
                 await seed.finish?.();
             }
         }
 
         // ============================================================
-        // 5. 收尾：记录开荒时间、落盘设置、把学员送到 README
+        // 5. 收尾：把学员送到 README
         // ============================================================
-
-        // 只在首次落笔。字段名与设置页文案都说的是「首次开荒于」，
-        // 每次补齐都重写会让面板把补齐当天说成开荒当天，且首次时刻从此无处可寻
-        if (isFirstRun) {
-            ctx.settings.initializedAt = nowStamp(ctx.settings.dateTimeFormat);
-        }
-
-        await ctx.saveSettings();
 
         new Notice(MESSAGES.done);
 
@@ -145,13 +143,18 @@ export async function applySeed(ctx: ZiminosContext, seed: VaultSeed): Promise<v
  * 随模板分发的库内导游与 90-system/ 下的系统笔记都不算数——
  * 前者是学员拿到库时就在的，后者是插件自己写的，把它们计入会让开荒第一步就被自己挡住。
  */
-function hasUserNotes(ctx: ZiminosContext): boolean {
+function hasUserNotes(ctx: ZiminosContext, seeds: readonly VaultSeed[]): boolean {
     const systemPrefix = `${FOLDERS.system}/`;
+    const generated = new Set<string>([
+        README_FILE,
+        SCHEMA_NOTE,
+        ...seeds.flatMap((seed) => seed.notes.map((note) => note.path)),
+    ]);
 
-    // README 随模板分发、90-system 归插件自己，都不算用户笔记——计入会让开荒被自己挡住
+    // 首次失败可能已经留下部分种子；它们仍然是插件产物，不能反过来挡住恢复。
     return ctx.app.vault
         .getMarkdownFiles()
-        .some((file) => file.path !== README_FILE && !file.path.startsWith(systemPrefix));
+        .some((file) => !generated.has(file.path) && !file.path.startsWith(systemPrefix));
 }
 
 /**

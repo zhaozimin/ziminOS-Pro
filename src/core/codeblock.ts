@@ -168,6 +168,12 @@ class ViewBlock extends MarkdownRenderChild {
 
     private readonly sourcePath: string;
 
+    /** 每次重画递增；异步返回时只有最新一代有权提交 DOM */
+    private renderGeneration = 0;
+
+    /** 卸载后的异步结果必须丢弃，不能再碰已经离场的容器 */
+    private loaded = false;
+
     constructor(el: HTMLElement, host: ViewHost, request: ViewRequest, sourcePath: string) {
         super(el);
         this.host = host;
@@ -176,11 +182,14 @@ class ViewBlock extends MarkdownRenderChild {
     }
 
     onload(): void {
+        this.loaded = true;
         this.host.attach(this);
         void this.render();
     }
 
     onunload(): void {
+        this.loaded = false;
+        this.renderGeneration += 1;
         this.host.detach(this);
     }
 
@@ -190,10 +199,12 @@ class ViewBlock extends MarkdownRenderChild {
      * 任何一种都必须画出一句中文说明，绝不能留一个空白块让学员以为系统坏了。
      */
     async render(): Promise<void> {
-        this.containerEl.empty();
+        const generation = ++this.renderGeneration;
+        const output = document.createElement('div');
 
         if (!this.request.name) {
-            renderEmpty(this.containerEl, '这个 ziminos 代码块没写视图名。第一行写视图名即可，例如「人脉名录」。');
+            renderEmpty(output, '这个 ziminos 代码块没写视图名。第一行写视图名即可，例如「人脉名录」。');
+            this.commit(output, generation);
 
             return;
         }
@@ -201,22 +212,36 @@ class ViewBlock extends MarkdownRenderChild {
         const definition = this.host.registry.get(this.request.name);
 
         if (!definition) {
-            renderEmpty(this.containerEl, `没有名为「${this.request.name}」的视图。`);
-            renderNote(this.containerEl, `可用视图：${this.host.names.join(' · ')}`);
+            renderEmpty(output, `没有名为「${this.request.name}」的视图。`);
+            renderNote(output, `可用视图：${this.host.names.join(' · ')}`);
+            this.commit(output, generation);
 
             return;
         }
 
         try {
             await definition.render(
-                this.host.contextFor(this.containerEl, this.sourcePath, this.request.params),
+                this.host.contextFor(output, this.sourcePath, this.request.params),
             );
+            this.commit(output, generation);
         } catch (error) {
+            if (!this.loaded || generation !== this.renderGeneration) return;
+
             const message = error instanceof Error ? error.message : String(error);
 
-            this.containerEl.empty();
-            renderEmpty(this.containerEl, `视图「${this.request.name}」渲染失败：${message}`);
+            output.empty();
+            renderEmpty(output, `视图「${this.request.name}」渲染失败：${message}`);
+            this.commit(output, generation);
         }
+    }
+
+    /** 将离屏结果一次性换上去；旧代与卸载后的结果在这里无声作废 */
+    private commit(output: HTMLElement, generation: number): void {
+        if (!this.loaded || generation !== this.renderGeneration) return;
+
+        this.containerEl.empty();
+
+        while (output.firstChild) this.containerEl.appendChild(output.firstChild);
     }
 }
 

@@ -21,7 +21,7 @@
  *        前者因为一本书就是一个项目，后者因为两页加起来只有四个字段；页内切段不切页。
  *        侧边栏那一页不认识任何一条具体命令：清单现读 ctx.commands 的花名册，
  *        因此加一条命令、改一个图标，这个文件一个字都不用改。
- *        开荒动作、微信读书扫码、两处显隐同步与作者名片都由 main 注入而非自己 import：
+ *        开荒动作、微信读书连接/断开、两处显隐同步与作者名片都由 main 注入而非自己 import：
  *        设置页因此既不认识参与开荒的模块名单，也不认识登录窗口、状态栏按钮、边栏图标与名片的实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -52,7 +52,7 @@ import type { ZiminosContext } from './core/types';
 // ============================================================
 
 /**
- * 设置页干不了、必须由 main 递进来的五件事。
+ * 设置页干不了、必须由 main 递进来的六件事。
  *
  * 用一个对象而不是五个位置参数：中间两个函数的类型都是 `() => void`，
  * 摆成位置参数的话调换顺序照样能通过编译，出的错却是「改了外观开关，边栏跟着动」——
@@ -66,6 +66,8 @@ export interface SettingActions {
      * 返回是否连上；设置页不看这个值——它连完就整页重建，状态现读设置对象。
      */
     readonly connectWeread: () => Promise<boolean>;
+    /** 清掉微信读书持久 Cookie 与同一会话的内存令牌 */
+    readonly disconnectWeread: () => Promise<void>;
     /** 让状态栏那个按钮按当前设置重新决定显隐 */
     readonly syncAppearanceSwitch: () => void;
     /** 让左侧边栏那列图标按当前设置重新决定各自显隐 */
@@ -460,8 +462,7 @@ export class ZiminosSettingTab extends PluginSettingTab {
 
                     try {
                         if (connected) {
-                            this.ctx.settings.wereadCookie = '';
-                            await this.ctx.saveSettings();
+                            await this.actions.disconnectWeread();
                         } else {
                             await this.actions.connectWeread();
                         }

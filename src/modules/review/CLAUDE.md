@@ -15,6 +15,10 @@ views.ts: 主题链的两个自动视图（今日产出、主题链）。缺记�
 projectViews.ts: 项目数据汇入复盘的三个视图（项目动态、完成的项目、年度全景）。它们认 CONTAINER_TYPES（project + book），因为一本书也是有终点、可归档的项目。往年数据不把今日 status 伪装成当年快照。
 seed.ts: 开荒贡献，只声报日记目录；不预建空日记，避免时间轴出现假记录。
 
+## 年度口径
+
+年度全景里“仍在进行”的耗时一律截到今天；未来年末只是视图边界，不是已经发生的时间。往年仍明确提示状态字段只能表达当前事实，既不把今天的状态冒充历史快照，也不把尚未来到的天数计入执行时长。
+
 ## 模块契约
 
 对外暴露 reviewSeed、registerPeriodicCommands、registerThemeCommand、promptThemeIfMissing、openPeriodNote 与两个视图数组。main.ts 注入「日记打开后」回调与日历点击，防止 periodic.ts、theme.ts、calendar 互相 import。

@@ -277,7 +277,8 @@ export async function createContainer(
                 if (person) {
                     relation = {
                         field,
-                        target: person.basename,
+                        // 全路径消除人脉与客户目录里的同名歧义，别名仍让属性面板只显示姓名
+                        target: `${person.path.replace(/\.md$/i, '')}|${person.basename}`,
                     };
                 }
             }

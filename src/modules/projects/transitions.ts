@@ -3,8 +3,10 @@
  *          依赖 core/commands 的 TRANSITION_COMMANDS，
  *          依赖 core/constants 的 TRANSITIONS、STATUS_LABELS、FIELDS 与流转类型，依赖 core/time 的 today，
  *          依赖 core/folders 的 ensureFolderPath、normalizeFolderPath，
- *          依赖 core/types 的 ZiminosContext 与 DEFAULT_SETTINGS，依赖 core/frontmatter 的 Frontmatter 类型
- * [OUTPUT]: 对外提供 registerTransitionCommands（注册四条流转命令）与 runProjectTransition（执行单次流转）
+ *          依赖 core/types 的 ZiminosContext/DEFAULT_SETTINGS 与归档移交契约 ArchivedHook，
+ *          依赖 core/frontmatter 的 Frontmatter 类型
+ * [OUTPUT]: 对外提供 registerTransitionCommands（注册四条流转命令）与 runProjectTransition（执行单次流转），
+ *           两者都收一个可选的 ArchivedHook——那是「项目刚刚完成归档」这件事的出口
  * [POS]: projects 模块的生命周期终局，与 createProject 构成项目的一生两端——
  *        createProject 在项目目录里造出 MOC，本文件按 TRANSITIONS 状态机把整个项目文件夹
  *        在「项目目录」与「归档目录」之间整体搬移，并在同一次写入里改写 MOC 的 status 与 archived。
@@ -17,7 +19,11 @@
  *        都整体回滚，绝不留下「文件夹已搬走但状态没改」的半截状态。这是全插件唯一会移动
  *        用户整个目录的写路径，因此它对确认框与回滚的谨慎程度必须高于其他模块，
  *        自写登记也必须覆盖整棵子树而非仅那一个被重命名的节点——搬移会连带重写项目内
- *        每张卡片的 up 双链，那是插件的动作，不该被 updatedMaintainer 记成用户的编辑
+ *        每张卡片的 up 双链，那是插件的动作，不该被 updatedMaintainer 记成用户的编辑。
+ *        v0.16.0 起它多了一个出口而非多了一段流程：归档成功之后，若上游递进来了
+ *        ArchivedHook，就把刚归档的容器身份交出去。本文件不知道接住它的是谁、
+ *        更不知道《赛博永生》是什么——第二版把它接到出库单上，第一版根本不递这个参数，
+ *        于是免费库里这条 if 恒为假，归档流程与第二版出现之前逐字节相同
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -31,7 +37,7 @@ import { ensureFolderPath, normalizeFolderPath } from '../../core/folders';
 import type { Frontmatter } from '../../core/frontmatter';
 import { today } from '../../core/time';
 import { DEFAULT_SETTINGS } from '../../core/types';
-import type { ZiminosContext } from '../../core/types';
+import type { ArchivedHook, ZiminosContext } from '../../core/types';
 import { resolveMocPath } from './moc';
 
 // ============================================================
@@ -48,6 +54,13 @@ const MOVABLE_TYPES = CONTAINER_TYPES;
 
 /** 确认框容器的样式钩子类名，自原脚本原样保留（V1 无 styles.css，仅作标识） */
 const CONFIRM_MODAL_CLASS = 'qa-project-transition-confirm';
+
+/**
+ * 唯一会触发归档移交的终态。
+ * 写成常量而不是就地比一个字符串，是为了让「为什么只有完成会出库」这件事有一个可搜的落点——
+ * 将来若要放宽到「放弃也算素材」，改的是这一行，而不是去正文里找那个字符串。
+ */
+const ARCHIVE_HANDOVER_STATUS = TRANSITIONS.done.status;
 
 // ============================================================
 // 流转计划：守卫全部通过后才生成，是执行阶段唯一的输入
@@ -73,6 +86,10 @@ interface TransitionPlan {
     readonly targetMocPath: string;
     /** 搬移前的 MOC 路径，回滚后据此复核 */
     readonly expectedMocPath: string;
+    /** 容器类型（project 或 book），归档移交时要交给下游区分是项目还是一本书 */
+    readonly containerType: string;
+    /** MOC 的 UID，归档移交时的跨库身份；YAML 里没有时为空串 */
+    readonly uid: string;
 }
 
 /** 执行过程中已经走到哪一步，决定回滚要撤销哪几件事 */
@@ -100,11 +117,11 @@ interface TransitionProgress {
  * 一律用 callback 而非 checkCallback：命令必须在任何情况下都可见可点，
  * 用户在错误的笔记上执行时要得到「为什么不行」的中文提示，而不是命令凭空消失。
  */
-export function registerTransitionCommands(ctx: ZiminosContext): void {
+export function registerTransitionCommands(ctx: ZiminosContext, onArchived?: ArchivedHook): void {
     for (const command of TRANSITION_COMMANDS) {
         // 回调不能是 async：流转内部已吃掉全部异常并转成 Notice，此处无需等待
         ctx.commands.register(command, () => {
-            void runProjectTransition(ctx, command.action);
+            void runProjectTransition(ctx, command.action, onArchived);
         });
     }
 }
@@ -120,6 +137,7 @@ export function registerTransitionCommands(ctx: ZiminosContext): void {
 export async function runProjectTransition(
     ctx: ZiminosContext,
     action: TransitionAction,
+    onArchived?: ArchivedHook,
 ): Promise<void> {
     try {
         // 动作由命令表固化，理论上必然命中；保留原脚本守卫作为最后一道防线
@@ -152,6 +170,22 @@ export async function runProjectTransition(
         new Notice(
             `项目已${transition.label}：${plan.projectName} → ${formatStatusForDisplay(transition.status)}`,
         );
+
+        // 归档移交：只有「完成」才交出去。
+        // 暂停与放弃同样搬进归档目录，但它们不是结论——一个还没想好、一个明确不要了，
+        // 把它们当成知识素材送进《赛博永生》，等于让那本库里长出一堆讲「我当时没做完」的页。
+        // 重新开始更不该交：它是反向流转，项目正回到台面上。
+        // 这一步刻意排在成功 Notice 之后：出库单写不写得成，都不该影响
+        // 「项目已经归档」这个已经落地的事实，也不该让用户看到两条互相矛盾的提示
+        if (onArchived && transition.status === ARCHIVE_HANDOVER_STATUS) {
+            onArchived({
+                name: plan.projectName,
+                kind: plan.containerType,
+                mocPath: plan.targetMocPath,
+                folderPath: plan.targetProjectPath,
+                uid: plan.uid,
+            });
+        }
     } catch (error) {
         new Notice(`项目状态流转失败：${getErrorMessage(error)}`);
     }
@@ -242,6 +276,8 @@ function resolveTransitionPlan(
         targetProjectPath,
         targetMocPath,
         expectedMocPath,
+        containerType: type,
+        uid: normalizeText(frontmatter?.[FIELDS.uid]),
     };
 }
 
