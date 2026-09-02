@@ -10,7 +10,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -325,9 +325,17 @@ test('每一份施工契约都在 AGENTS.md 的路由表里', () => {
     }
 });
 
-const manifestPath = path.join(ROOT, 'src/modules/eternal/manifest.ts');
+/**
+ * 专业版测试的闸门是**交付物**而不是源码。
+ *
+ * 从 v0.19.0 起 `src/` 整份同步到第一版的公开仓库（第二版那部分被装配期开关关着、
+ * 一行都不执行），因此 `src/modules/eternal/` 在两个仓库里都存在，拿它当闸门会让
+ * 下面这几条在第一版仓库里跑起来，然后找不到 `skill-pro/`、`vault-pro/` 而红。
+ * 真正区分两个仓库的是交付物：只有第二版仓库才有那份契约。
+ */
+const proContractPath = path.join(ROOT, 'skill-pro/SKILL.md');
 
-if (existsSync(manifestPath)) {
+if (existsSync(proContractPath)) {
     const { manifestLine, parseManifestLine } = await loadTypeScript('src/modules/eternal/manifest.ts');
 
     const {
@@ -362,6 +370,41 @@ if (existsSync(manifestPath)) {
         // 首页两段指令各自导向自己那个仓库的契约
         assert.ok(readme.includes(`${V1_REPO}/blob/main/skill/SKILL.md`));
         assert.ok(readme.includes(`${PRO_REPO}/blob/main/skill-pro/SKILL.md`));
+    });
+
+    /**
+     * 发布通道的三张清单必须覆盖仓库根的每一个条目。
+     *
+     * publish-v1.sh 把共享部分单向推到第一版的公开仓库，靠 SHARED / PRO_ONLY / PER_REPO
+     * 三张手写清单分流。新增一个第二版专属的顶层目录却忘了写进 PRO_ONLY，
+     * 后果是把付费交付物推进公开仓库——而 git、rsync、脚本自己的防泄漏断言
+     * **都不会报错**，因为那个断言只认清单里已经写着的名字。
+     * 因此判据反过来：不是「清单里的东西都在」，而是「根目录里的东西都被分类过」。
+     */
+    test('publish-v1.sh 的三张清单覆盖仓库根的每一个条目', () => {
+        const script = readFileSync(path.join(ROOT, 'publish-v1.sh'), 'utf8');
+        const classified = new Set();
+
+        for (const listName of ['SHARED', 'PRO_ONLY', 'PER_REPO']) {
+            const matched = new RegExp(`^${listName}=\\(([\\s\\S]*?)^\\)`, 'm').exec(script);
+
+            assert.ok(matched, `publish-v1.sh 缺少 ${listName} 清单`);
+
+            for (const line of matched[1].split('\n')) {
+                const name = line.trim();
+
+                if (name && !name.startsWith('#')) classified.add(name);
+            }
+        }
+
+        // 开发环境的产物与工具目录不进任何一个仓库，不需要分类
+        const ignored = new Set(['.git', 'node_modules', '.claude', '.DS_Store', '.impeccable', '.publish-staging']);
+
+        for (const entry of readdirSync(ROOT)) {
+            if (ignored.has(entry)) continue;
+
+            assert.ok(classified.has(entry), `仓库根的 ${entry} 没有出现在 publish-v1.sh 的任何一张清单里`);
+        }
     });
 
     /**

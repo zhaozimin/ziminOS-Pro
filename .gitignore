@@ -33,6 +33,9 @@ id_ed25519
 /vault-pro/*/.obsidian/plugins/*/recent-files.json
 /vault-pro/*/.obsidian/plugins/*/cursor-positions.json
 
+# 发布通道的暂存目录。它必须住在仓库内部（见 publish-v1.sh），因此必须被忽略
+/.publish-staging/
+
 # 开发垃圾，打包时也会被剔除
 .impeccable/
 __pycache__/
