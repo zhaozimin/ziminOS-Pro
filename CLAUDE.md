@@ -42,7 +42,7 @@ V2 起的二十二个笔记内视图由插件自渲染：笔记里只留一行 `
 </views>
 
 <config>
-AGENTS.md - 智能体任务路由；安装请求强制进入 skill/SKILL.md，开发请求进入项目规格
+AGENTS.md - 智能体任务路由，**桌面智能体自动读到的第一份指令**，因此是全仓库路由的第一现场。它按版次分流：提到三库/pro/付费或点名另外两本库 → skill-pro/SKILL.md，否则 → skill/SKILL.md；开发请求进入项目规格。v0.17.0 重写：它从第二版落库（b630b4a）起一直停在「只有一本库」的世界，写着无条件的「安装请求→skill/SKILL.md」与「不得创建另一层目录」——后一句恰好把三库布局明令禁止了，于是拿着第二版指令来的智能体被它劫持成第一版，只装出一本库且**不报错**。教训是它必须与契约同增同减，因此带 [PROTOCOL] 头并由回归钉住：每一份存在的施工契约都必须出现在它的路由表里
 README.md - Gitee 公开首页与安装入口（`ziminzhao/ziminos-pro`，v0.17.0 起是唯一活着的分发源，GitHub 那个仓库已 403）；「一分钟安装」v0.17.0 起是**两个**并排的可复制 `text` 代码块——第一版导向 skill/SKILL.md、第二版导向 skill-pro/SKILL.md，因为两份契约互不引用，首页不替智能体做版次判断只会让它猜。首页仍不复制第二份安装逻辑，两段指令都只说「去读哪份契约、施工源在哪」
 package.json - 依赖与四条脚本：dev 常驻 watch，test 跑插件审计回归，build 先 tsc 严格检查再 esbuild 打包，check 串行测试与构建
 make-pro-package.sh - 第二版的打包出口；先跑插件与智能体两层回归，再组装、校验并产出 zip 与 SHA-256。第二版的**事实源仓库是 Gitee 的 `ziminzhao/ziminos-pro`**（GitHub 上的 `zhaozimin/ziminOS` 只有第一版，没有 vault-pro/ 与 skill-pro/），因此 skill-pro/SKILL.md 的两条来路——分发包与 clone——取的是同一个仓库的两种形态

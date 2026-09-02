@@ -79,6 +79,31 @@ test('本机书源不在模块顶层静态引入 Node 内建模块', () => {
 });
 
 /**
+ * 每一份施工契约都必须出现在 AGENTS.md 的路由表里。
+ *
+ * AGENTS.md 是桌面智能体自动读到的第一份指令，优先级高于用户那句话。第二版落库时它被漏改，
+ * 于是整整一个版本里它都在说无条件的「安装请求 → skill/SKILL.md」与「不得创建另一层目录」——
+ * 后一句恰好把三库布局明令禁止了。拿着第二版指令来的智能体被它劫持成第一版，
+ * 只装出一本库，而且**不报错**：用户看到的是一个装好了的笔记库，只是少了两本。
+ *
+ * 这条测试把「新增契约必须同步路由」变成编译期之外的硬约束。再加第三份契约时它会先红。
+ */
+test('每一份施工契约都在 AGENTS.md 的路由表里', () => {
+    const agents = readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');
+
+    for (const contract of ['skill/SKILL.md', 'skill-pro/SKILL.md']) {
+        if (!existsSync(path.join(ROOT, contract))) continue;
+
+        assert.ok(agents.includes(contract), `AGENTS.md 的路由表里没有 ${contract}`);
+    }
+
+    // 三本库的名字也要在，否则「工作区不是笔记库」这件事说不清楚
+    for (const vault of ['兼收并蓄', '以人为本', '赛博永生']) {
+        assert.ok(agents.includes(vault), `AGENTS.md 没有提到《${vault}》`);
+    }
+});
+
+/**
  * 安装入口不许指向已经打不开的仓库。
  *
  * GitHub 的 zhaozimin/ziminOS 现在返回 403（账号封禁），而 README 的一键指令与

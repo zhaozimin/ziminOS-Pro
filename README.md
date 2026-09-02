@@ -31,7 +31,9 @@
 请根据 https://gitee.com/ziminzhao/ziminos-pro/blob/main/skill-pro/SKILL.md，把当前工作区搭建成 ziminOS 第二版三库系统。施工源走「来路二」，仓库地址是 https://gitee.com/ziminzhao/ziminos-pro.git。当前工作区是系统根，不是笔记库：不要询问名称或安装位置，不要在工作区内克隆源码。请严格执行 SKILL.md 中的安装、验证与清理步骤，完成后告诉我怎么用 Obsidian 分别打开这三本库。
 ```
 
-装完你会在这个文件夹里看到**三个并排的文件夹**，用 Obsidian 分别打开它们，不是打开外面那一层。三本里只有「以人为本」需要你手动点一次初始化。
+装完你会在这个文件夹里看到**三个并排的文件夹**：`兼收并蓄`、`以人为本`、`赛博永生`。用 Obsidian 分别打开它们，不是打开外面那一层。三本里只有「以人为本」需要你手动点一次初始化。
+
+**装完先看一眼对不对。** 如果这个文件夹里只出现了一本库，或者直接冒出 `00-inbox`、`01-projects`、`90-system` 这类文件夹，说明智能体执行的是第一版契约——那不是你要的，把这段指令重发一次，并告诉它「按 skill-pro/SKILL.md 装三库，不是 skill/SKILL.md」。
 
 > **旧指令失效**：早前流传的一键指令指向 `github.com/zhaozimin/ziminOS`，那个地址现在访问不到。请改用上面的 Gitee 地址。
 
