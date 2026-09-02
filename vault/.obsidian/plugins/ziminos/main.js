@@ -83,8 +83,11 @@ var INSPIRATION_DEFAULTS = {
   fileName: "\u7075\u611F\u96C6.md",
   heading: "# \u7075\u611F\u96C6",
   insertPosition: "heading-top",
-  format: "- [ ]  {{content}} [[{{date}}]] {{time}}"
+  format: "- [ ] {{content}} [[{{date}}]] {{time}}"
 };
+var LEGACY_INSPIRATION_FORMATS = [
+  "- [ ]  {{content}} [[{{date}}]] {{time}}"
+];
 var CARD_FIELDS = [
   "aliases",
   "description",
@@ -1532,7 +1535,7 @@ function normalizeSettings(input) {
     inspirationFileName: stringValue("inspirationFileName"),
     inspirationHeading: stringValue("inspirationHeading"),
     inspirationInsertPosition: insertPosition,
-    inspirationFormat: stringValue("inspirationFormat"),
+    inspirationFormat: currentInspirationFormat(stringValue("inspirationFormat")),
     diaryFolder: stringValue("diaryFolder"),
     contactFolder: stringValue("contactFolder"),
     clientFolder: stringValue("clientFolder"),
@@ -1555,6 +1558,9 @@ function normalizeSettings(input) {
     rememberCursor: booleanValue("rememberCursor"),
     initializedAt: stringValue("initializedAt")
   };
+}
+function currentInspirationFormat(stored) {
+  return LEGACY_INSPIRATION_FORMATS.includes(stored) ? INSPIRATION_DEFAULTS.format : stored;
 }
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -18940,9 +18946,9 @@ function renderInspirationEntry(format, inspiration, timeParts) {
 }
 function buildInitialInspirationContent(entry, heading, targetPath) {
   const filter = buildDataviewTaskQuery(targetPath);
-  return `${heading}
+  return `${filter}
 
-${filter}
+${heading}
 
 ${entry}
 `;
@@ -18993,7 +18999,7 @@ function insertInspiration(content, entry, position, heading, targetPath) {
       break;
     }
     case "file-top": {
-      const insertionIndex = findBodyStart(lines);
+      const insertionIndex = findBodyStart(lines, heading);
       lines.splice(insertionIndex, 0, ...entryLines);
       break;
     }
@@ -19024,9 +19030,13 @@ function findHeadingSectionEnd(lines, headingIndex, headingLevel) {
   return lines.length;
 }
 function findHeadingContentStart(lines, headingIndex) {
-  const queryStart = skipBlankLines(lines, headingIndex + 1);
-  if (!isDataviewFence(lines[queryStart])) return headingIndex + 1;
-  return skipBlankLines(lines, findDataviewFenceEnd(lines, queryStart) + 1);
+  const queryStart = firstContentLine(lines, headingIndex + 1);
+  if (!isDataviewFence(lines[queryStart])) return queryStart;
+  return firstContentLine(lines, findDataviewFenceEnd(lines, queryStart) + 1);
+}
+function firstContentLine(lines, start) {
+  const index = skipBlankLines(lines, start);
+  return index < lines.length ? index : Math.max(start, lines.length - 1);
 }
 function normalizeSystemHeader(lines, heading, targetPath) {
   var _a, _b;
@@ -19052,13 +19062,14 @@ function normalizeSystemHeader(lines, heading, targetPath) {
   lines.splice(
     bodyStart,
     contentStart - bodyStart,
-    heading,
     ...currentQuery.split("\n"),
+    "",
+    heading,
     ""
   );
 }
-function findBodyStart(lines) {
-  var _a, _b;
+function findBodyStart(lines, heading) {
+  var _a, _b, _c;
   const bodyStart = findMarkdownBodyStart(lines);
   let queryStart = bodyStart;
   if (/^#{1,6}\s+/.test((_b = (_a = lines[bodyStart]) == null ? void 0 : _a.trim()) != null ? _b : "")) {
@@ -19066,7 +19077,8 @@ function findBodyStart(lines) {
     if (isDataviewFence(lines[candidate])) queryStart = candidate;
   }
   if (!isDataviewFence(lines[queryStart])) return bodyStart;
-  return skipBlankLines(lines, findDataviewFenceEnd(lines, queryStart) + 1);
+  const afterQuery = skipBlankLines(lines, findDataviewFenceEnd(lines, queryStart) + 1);
+  return ((_c = lines[afterQuery]) == null ? void 0 : _c.trim()) === heading ? skipBlankLines(lines, afterQuery + 1) : afterQuery;
 }
 function findMarkdownBodyStart(lines) {
   var _a;

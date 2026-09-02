@@ -27,6 +27,7 @@ import {
     FOLDERS,
     INSPIRATION_DEFAULTS,
     INSPIRATION_INSERT_POSITIONS,
+    LEGACY_INSPIRATION_FORMATS,
     RECENT_FILES_DEFAULTS,
     RECENT_FILES_LIMITS,
     RECENT_FILES_SORTS,
@@ -253,7 +254,7 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
         inspirationFileName: stringValue('inspirationFileName'),
         inspirationHeading: stringValue('inspirationHeading'),
         inspirationInsertPosition: insertPosition,
-        inspirationFormat: stringValue('inspirationFormat'),
+        inspirationFormat: currentInspirationFormat(stringValue('inspirationFormat')),
         diaryFolder: stringValue('diaryFolder'),
         contactFolder: stringValue('contactFolder'),
         clientFolder: stringValue('clientFolder'),
@@ -276,6 +277,15 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
         rememberCursor: booleanValue('rememberCursor'),
         initializedAt: stringValue('initializedAt'),
     };
+}
+
+/**
+ * 单条格式是全表唯一一个会被**改值**的字段：与某条旧默认字节相等时换成当前默认值。
+ * 判据是字节相等而不是「看起来像默认值」——用户改过一个字，它就不再等于任何旧默认，
+ * 于是原样留下。这条不是迁移脚本的开端：其余字段仍然只验形、不改值。
+ */
+function currentInspirationFormat(stored: string): string {
+    return LEGACY_INSPIRATION_FORMATS.includes(stored) ? INSPIRATION_DEFAULTS.format : stored;
 }
 
 /** JSON 对象守卫；数组与 null 都不是设置记录 */

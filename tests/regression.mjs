@@ -60,6 +60,9 @@ const { coalesceHighlights, normalizedHighlightKey } = await loadTypeScript(
 );
 const { dayText } = await loadTypeScript('src/core/time.ts', { stubObsidian: true });
 const { DEFAULT_SETTINGS, normalizeSettings } = await loadTypeScript('src/core/types.ts');
+const { buildInitialInspirationContent, insertInspiration } = await loadTypeScript(
+    'src/modules/inspiration/templates.ts',
+);
 const { setSnippetEnabled } = await loadTypeScript('src/modules/appearance/snippets.ts');
 
 test('package 版本是唯一事实源，manifest 镜像已同步', () => {
@@ -233,6 +236,66 @@ test('持久化设置在进入运行时前逐字段验形', () => {
     assert.equal(normalized.projectFolder, '');
 });
 
+/**
+ * 灵感集的系统页眉是「查询在上、标题在下」，新的一条紧贴标题。
+ *
+ * v0.19.0 由用户拍板换的向，判据是这篇笔记被打开的姿势：它是收件箱，
+ * 打开就为看还没勾掉的那几条，渲染出来的清单该占第一屏。
+ * 两个写入方共用这一种版式——插件走这里，口述走 notectl，
+ * 分叉的表现不是报错，是同一本库里两篇灵感集长得不一样。
+ */
+test('灵感集页眉是查询在上、标题在下，新的一条紧贴标题', () => {
+    const path = '00-inbox/灵感集.md';
+    const first = buildInitialInspirationContent('- [ ] 第一条', '# 灵感集', path);
+
+    assert.match(first, /^```dataview\n/);
+    assert.match(first, /```\n\n# 灵感集\n\n- \[ \] 第一条\n$/);
+
+    const second = insertInspiration(first, '- [ ] 第二条', 'heading-top', '# 灵感集', path);
+
+    assert.match(second, /# 灵感集\n\n- \[ \] 第二条\n- \[ \] 第一条\n$/);
+});
+
+/**
+ * v0.4.0–v0.18.0 的老页眉（标题在上、查询在下）在下一次记录灵感时换位，且**只换一次**。
+ *
+ * 幂等这一半必须钉住：换位与「认得出换位后的样子」是同一段代码的两面，
+ * 认不出的表现不是报错，是每记一条就把页眉重排一遍，用户的笔记天天在变。
+ */
+test('老页眉换位一次，此后逐字节稳定', () => {
+    const path = '00-inbox/灵感集.md';
+    const legacyHeader = insertInspiration(
+        '# 灵感集\n\n```dataview\ntask\nfrom\n    "00-inbox/灵感集.md"\nwhere\n    !completed\n' +
+            'group by\n    "最后更新 · " + dateformat(file.mtime, "yyyy-MM-dd HH:mm")\n```\n\n- [ ] 旧的\n',
+        '- [ ] 新的',
+        'heading-top',
+        '# 灵感集',
+        path,
+    );
+
+    assert.match(legacyHeader, /^```dataview\n/);
+    assert.match(legacyHeader, /# 灵感集\n\n- \[ \] 新的\n- \[ \] 旧的\n$/);
+
+    const again = insertInspiration(legacyHeader, '- [ ] 更新的', 'heading-top', '# 灵感集', path);
+
+    assert.equal(again.replace('- [ ] 更新的\n', ''), legacyHeader);
+});
+
+/**
+ * 单条格式是全表唯一一个会被**改值**的字段。
+ *
+ * `- [ ]` 后面那两个空格是默认值自带的笔误，老库的 data.json 里躺着它的副本，
+ * 只改 INSPIRATION_DEFAULTS 救不了已经装过的人——他们的灵感会一直多带一个空格。
+ * 换值的判据是字节相等：用户改过一个字，它就不再等于任何一条旧默认，于是原样留下。
+ */
+test('旧默认的单条格式被换成当前默认，用户改过的一个字不动', () => {
+    const legacy = normalizeSettings({ inspirationFormat: '- [ ]  {{content}} [[{{date}}]] {{time}}' });
+    const mine = normalizeSettings({ inspirationFormat: '{{time}} {{content}}' });
+
+    assert.equal(legacy.inspirationFormat, DEFAULT_SETTINGS.inspirationFormat);
+    assert.equal(mine.inspirationFormat, '{{time}} {{content}}');
+});
+
 test('损坏的 appearance.json 被拒绝，不覆盖用户外观配置', async () => {
     let writes = 0;
     const app = {
@@ -343,6 +406,8 @@ if (existsSync(proContractPath)) {
         ETERNAL_INDEX_FILE,
         ETERNAL_LOG_FILE,
         ETERNAL_LOG_INGEST_MARKS,
+        INSPIRATION_DEFAULTS,
+        LEGACY_INSPIRATION_FORMATS,
     } = await loadTypeScript('src/core/constants.ts');
 
     const PRO_REPO = 'gitee.com/ziminzhao/ziminos-pro';
@@ -513,6 +578,30 @@ if (existsSync(proContractPath)) {
     test('账本仍认得汉化之前写下的 ingest 行', () => {
         assert.ok(ETERNAL_LOG_INGEST_MARKS.includes('消化'));
         assert.ok(ETERNAL_LOG_INGEST_MARKS.includes('ingest'));
+    });
+
+    /**
+     * 灵感行的形态两侧同源。
+     *
+     * 同一条灵感有两个写入方：《以人为本》里的「记录灵感」命令与口述走的 notectl。
+     * 两处各存一份格式串，分叉时不报错——只是同一种记录长出两种复选框，
+     * 一种 `- [ ] `、一种 `- [ ]  `。肉眼几乎分不出，Markdown 却把多出来的那个空格
+     * 算进内容，于是同一串灵感在缩进、折叠与勾选回写上表现不一。
+     * v0.19.0 之前两边都是两个空格，正因为它们当时是一致的，谁都没发现那是个笔误。
+     */
+    test('灵感行的格式两侧同源', () => {
+        const script = readFileSync(path.join(ROOT, 'skill-pro/scripts/notectl.py'), 'utf8');
+        const matched = /^INSPIRATION_FORMAT = "([^"]*)"/m.exec(script);
+
+        assert.ok(matched, 'notectl.py 里找不到 INSPIRATION_FORMAT');
+        assert.equal(
+            matched[1].replace(/\{(content|date|time)\}/g, '{{$1}}'),
+            INSPIRATION_DEFAULTS.format,
+        );
+
+        // 老默认值必须留在场上：只改默认值救不了 data.json 里躺着旧副本的老库
+        assert.ok(LEGACY_INSPIRATION_FORMATS.includes('- [ ]  {{content}} [[{{date}}]] {{time}}'));
+        assert.equal(LEGACY_INSPIRATION_FORMATS.includes(INSPIRATION_DEFAULTS.format), false);
     });
 
     test('出库单项目名与路径含可见分隔符时仍能无损往返', () => {

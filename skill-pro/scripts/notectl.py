@@ -40,7 +40,7 @@ STAMP_FORMAT = "%Y-%m-%d %H:%M:%S"       # 对侧 DEFAULT_DATETIME_FORMAT
 UID_FORMAT = "%Y%m%d%H%M%S"              # 对侧 UID_FORMAT
 
 INSPIRATION_HEADING = "# 灵感集"          # 对侧 INSPIRATION_DEFAULTS.heading
-INSPIRATION_FORMAT = "- [ ]  {content} [[{date}]] {time}"   # `- [ ]` 后是两个空格
+INSPIRATION_FORMAT = "- [ ] {content} [[{date}]] {time}"    # 对侧 INSPIRATION_DEFAULTS.format
 
 DIARY_SUBFOLDER = "05-diary/01-daily"    # 对侧 PERIODS.daily.folder
 DIARY_HEADING = "## 今天做了什么"          # 对侧 DIARY_LOG_HEADING
@@ -65,6 +65,28 @@ LEDGER_SEPARATOR_SAFE = "|"
 EDITION_REL = ".obsidian/plugins/ziminos/edition.json"
 INSPIRATION_FILE = "灵感集.md"
 CLIP_FOLDER = "剪藏"
+
+# 灵感集顶部那块 Dataview 查询（对侧 templates.ts 的 buildDataviewTaskQuery）。
+# 逐字节写死是有意的：本脚本敢搬动它，唯一的底气就是**认得出它是系统生成的**，
+# 而认的办法只有字节相等——少一个空格就不再是它，于是宁可不动。
+# 用户自己写的查询因此永远不会被搬走，且不需要本脚本去猜他想干什么。
+INSPIRATION_QUERY = "\n".join(
+    [
+        "```dataview",
+        "task",
+        "from",
+        '    "' + INSPIRATION_FILE + '"',
+        "where",
+        "    !completed",
+        "group by",
+        '    "最后更新 · " + dateformat(file.mtime, "yyyy-MM-dd HH:mm")',
+        "```",
+    ]
+)
+
+# 查询在上、标题在下：打开笔记先看见渲染出来的清单，原始流水在标题下面。
+# 与《兼收并蓄》交付的 灵感集.md 逐字节相同，回归里有一条盯着这对数字。
+INSPIRATION_NOTE = INSPIRATION_QUERY + "\n\n" + INSPIRATION_HEADING + "\n"
 
 SOURCE_MARK = "#口述"      # 笔迹可辨认：口述记的与手打的要能分出来。空串即关闭
 LINK_LABEL = "点击跳转"
@@ -408,26 +430,55 @@ def insert_into_section(content: str, heading: str, lines_to_add: Sequence[str])
     return "\n".join(lines)
 
 
-def insert_below_heading(content: str, heading: str, lines_to_add: Sequence[str]) -> str:
-    """插到标题区的最前面（灵感集的 heading-top）。
+def hoist_inspiration_query(content: str) -> str:
+    """把「标题在上、系统查询在下」的旧页眉换位成「查询在上、标题在下」。
 
-    越过标题本身、紧随其后的空行与 Dataview 查询块——那块是系统生成的汇总，
-    新记录该落在它下面而不是把它顶开。
+    换位的判据是**整块字节相等**：标题、一个空行、一字不差的 INSPIRATION_QUERY。
+    差一个字符就当作用户自己写的，原样不动——这条纪律比换位本身重要，
+    因为搬错的那一次不会报错，只会让他某天发现自己的查询跑到了别处。
     """
-    lines = content.split("\n")
+    body = content.lstrip("\n")
+    header = INSPIRATION_HEADING + "\n\n" + INSPIRATION_QUERY
+    rest = body[len(header):]
+
+    if not body.startswith(header) or (rest and not rest.startswith("\n")):
+        return content
+
+    return INSPIRATION_QUERY + "\n\n" + INSPIRATION_HEADING + rest
+
+
+def insert_below_heading(content: str, heading: str, lines_to_add: Sequence[str]) -> str:
+    """插到标题区的最前面：新的一条永远是 `# 灵感集` 下面的第一行。
+
+    先把老页眉换位，再插入。条目之间**不留空行**——一个空行会把一串复选框
+    拆成一串各自独立的单项列表：看上去一模一样，缩进、折叠与拖拽却全变了。
+    """
+    lines = hoist_inspiration_query(content).split("\n")
     heading_index = next(
         (i for i, text in enumerate(lines) if text.strip() == heading.strip()), -1
     )
 
+    # 标题被学员改名或删掉了：补一个，连同新条目放在原文之上，一条都不丢。
+    # 查询还认得出来时把标题补在它下面，好让文件仍然只有一种形态——
+    # 否则这一次的意外会把版式永久定在另一种样子上，此后每一条都跟着歪。
     if heading_index < 0:
-        return heading + "\n\n" + "\n".join(lines_to_add) + "\n\n" + content.lstrip()
+        rest = "\n".join(lines).strip("\n")
+        header = heading
+
+        if rest.startswith(INSPIRATION_QUERY):
+            header = INSPIRATION_QUERY + "\n\n" + heading
+            rest = rest[len(INSPIRATION_QUERY):].strip("\n")
+
+        block = header + "\n\n" + "\n".join(lines_to_add)
+
+        return block + ("\n\n" + rest if rest else "") + "\n"
 
     cursor = heading_index + 1
 
     while cursor < len(lines) and lines[cursor].strip() == "":
         cursor += 1
 
-    # 跳过紧随标题的代码块（Dataview 查询）
+    # 标题下面还压着一块代码时（换不动的老页眉，或用户自己写的查询），新条目落在它下面
     if cursor < len(lines) and lines[cursor].lstrip().startswith("```"):
         cursor += 1
 
@@ -436,12 +487,21 @@ def insert_below_heading(content: str, heading: str, lines_to_add: Sequence[str]
 
         cursor = min(cursor + 1, len(lines))
 
-        while cursor < len(lines) and lines[cursor].strip() == "":
-            cursor += 1
+    head = lines[:cursor]
+    tail = lines[cursor:]
 
-    lines[cursor:cursor] = list(lines_to_add) + [""]
+    # 页眉与流水之间恰好一个空行，流水内部一行挨一行，文件末尾恰好一个换行：
+    # 三处都由这里收口，插入算法因此不必关心原文的空行是多是少
+    while head and head[-1].strip() == "":
+        head.pop()
 
-    return "\n".join(lines)
+    while tail and tail[0].strip() == "":
+        tail.pop(0)
+
+    while tail and tail[-1].strip() == "":
+        tail.pop()
+
+    return "\n".join(head + [""] + list(lines_to_add) + tail) + "\n"
 
 
 # ============================================================
@@ -553,7 +613,7 @@ def write_inspiration(layout: Layout, raw: str, now: datetime) -> Dict[str, obje
         entry += " " + SOURCE_MARK
 
     target = _normalize(layout.capture / INSPIRATION_FILE)
-    content = read_note(target) or (INSPIRATION_HEADING + "\n\n")
+    content = read_note(target) or INSPIRATION_NOTE
     updated = insert_below_heading(content, INSPIRATION_HEADING, [entry] + _link_lines(moved))
 
     write_note(target, updated)

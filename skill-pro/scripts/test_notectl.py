@@ -130,12 +130,59 @@ class InsertSectionTest(unittest.TestCase):
 
 
 class InsertBelowHeadingTest(unittest.TestCase):
-    def test_skips_dataview_block(self):
-        content = "# 灵感集\n\n```dataview\ntask\n```\n\n- [ ]  旧的\n"
-        result = N.insert_below_heading(content, "# 灵感集", ["- [ ]  新的"])
+    def test_newest_sits_directly_below_heading(self):
+        """新的一条永远是 `# 灵感集` 下面的第一行，且与旧条目连成同一串列表。"""
+        content = N.INSPIRATION_NOTE
+        for text in ["第一条", "第二条"]:
+            content = N.insert_below_heading(content, N.INSPIRATION_HEADING, ["- [ ] " + text])
+
+        self.assertEqual(
+            content,
+            N.INSPIRATION_QUERY + "\n\n# 灵感集\n\n- [ ] 第二条\n- [ ] 第一条\n",
+        )
+
+    def test_hoists_legacy_header(self):
+        """老布局（标题在上、系统查询在下）在下一次写入时换位，此后只有一种形态。"""
+        legacy = "# 灵感集\n\n" + N.INSPIRATION_QUERY + "\n\n- [ ] 旧的\n"
+        result = N.insert_below_heading(legacy, N.INSPIRATION_HEADING, ["- [ ] 新的"])
+
+        self.assertEqual(
+            result,
+            N.INSPIRATION_QUERY + "\n\n# 灵感集\n\n- [ ] 新的\n- [ ] 旧的\n",
+        )
+
+    def test_keeps_foreign_query_where_it_is(self):
+        """用户自己写的查询一个字都不搬：搬错了不报错，只是某天它凭空换了地方。"""
+        mine = "# 灵感集\n\n```dataview\ntask\nfrom \"别处\"\n```\n\n- [ ] 旧的\n"
+        result = N.insert_below_heading(mine, N.INSPIRATION_HEADING, ["- [ ] 新的"])
         lines = result.split("\n")
-        self.assertLess(lines.index("```dataview"), lines.index("- [ ]  新的"))
-        self.assertLess(lines.index("- [ ]  新的"), lines.index("- [ ]  旧的"))
+
+        self.assertLess(lines.index("# 灵感集"), lines.index("```dataview"))
+        self.assertLess(lines.index("```dataview"), lines.index("- [ ] 新的"))
+        self.assertLess(lines.index("- [ ] 新的"), lines.index("- [ ] 旧的"))
+
+    def test_restores_missing_heading_below_the_query(self):
+        """学员删掉标题也不该让版式永久走样，更不该丢掉已有的条目。"""
+        result = N.insert_below_heading(
+            N.INSPIRATION_QUERY + "\n\n- [ ] 孤儿\n", N.INSPIRATION_HEADING, ["- [ ] 新的"]
+        )
+        lines = result.split("\n")
+
+        self.assertLess(lines.index("```dataview"), lines.index("# 灵感集"))
+        self.assertLess(lines.index("# 灵感集"), lines.index("- [ ] 新的"))
+        self.assertIn("- [ ] 孤儿", lines)
+
+
+# 装出去的那一份只有 scripts/，仓库里才有 vault-pro/。这条因此是**仓库期审计**：
+# 交付的空模板与脚本认得的那一份必须逐字节相同——差一个字节，用户收到笔记库后
+# 记的第一条口述就走进「认不出页眉」的降级路径，把标题补在查询上面，且不报错。
+REPO_TEMPLATE = Path(__file__).resolve().parents[2] / "vault-pro" / "兼收并蓄" / "灵感集.md"
+
+
+class ShippedTemplateTest(unittest.TestCase):
+    @unittest.skipUnless(REPO_TEMPLATE.is_file(), "只在仓库里跑")
+    def test_matches_initial_note(self):
+        self.assertEqual(REPO_TEMPLATE.read_text(encoding="utf-8"), N.INSPIRATION_NOTE)
 
 
 class DailyNoteTest(unittest.TestCase):
@@ -218,7 +265,7 @@ class EndToEndTest(unittest.TestCase):
             self.layout, "定价页把年付放在最前面 https://a.org/x", datetime(2026, 8, 16, 19, 33)
         )
         written = Path(str(result["path"])).read_text(encoding="utf-8")
-        self.assertIn("- [ ]  定价页把年付放在最前面 [[2026-08-16]] 19:33 #口述", written)
+        self.assertIn("- [ ] 定价页把年付放在最前面 [[2026-08-16]] 19:33 #口述", written)
         self.assertIn("    - 🔗 [点击跳转](https://a.org/x)", written)
         self.assertTrue(str(result["path"]).startswith(str(self.layout.capture)))
 

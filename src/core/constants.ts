@@ -3,7 +3,8 @@
  * [OUTPUT]: 对外提供 PARA 目录常量 FOLDERS/INIT_FOLDERS/CONTACT_FOLDER/CLIENT_FOLDER、
  *           笔记路径常量 NAV_FILE/TEMPLATE_FILES/CONTACT_MOC/CLIENT_MOC、
  *           卡片字段序 CARD_FIELDS 与其字段类型 CardField、统一字段名 FIELDS 与身份取值 NOTE_TYPES、
- *           时间格式 DEFAULT_DATETIME_FORMAT/UID_FORMAT/DAY_FORMAT、灵感收集默认值与插入位置，
+ *           时间格式 DEFAULT_DATETIME_FORMAT/UID_FORMAT/DAY_FORMAT、
+ *           灵感收集默认值 INSPIRATION_DEFAULTS/LEGACY_INSPIRATION_FORMATS 与插入位置，
  *           自写抑制窗口 SELF_WRITE_WINDOW_MS，项目生命周期状态机 TRANSITIONS/STATUS_LABELS
  *           及其类型 ProjectStatus/TransitionAction/FolderRole/ProjectTransition，
  *           五级复盘周期表 PERIODS 及其类型 PeriodKey/PeriodDefinition，
@@ -130,8 +131,18 @@ export const INSPIRATION_DEFAULTS = {
     fileName: '灵感集.md',
     heading: '# 灵感集',
     insertPosition: 'heading-top' as InspirationInsertPosition,
-    format: '- [ ]  {{content}} [[{{date}}]] {{time}}',
+    format: '- [ ] {{content}} [[{{date}}]] {{time}}',
 } as const;
+
+/**
+ * 曾经当过默认值、如今要被换掉的单条格式。
+ * `- [ ]` 后面那两个空格从来不是谁的选择，是默认值自带的笔误；老库的 data.json 里
+ * 躺着它的副本，只改上面那行救不了已经装过的人。normalizeSettings 按**字节相等**
+ * 认出它并换成当前默认值——自己改过格式的人一个字不动，因为改过的不等于任何一条旧默认。
+ */
+export const LEGACY_INSPIRATION_FORMATS: readonly string[] = [
+    '- [ ]  {{content}} [[{{date}}]] {{time}}',
+];
 
 // ============================================================
 // 卡片 YAML 字段

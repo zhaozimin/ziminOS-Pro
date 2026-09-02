@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 core/constants 的灵感默认值与插入位置类型；接收用户输入、模板时间变量和 Markdown 原文
  * [OUTPUT]: 对外提供输入/标题/格式规范化、灵感模板渲染、带文件最后修改时间分组的
  *           Dataview 未完成任务查询、
- *           “首行标题 + 第二行查询”新笔记生成、旧布局迁移与四种安全插入算法
+ *           “首块查询 + 其下标题”新笔记生成、老页眉换位与四种安全插入算法
  * [POS]: inspiration 模块的纯文本引擎，不接触 Obsidian、磁盘或设置落盘；capture.ts 只负责编排，
  *        所有会改变 Markdown 字符串的规则集中在这里，便于无笔记库环境下做确定性回归验证
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -74,7 +74,11 @@ export function renderInspirationEntry(
     );
 }
 
-/** 首行固定给阅读者看标题，Dataview 从第二行开始，避免默认光标暴露整段查询源码 */
+/**
+ * 系统页眉是「查询在上、标题在下」（v0.19.0 由用户拍板改的，此前反过来）。
+ * 判据是这篇笔记被打开的姿势：它是收件箱，打开就为看还没勾掉的那几条，
+ * 渲染出来的清单该占第一屏；标题之下是完整流水，最新的一条紧贴标题。
+ */
 export function buildInitialInspirationContent(
     entry: string,
     heading: string,
@@ -82,9 +86,9 @@ export function buildInitialInspirationContent(
 ): string {
     const filter = buildDataviewTaskQuery(targetPath);
 
-    // 标题与围栏之间那一行空行不是装饰：标准 Markdown 要求代码块与标题各自成块，
+    // 围栏与标题之间那一行空行不是装饰：标准 Markdown 要求代码块与标题各自成块，
     // 而读取侧的 skipBlankLines 本来就越过它，加了不影响任何一处解析
-    return `${heading}\n\n${filter}\n\n${entry}\n`;
+    return `${filter}\n\n${heading}\n\n${entry}\n`;
 }
 
 /**
@@ -123,7 +127,7 @@ function buildDataviewTaskQueryVersion(targetPath: string, includeMtimeGroup: bo
 /**
  * 把一条已渲染的灵感插入既有 Markdown。
  * 标题模式找不到标题时抛错且不返回新文本；正文顶部会越过 YAML、系统标题与
- * Dataview 围栏。v0.3.0 生成的“查询在前”布局会在用户下次显式记录灵感时安全换位。
+ * Dataview 围栏。老页眉（v0.3.0 与 v0.4.0–v0.18.0 两种）在用户下次显式记录灵感时安全换位。
  */
 export function insertInspiration(
     content: string,
@@ -159,7 +163,7 @@ export function insertInspiration(
             break;
         }
         case 'file-top': {
-            const insertionIndex = findBodyStart(lines);
+            const insertionIndex = findBodyStart(lines, heading);
 
             lines.splice(insertionIndex, 0, ...entryLines);
             break;
@@ -201,18 +205,36 @@ function findHeadingSectionEnd(lines: readonly string[], headingIndex: number, h
     return lines.length;
 }
 
-/** 标题下方若紧跟系统 Dataview 页眉，“置顶”仍是页眉下的第一条内容 */
+/**
+ * 标题下方若还压着一块 Dataview（换不动的老页眉，或用户自己写的查询），
+ * “置顶”仍解释为它下面的第一条内容——把新灵感插进查询上面等于每天把它往下推一行。
+ */
 function findHeadingContentStart(lines: readonly string[], headingIndex: number): number {
-    const queryStart = skipBlankLines(lines, headingIndex + 1);
+    const queryStart = firstContentLine(lines, headingIndex + 1);
 
-    if (!isDataviewFence(lines[queryStart])) return headingIndex + 1;
+    if (!isDataviewFence(lines[queryStart])) return queryStart;
 
-    return skipBlankLines(lines, findDataviewFenceEnd(lines, queryStart) + 1);
+    return firstContentLine(lines, findDataviewFenceEnd(lines, queryStart) + 1);
 }
 
 /**
- * 只识别两种完整字节相等的系统查询：v0.3.0 原查询与当前查询。
- * 旧布局换成“标题在前”，旧查询同时升级 mtime 分组；用户改过的其他 Dataview 块不猜测、不搬动。
+ * 越过那一段排版空行，落在第一条真内容上；空行本身留在原处，新灵感因此不会
+ * 紧贴标题挤成一块。唯一不越过的是**文件末尾那一行空串**——它是结尾的换行，
+ * 插到它后面等于把换行吃掉，于是每写一条就少一个换行，直到某天两条并成一行。
+ */
+function firstContentLine(lines: readonly string[], start: number): number {
+    const index = skipBlankLines(lines, start);
+
+    return index < lines.length ? index : Math.max(start, lines.length - 1);
+}
+
+/**
+ * 把可证明的系统页眉换成当前形态：查询在上、标题在下、查询带 mtime 分组。
+ *
+ * 三种老页眉都在此收口：v0.3.0 的“查询在前、查询不带分组”、
+ * v0.4.0–v0.18.0 的“标题在前”，以及当前形态自身（换位后必须原样返回，否则每写一条抖一次）。
+ * 换位的门槛是**整块字节相等**——只认这两版系统查询，用户改过的任何 Dataview 块
+ * 不猜测、不搬动：搬错的那一次不报错，只会让他某天发现自己的查询凭空换了地方。
  */
 function normalizeSystemHeader(lines: string[], heading: string, targetPath: string): void {
     const bodyStart = findMarkdownBodyStart(lines);
@@ -244,14 +266,15 @@ function normalizeSystemHeader(lines: string[], heading: string, targetPath: str
     lines.splice(
         bodyStart,
         contentStart - bodyStart,
-        heading,
         ...currentQuery.split('\n'),
+        '',
+        heading,
         '',
     );
 }
 
 /** YAML 合法闭合时返回系统页眉后的正文起点；围栏未闭合时拒绝写入 */
-function findBodyStart(lines: readonly string[]): number {
+function findBodyStart(lines: readonly string[], heading: string): number {
     const bodyStart = findMarkdownBodyStart(lines);
     let queryStart = bodyStart;
 
@@ -263,7 +286,10 @@ function findBodyStart(lines: readonly string[]): number {
 
     if (!isDataviewFence(lines[queryStart])) return bodyStart;
 
-    return skipBlankLines(lines, findDataviewFenceEnd(lines, queryStart) + 1);
+    const afterQuery = skipBlankLines(lines, findDataviewFenceEnd(lines, queryStart) + 1);
+
+    // 当前形态里标题在查询下面，它同属系统页眉：不越过它，“正文顶部”会插进页眉中间
+    return lines[afterQuery]?.trim() === heading ? skipBlankLines(lines, afterQuery + 1) : afterQuery;
 }
 
 /** 只负责越过 YAML 与紧随的空行，不对正文结构作任何推断 */
