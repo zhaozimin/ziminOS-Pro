@@ -438,6 +438,27 @@ if (existsSync(proContractPath)) {
     });
 
     /**
+     * 首页那段升级口令必须点得到契约里真实存在的那一节。
+     *
+     * 它是给用户复制粘贴的，里面写死了小节标题「三、C 三库系统的日常升级」。
+     * 契约那边改一次标题，这段口令就开始指向一个不存在的小节——而智能体不会因此报错，
+     * 它会自己找一个看起来差不多的地方接着干，于是「百分之百走升级」这句承诺
+     * 悄悄退回成「它自己判断」。这正是这段口令存在的理由被抵消掉的那一刻。
+     */
+    test('首页的升级口令指向契约里真实存在的那一节', () => {
+        const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+        const contract = readFileSync(path.join(ROOT, 'skill-pro/SKILL.md'), 'utf8');
+        const section = '三、C 三库系统的日常升级';
+
+        assert.ok(readme.includes(section), 'README 的升级口令没有点名 C 模式那一节');
+        assert.ok(contract.includes(`## ${section}`), `契约里没有「${section}」这一节`);
+
+        // 口令必须同时要求取施工源与自证版本，这两条是它区别于「原样再发一次」的全部价值
+        assert.ok(readme.includes('二、在工作区外取得施工源'));
+        assert.ok(readme.includes('升级前后的插件版本号'));
+    });
+
+    /**
      * 发布通道的三张清单必须覆盖仓库根的每一个条目。
      *
      * publish-v1.sh 把共享部分单向推到第一版的公开仓库，靠 SHARED / PRO_ONLY / PER_REPO
