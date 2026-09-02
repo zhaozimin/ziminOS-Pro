@@ -135,7 +135,7 @@ export default class ZiminosPlugin extends Plugin {
         // seed 里带着 created 与 UID，插件早上加载、下午开荒的话，
         // 预先算好的时间戳会把开荒时刻记成加载时刻
         const collectSeeds = (): VaultSeed[] => [
-            projectsSeed(ctx),
+            projectsSeed(),
             reviewSeed(ctx),
             contactsSeed(ctx),
         ];

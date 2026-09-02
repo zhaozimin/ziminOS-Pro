@@ -331,11 +331,6 @@ export interface VaultSeed {
     readonly folders: readonly string[];
     /** 本模块要求存在的笔记；已存在的一律不读不改不覆盖 */
     readonly notes: readonly VaultSeedNote[];
-    /**
-     * 仅首次开荒执行的收尾动作，例如开出第一个项目。
-     * 补齐时不执行——补齐是修复骨架，不是重来一次。
-     */
-    readonly finish?: () => Promise<void>;
 }
 
 /**

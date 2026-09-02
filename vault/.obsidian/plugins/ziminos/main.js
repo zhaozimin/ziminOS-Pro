@@ -19516,9 +19516,6 @@ function navContent() {
   lines.push("", "```", "");
   return lines.join("\n");
 }
-function firstProjectDescription() {
-  return "\u642D\u5EFA\u5C5E\u4E8E\u6211\u7684\u4E2A\u4EBA\u77E5\u8BC6\u7BA1\u7406\u7CFB\u7EDF";
-}
 
 // src/modules/projects/createContainer.ts
 var OWNERSHIP = [
@@ -19990,33 +19987,15 @@ function registerCreateProjectCommand(ctx, pickPerson2) {
 }
 
 // src/modules/projects/seed.ts
-var FIRST_PROJECT_SUFFIX = "OS_v1";
-var MESSAGES8 = {
-  namePrompt: "\u4F60\u7684\u540D\u5B57\uFF08\u7528\u4E8E\u521B\u5EFA\u7B2C\u4E00\u4E2A\u9879\u76EE\uFF0CEsc \u8DF3\u8FC7\uFF09",
-  namePlaceholder: "\u4F8B\u5982\uFF1A\u5C0F\u660E"
-};
-function projectsSeed(ctx) {
+function projectsSeed() {
   return {
     folders: [],
     notes: [
       { path: TEMPLATE_FILES.card, content: cardTemplateFile() },
       { path: TEMPLATE_FILES.moc, content: mocTemplateFile() },
       { path: NAV_FILE, content: navContent() }
-    ],
-    finish: () => createFirstProject(ctx)
+    ]
   };
-}
-async function createFirstProject(ctx) {
-  const answer = await new TextInputModal(ctx.app, {
-    title: MESSAGES8.namePrompt,
-    placeholder: MESSAGES8.namePlaceholder
-  }).openAndGetValue();
-  const ownerName = (answer != null ? answer : "").trim();
-  if (!ownerName) return;
-  await createProject(ctx, {
-    name: `${ownerName}${FIRST_PROJECT_SUFFIX}`,
-    description: firstProjectDescription()
-  });
 }
 
 // src/modules/projects/transitions.ts
@@ -20820,7 +20799,7 @@ function reviewSeed(ctx) {
 
 // src/modules/review/theme.ts
 var import_obsidian37 = require("obsidian");
-var MESSAGES9 = {
+var MESSAGES8 = {
   unchanged: "\u4E3B\u9898\u6CA1\u6709\u53D8\u5316\uFF08\u7559\u7A7A\u4E0D\u4F1A\u6E05\u6389\u5DF2\u7ECF\u5199\u597D\u7684\u4E3B\u9898\uFF09",
   donePrefix: "\u5DF2\u5199\u5165",
   failedPrefix: "\u5199\u4E3B\u9898\u5931\u8D25\uFF1A"
@@ -20858,14 +20837,14 @@ async function promptAndWriteTheme(ctx, file, period, current) {
   if (answer === null) return;
   const theme = answer.trim();
   if (!theme) {
-    new import_obsidian37.Notice(MESSAGES9.unchanged);
+    new import_obsidian37.Notice(MESSAGES8.unchanged);
     return;
   }
   ctx.guard.mark(file.path);
   await ctx.app.fileManager.processFrontMatter(file, (frontmatter) => {
     frontmatter[FIELDS.theme] = theme;
   });
-  new import_obsidian37.Notice(`${MESSAGES9.donePrefix}${period.label}\u4E3B\u9898\uFF1A${theme}`);
+  new import_obsidian37.Notice(`${MESSAGES8.donePrefix}${period.label}\u4E3B\u9898\uFF1A${theme}`);
 }
 function themeOf(ctx, file) {
   var _a, _b, _c;
@@ -20875,7 +20854,7 @@ function themeOf(ctx, file) {
 }
 function reportFailure(error) {
   const message2 = error instanceof Error ? error.message : String(error);
-  new import_obsidian37.Notice(MESSAGES9.failedPrefix + message2);
+  new import_obsidian37.Notice(MESSAGES8.failedPrefix + message2);
 }
 async function resolveTarget(ctx) {
   const active = ctx.app.workspace.getActiveFile();
@@ -21413,6 +21392,84 @@ var RibbonDock = class {
 // src/modules/setup/init.ts
 var import_obsidian40 = require("obsidian");
 
+// src/modules/setup/celebrate.ts
+var PIECES_PER_SIDE = 36;
+var DURATION_MS = { min: 1500, max: 2600 };
+var DELAY_MS = { min: 0, max: 260 };
+var COLORS = [
+  "var(--color-red)",
+  "var(--color-orange)",
+  "var(--color-yellow)",
+  "var(--color-green)",
+  "var(--color-cyan)",
+  "var(--color-blue)",
+  "var(--color-purple)",
+  "var(--color-pink)"
+];
+function celebrate(ctx) {
+  var _a;
+  try {
+    const host = ctx.app.workspace.containerEl;
+    const doc = host.ownerDocument;
+    const win = doc.defaultView;
+    if (!win) return;
+    if ((_a = win.matchMedia) == null ? void 0 : _a.call(win, "(prefers-reduced-motion: reduce)").matches) return;
+    const layer = doc.createElement("div");
+    layer.addClass("ziminos-confetti");
+    host.appendChild(layer);
+    const { width, height } = host.getBoundingClientRect();
+    const animations = [];
+    for (const side of ["left", "right"]) {
+      for (let index = 0; index < PIECES_PER_SIDE; index += 1) {
+        animations.push(launch(doc, layer, side, width, height));
+      }
+    }
+    const remove = () => layer.remove();
+    Promise.allSettled(animations.map((animation) => animation.finished)).then(remove, remove);
+    ctx.plugin.register(remove);
+  } catch (e) {
+  }
+}
+function launch(doc, layer, side, width, height) {
+  var _a;
+  const piece = doc.createElement("i");
+  piece.addClass("ziminos-confetti-piece");
+  piece.style.background = (_a = COLORS[Math.floor(Math.random() * COLORS.length)]) != null ? _a : COLORS[0];
+  const fromLeft = side === "left";
+  piece.style.left = fromLeft ? "0px" : `${width}px`;
+  piece.style.top = `${height * (0.55 + Math.random() * 0.25)}px`;
+  layer.appendChild(piece);
+  const toward = (fromLeft ? 1 : -1) * width * (0.35 + Math.random() * 0.5);
+  const rise = height * (0.35 + Math.random() * 0.35);
+  const fall = height * (0.6 + Math.random() * 0.5);
+  const spin = 360 * (2 + Math.random() * 3) * (fromLeft ? 1 : -1);
+  return piece.animate(
+    [
+      { transform: "translate(0, 0) rotate(0deg)", opacity: 1, offset: 0 },
+      {
+        transform: `translate(${toward * 0.55}px, ${-rise}px) rotate(${spin * 0.5}deg)`,
+        opacity: 1,
+        offset: 0.45
+      },
+      {
+        transform: `translate(${toward}px, ${fall}px) rotate(${spin}deg)`,
+        opacity: 0,
+        offset: 1
+      }
+    ],
+    {
+      duration: between(DURATION_MS.min, DURATION_MS.max),
+      delay: between(DELAY_MS.min, DELAY_MS.max),
+      // 出膛快、滞空慢、落下再快，一条标准的抛物线手感
+      easing: "cubic-bezier(0.2, 0.7, 0.35, 1)",
+      fill: "forwards"
+    }
+  );
+}
+function between(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
 // src/modules/setup/schemaNote.ts
 var SAMPLE_TYPE = "\u793A\u4F8B";
 function schemaNoteContent(created, uid) {
@@ -21541,17 +21598,16 @@ function schemaNoteContent(created, uid) {
 }
 
 // src/modules/setup/init.ts
-var MESSAGES10 = {
+var MESSAGES9 = {
   notEmpty: "\u68C0\u6D4B\u5230\u5DF2\u6709\u7B14\u8BB0\uFF0CziminOS \u53EA\u5728\u7A7A\u5E93\u5F00\u8352\u3002\u8BF7\u65B0\u5EFA\u4E00\u4E2A\u7A7A\u5E93\u518D\u8BD5\u3002",
   done: "\u5F00\u8352\u5B8C\u6210 \u2705",
   failedPrefix: "\u521D\u59CB\u5316\u5931\u8D25\uFF1A"
 };
 async function initializeVault(ctx, seeds) {
-  var _a;
   try {
     const isFirstRun = ctx.settings.initializedAt === "";
     if (isFirstRun && hasUserNotes(ctx, seeds)) {
-      new import_obsidian40.Notice(MESSAGES10.notEmpty);
+      new import_obsidian40.Notice(MESSAGES9.notEmpty);
       return;
     }
     for (const folder of INIT_FOLDERS) {
@@ -21565,16 +21621,14 @@ async function initializeVault(ctx, seeds) {
     if (isFirstRun) {
       ctx.settings.initializedAt = nowStamp(ctx.settings.dateTimeFormat);
       await ctx.saveSettings();
-      for (const seed of seeds) {
-        await ((_a = seed.finish) == null ? void 0 : _a.call(seed));
-      }
     }
-    new import_obsidian40.Notice(MESSAGES10.done);
+    new import_obsidian40.Notice(MESSAGES9.done);
+    celebrate(ctx);
     const landing = ctx.app.vault.getAbstractFileByPath(README_FILE) ? README_FILE : NAV_FILE;
     await ctx.app.workspace.openLinkText(landing, "", false);
   } catch (error) {
     const message2 = error instanceof Error ? error.message : String(error);
-    new import_obsidian40.Notice(MESSAGES10.failedPrefix + message2);
+    new import_obsidian40.Notice(MESSAGES9.failedPrefix + message2);
   }
 }
 async function applySeed(ctx, seed) {
@@ -22341,7 +22395,7 @@ var ZiminosPlugin = class extends import_obsidian43.Plugin {
     };
     this.register(disposeWereadSession);
     const collectSeeds = () => [
-      projectsSeed(ctx),
+      projectsSeed(),
       reviewSeed(ctx),
       contactsSeed(ctx)
     ];

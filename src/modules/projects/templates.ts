@@ -1,8 +1,8 @@
 /**
  * [INPUT]: 依赖 ../../core/constants 的 CARD_FIELDS（卡片十字段的权威顺序）。
  *          MOC 的文件名由调用方经 ./moc 算好递进来，本文件不认识命名约定
- * [OUTPUT]: 对外提供 MocContentOptions 类型与七个纯生成函数：mocFrontmatter、mocBaseBlock、mocContent、
- *           cardTemplateFile、mocTemplateFile、navContent、firstProjectDescription
+ * [OUTPUT]: 对外提供 MocContentOptions 类型与六个纯生成函数：mocFrontmatter、mocBaseBlock、mocContent、
+ *           cardTemplateFile、mocTemplateFile、navContent
  * [POS]: projects 模块的文本工厂，是「笔记长成什么样」的唯一出处。
  *        全部函数无副作用、只吐字符串，既不碰 App 也不碰文件系统——因此建项目与开荒共用同一套骨架，
  *        库里所有 MOC 的 YAML 与 base 视图才可能长期同构；日后改版式只需动这一个文件。
@@ -379,16 +379,4 @@ export function navContent(): string {
     lines.push('', '```', '');
 
     return lines.join('\n');
-}
-
-// ============================================================
-// 首个项目
-// ============================================================
-
-/**
- * 开荒时自动创建的第一个项目的概述。
- * 学员的第一个项目就是"搭建这套系统"本身——用产品讲清产品，比任何说明书都直接。
- */
-export function firstProjectDescription(): string {
-    return '搭建属于我的个人知识管理系统';
 }

@@ -1086,3 +1086,43 @@ div.ziminos-table-wrap > table.ziminos-table tbody tr:hover {
 .ziminos-settings-body .ziminos-about {
     margin: 0;
 }
+
+/* ============================================================
+ * 开荒礼花
+ *
+ * 只在点完「初始化」那一刻出现一次，几秒后连同整层自行移除。
+ * 它取代的是从前那个「问你叫什么、给你开第一个项目」的弹窗：
+ * 同样是告诉学员装好了，但不索取、不阻塞、不需要他做任何决定。
+ *
+ * 轨迹与颜色由 modules/setup/celebrate 逐片计算（Web Animations API），
+ * 这里只定义「一片纸屑长什么样、那一层怎么铺」——
+ * 七十二片各有各的落点，写成 CSS 关键帧要生成七十二组，那是把随机性硬编码。
+ * ============================================================ */
+
+.ziminos-confetti {
+    position: absolute;
+    inset: 0;
+    /* 绝不吃鼠标：覆盖层铺满整个工作区，不设这条，礼花飞的那两秒用户点什么都没反应，
+       而他不会把这归咎于一个动画 */
+    pointer-events: none;
+    overflow: hidden;
+    /* 压在模态框之下、内容之上：庆祝不该盖住任何需要操作的东西 */
+    z-index: var(--layer-notice);
+}
+
+.ziminos-confetti-piece {
+    position: absolute;
+    width: 8px;
+    height: 14px;
+    /* 长方形而不是圆点：旋转时宽窄交替，才有纸片翻面的手感 */
+    border-radius: 2px;
+    will-change: transform, opacity;
+}
+
+/* 系统开了「减少动效」时连节点都不生成（判断在 celebrate 里），
+   这一条是第二道保险：万一某个环境的 matchMedia 探不到，至少不让它动 */
+@media (prefers-reduced-motion: reduce) {
+    .ziminos-confetti {
+        display: none;
+    }
+}

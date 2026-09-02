@@ -19,6 +19,7 @@
 
 import { Notice } from 'obsidian';
 import { FOLDERS, INIT_FOLDERS, NAV_FILE, README_FILE, SCHEMA_NOTE } from '../../core/constants';
+import { celebrate } from './celebrate';
 import { ensureFolderPath } from '../../core/folders';
 import { nowStamp, nowStampAndUid } from '../../core/time';
 import { schemaNoteContent } from './schemaNote';
@@ -89,15 +90,12 @@ export async function initializeVault(
         // ============================================================
 
         if (isFirstRun) {
-            // 确定性的骨架与种子已经落齐，此刻初始化事实已经成立。
-            // 必须在可选 finish 之前提交：否则第一个项目建成、随后设置落盘失败时，
-            // 重启后它会被空库检查当成用户笔记，整个初始化从此无法恢复。
+            // 骨架与种子已经落齐，此刻初始化事实已经成立，立刻提交。
+            // v0.19.0 之前这里之后还跟着一个可选的 finish（弹框问名字、开第一个项目），
+            // 「先提交再 finish」是为了让那一步失败时初始化仍可恢复。那一步已经删掉，
+            // 但先提交的次序保留——它现在的理由更简单：写盘的事做完就落账，别拖到收尾之后
             ctx.settings.initializedAt = nowStamp(ctx.settings.dateTimeFormat);
             await ctx.saveSettings();
-
-            for (const seed of seeds) {
-                await seed.finish?.();
-            }
         }
 
         // ============================================================
@@ -105,6 +103,10 @@ export async function initializeVault(
         // ============================================================
 
         new Notice(MESSAGES.done);
+
+        // 成了就放一次礼花。它取代的是从前那个「问你叫什么、给你开第一个项目」的弹窗——
+        // 同样是告诉他装好了，但不索取、不阻塞、不需要他做任何决定
+        celebrate(ctx);
 
         // 开荒完成后第一眼是 README：头部是作者名片，正文是说明书。
         // 只拿到 main.js 的库没有 README，那就回落到导航——两者必有其一是这次开荒刚建的
