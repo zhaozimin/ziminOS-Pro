@@ -113,7 +113,15 @@ const SITES: readonly Site[] = [
     },
 ];
 
-/** 频道胶囊上「海外」下「中国大陆」：平台才分边，分组即解释 */
+/**
+ * 频道胶囊上「海外」下「中国大陆」：平台才分边，分组即解释。
+ *
+ * 两行**同序**：代码 → 图文 → 长视频（GitHub / X / YouTube，Gitee / 小红书 / 哔哩哔哩）。
+ * 这不是排版洁癖——两行并排摆着，读者会不自觉地按列去对，
+ * 列对不齐就得逐个读标签才知道哪个是哪个，而分组本来就是为了省掉这一步。
+ * 长视频排在最后也有它自己的理由：那是三者里门槛最高的一个入口，
+ * 摆在末位符合读者从轻到重的浏览顺序。加频道时照这条序插进去。
+ */
 const CHANNEL_REGIONS: readonly ChannelRegion[] = [
     {
         label: '海外',
@@ -127,8 +135,8 @@ const CHANNEL_REGIONS: readonly ChannelRegion[] = [
         label: '中国大陆',
         channels: [
             { name: 'Gitee', label: 'ziminzhao', url: 'https://gitee.com/ziminzhao', path: GITEE_PATH, color: '#C71D23' },
-            { name: '哔哩哔哩', label: '光头obsidian教程', url: 'https://b23.tv/E2UTPzQ', path: BILIBILI_PATH, color: '#00A1D6' },
             { name: '小红书', label: '光头obsidian教程', url: 'https://xhslink.cn/m/3NnLHIc6lQA', path: XIAOHONGSHU_PATH, color: '#FF2442', wordmark: true },
+            { name: '哔哩哔哩', label: '光头obsidian教程', url: 'https://b23.tv/E2UTPzQ', path: BILIBILI_PATH, color: '#00A1D6' },
         ],
     },
 ];
