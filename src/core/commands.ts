@@ -1,9 +1,10 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Plugin 类型；依赖 ./constants 的 PeriodKey 与 TransitionAction 两个类型
  * [OUTPUT]: 对外提供命令身份契约 CommandSpec、分组名 COMMAND_GROUPS、图标名 COMMAND_ICONS，
- *           三十条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
+ *           三十五条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
  *           TransitionCommand）/BOOK_COMMANDS/INSPIRATION_COMMAND/PERIOD_COMMANDS/THEME_COMMAND/
- *           OPEN_CALENDAR_COMMAND/CONTACT_COMMANDS/CLIENT_COMMANDS/APPEARANCE_COMMAND/FORMAT_COMMAND，
+ *           OPEN_CALENDAR_COMMAND/CONTACT_COMMANDS/CLIENT_COMMANDS/APPEARANCE_COMMAND/FORMAT_COMMAND/
+ *           RECENT_FILES_COMMAND/COPY_PATH_COMMAND/LEGACY_COMMANDS，
  *           左侧边栏默认摆件 DEFAULT_RIBBON_COMMANDS
  *           与它的读取侧兜底 normalizeRibbonCommands，
  *           以及注册台 CommandRegistry 与它交出的 RegisteredCommand
@@ -55,13 +56,14 @@ export interface CommandSpec {
 }
 
 /**
- * 九个命令分组。
+ * 十一个命令分组。
  *
- * 它不是新发明的分类，而是照着插件自己的结构切的：八个同名于 modules/ 下的目录
- * （setup / projects / books / inspiration / review / contacts / appearance / format），
- * 第九个 clients 例外——客户不是独立目录，是 contacts 模块里 client.ts 那一支，
- * 单列成组是因为客户与人脉在业务上本就是两个物种（见 contacts 的 L2）。
- * modules/ribbon 不在其中：它一条命令都不注册，只负责把别人的命令摆出来。
+ * 它不是新发明的分类，而是照着插件自己的结构切的：十个同名于 modules/ 下的目录
+ * （setup / projects / books / inspiration / review / contacts / appearance / format /
+ * explorer / legacy），clients 是唯一的例外——客户不是独立目录，
+ * 是 contacts 模块里 client.ts 那一支，单列成组是因为客户与人脉在业务上本就是两个物种
+ * （见 contacts 的 L2）。modules/ribbon 与 modules/editing 都不在其中：
+ * 前者一条命令都不注册、只负责把别人的命令摆出来，后者是两个监听、没有可执行的入口。
  */
 export const COMMAND_GROUPS = {
     setup: '开荒',
@@ -73,6 +75,8 @@ export const COMMAND_GROUPS = {
     clients: '客户',
     appearance: '外观',
     format: '排版',
+    explorer: '文件',
+    legacy: '旧版',
 } as const;
 
 /** 分组名的联合类型，供按组建表的地方做穷尽检查 */
@@ -97,10 +101,14 @@ export const GROUP_COLORS: Readonly<Record<CommandGroup, string>> = {
     [COMMAND_GROUPS.clients]: '#43A868',     // 客户＝生意与钱，绿
     [COMMAND_GROUPS.appearance]: '#E07B39',  // 外观＝调色盘，橙
     [COMMAND_GROUPS.format]: '#3BAFBF',      // 排版＝整洁，青
+    [COMMAND_GROUPS.explorer]: '#5A6ACF',    // 文件＝找路，罗盘针的靛蓝
+    // 旧版这三条做的是 Obsidian 自己的事，不属于 ziminOS 的任何一摊。
+    // 中性灰是这句话的视觉说法：在那一列彩色图标里，它们一眼就看得出是外来的
+    [COMMAND_GROUPS.legacy]: '#7A8290',
 };
 
 /**
- * 三十个图标名。
+ * 三十八个图标名：三十五条命令各一枚，加设置页那三张没有命令与之对应的标签页（边栏、文件、编辑）。
  *
  * 一律带 `ziminos-` 前缀：图标名是 Obsidian 全局共享的命名空间，
  * 不加前缀就可能盖掉 lucide 里的同名图标，或者被后装的插件盖掉。
@@ -140,15 +148,27 @@ export const COMMAND_ICONS = {
     appearance: 'ziminos-appearance',
     format: 'ziminos-format',
     /**
-     * 不属于任何命令的一枚：设置页「边栏」标签页的图标。
-     * 边栏这个模块管的是屏幕上那一列，没有哪条命令天然长它的样子，
-     * 图形与其余三十个同住 icons.ts，同一套画法
+     * 不属于任何命令的两枚：设置页「边栏」与「文件」两张标签页的图标。
+     * 这两个模块管的都是屏幕上的一块地方而不是一件可执行的事，
+     * 没有哪条命令天然长它们的样子，图形与其余三十个同住 icons.ts，同一套画法。
+     *
+     * 两枚都画那块地方本身而不画它的功能：边栏是「一块带左栏的面板」，
+     * 文件浏览器是「一个文件夹」。文件夹上刻意不加数字或角标——
+     * 标签页的身份是「文件浏览器的设置在这儿」，而计数只是它眼下唯一那件事，
+     * 把当期功能画进图标里，下一件功能进来时这枚图标就开始撒谎。
      */
+    recent: 'ziminos-recent',
+    filePath: 'ziminos-file-path',
+    vaultSwitch: 'ziminos-vault-switch',
+    help: 'ziminos-help',
+    appSettings: 'ziminos-app-settings',
     dock: 'ziminos-dock',
+    explorer: 'ziminos-explorer',
+    editing: 'ziminos-editing',
 } as const;
 
 // ============================================================
-// 三十条命令：顺序即它们在左侧边栏里的先后
+// 三十五条命令：顺序即它们在左侧边栏里的先后
 // ============================================================
 
 /**
@@ -415,12 +435,66 @@ export const FORMAT_COMMAND: CommandSpec = {
     group: COMMAND_GROUPS.format,
 };
 
+
+// ============================================================
+// 文件与旧版入口
+// ============================================================
+
+/** 打开侧栏那张「最近文件」清单。它不随启动自动展开——找不回某一篇时才想起它 */
+export const RECENT_FILES_COMMAND: CommandSpec = {
+    id: 'open-recent-files',
+    name: '打开最近文件',
+    icon: COMMAND_ICONS.recent,
+    group: COMMAND_GROUPS.explorer,
+};
+
+/**
+ * 复制当前笔记的完整路径。
+ * 它与右下角状态栏那一块是同一件事的两个出口：那一块用来看，这条用来在手机上
+ * （或把状态栏收起来之后）也能拿。两者调同一段复制，因此提示语一字不差。
+ */
+export const COPY_PATH_COMMAND: CommandSpec = {
+    id: 'copy-file-path',
+    name: '复制当前笔记路径',
+    icon: COMMAND_ICONS.filePath,
+    group: COMMAND_GROUPS.explorer,
+};
+
+/**
+ * Obsidian 1.6 挪走的那三个入口。
+ *
+ * 它们是全部命令里唯一一组**不属于 ziminOS 自己**的——做的是 Obsidian 的事，
+ * 因此单独成组、着中性灰，在边栏那张清单里一眼看出「这三个不是我家的东西」。
+ * 三条都走命令而不是自己画一条按钮栏：命令自动进命令面板、可绑快捷键，
+ * 勾进边栏后位置还归用户拖，比复刻一条固定的按钮栏更像 Obsidian 原本的样子。
+ */
+export const LEGACY_COMMANDS: Readonly<Record<'vault' | 'help' | 'settings', CommandSpec>> = {
+    vault: {
+        id: 'open-vault-chooser',
+        name: '切换笔记库',
+        icon: COMMAND_ICONS.vaultSwitch,
+        group: COMMAND_GROUPS.legacy,
+    },
+    help: {
+        id: 'open-obsidian-help',
+        name: '打开帮助',
+        icon: COMMAND_ICONS.help,
+        group: COMMAND_GROUPS.legacy,
+    },
+    settings: {
+        id: 'open-obsidian-settings',
+        name: '打开设置',
+        icon: COMMAND_ICONS.appSettings,
+        group: COMMAND_GROUPS.legacy,
+    },
+};
+
 // ============================================================
 // 左侧边栏：默认摆出哪几个
 // ============================================================
 
 /**
- * 全新库默认摆进左侧边栏的七条命令。
+ * 全新库默认摆进左侧边栏的十条命令。
  *
  * 三十条全摆上去等于把选择的负担丢回给学员——那条边栏会长成一根谁也不看的图标柱。
  * 这七条的判据是「一天里可能按不止一次」：记灵感、开日记、写主题是每天的动作，
@@ -445,6 +519,12 @@ export const DEFAULT_RIBBON_COMMANDS: readonly string[] = [
     CONTACT_COMMANDS.create.id,
     CONTACT_COMMANDS.favor.id,
     APPEARANCE_COMMAND.id,
+    // 旧版那三个默认就摆出来：它们存在的全部理由就是「回到 ribbon 上」，
+    // 一个需要先去设置页勾选才回来的按钮，等于没有回来。
+    // 顺序归用户——摆出来之后拖到哪儿由 Obsidian 自己记
+    LEGACY_COMMANDS.vault.id,
+    LEGACY_COMMANDS.help.id,
+    LEGACY_COMMANDS.settings.id,
 ];
 
 /**

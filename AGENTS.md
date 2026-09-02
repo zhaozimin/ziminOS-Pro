@@ -44,7 +44,11 @@
 
 - 源码只能临时放在工作区之外，不得在工作区内克隆。
 - 不得安装 Node.js、npm 依赖或任何额外插件、主题、字体。
-- 施工源仓库地址是 `https://gitee.com/ziminzhao/ziminos-pro.git`。GitHub 上的 `zhaozimin/ziminOS` 已经访问不到（403），不要用它，也不要去找镜像。
+- 施工源仓库**按版次分开**，取错了不会在克隆那一步报错：
+  - 第一版 → `https://gitee.com/ziminzhao/zimin-os-v1.git`
+  - 第二版 → `https://gitee.com/ziminzhao/ziminos-pro.git`
+  第二版取了 v1 仓库，clone 照样成功，缺 `vault-pro/` 要等到交付物清单才发作；第一版取了 pro 仓库更糟——它会把整份施工源克隆到用户机器，等于让每个免费用户顺手把付费交付物拉到本地。
+- GitHub 上的 `zhaozimin/ziminOS` 已经访问不到（403），不要用它，也不要去找镜像。
 
 ## 六、开发任务
 

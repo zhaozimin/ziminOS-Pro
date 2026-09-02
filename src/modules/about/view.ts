@@ -16,8 +16,9 @@
  *        胶囊 = 品牌原色图标 + 作者的平台账号名。
  *        头像以 data URI 编译进 main.js（≈19KB，渲染零网络请求，红线不破）；
  *        星图 logo 逐字取自 edu 站 favicon.svg，内联 SVG 最清晰。
- *        频道图形取自 Simple Icons（CC0，见 docs/第三方组件.md）：YouTube/B站/小红书按官方色值，
- *        GitHub 与 X 的官方原色本就是黑白两版，取 currentColor 随主题走正是「原本的颜色」
+ *        频道图形取自 Simple Icons（CC0，见 docs/第三方组件.md）：Gitee/YouTube/B站/小红书
+ *        按官方色值，GitHub 与 X 的官方原色本就是黑白两版，
+ *        取 currentColor 随主题走正是「原本的颜色」
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -71,7 +72,10 @@ interface ChannelRegion {
     readonly channels: readonly Channel[];
 }
 
-/* 五段 path 逐字取自 simple-icons@15 的 github/x/youtube/bilibili/xiaohongshu，不手改坐标 */
+/* 六段 path 逐字取自 simple-icons@15 的 gitee/github/x/youtube/bilibili/xiaohongshu，不手改坐标 */
+const GITEE_PATH =
+    'M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.016 0zm6.09 5.333c.328 0 .593.266.592.593v1.482a.594.594 0 0 1-.593.592H9.777c-.982 0-1.778.796-1.778 1.778v5.63c0 .327.266.592.593.592h5.63c.982 0 1.778-.796 1.778-1.778v-.296a.593.593 0 0 0-.592-.593h-4.15a.592.592 0 0 1-.592-.592v-1.482a.593.593 0 0 1 .593-.592h6.815c.327 0 .593.265.593.592v3.408a4 4 0 0 1-4 4H5.926a.593.593 0 0 1-.593-.593V9.778a4.444 4.444 0 0 1 4.445-4.444h8.296Z';
+
 const GITHUB_PATH =
     'M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12';
 
@@ -122,6 +126,7 @@ const CHANNEL_REGIONS: readonly ChannelRegion[] = [
     {
         label: '中国大陆',
         channels: [
+            { name: 'Gitee', label: 'ziminzhao', url: 'https://gitee.com/ziminzhao', path: GITEE_PATH, color: '#C71D23' },
             { name: '哔哩哔哩', label: '光头obsidian教程', url: 'https://b23.tv/E2UTPzQ', path: BILIBILI_PATH, color: '#00A1D6' },
             { name: '小红书', label: '光头obsidian教程', url: 'https://xhslink.cn/m/3NnLHIc6lQA', path: XIAOHONGSHU_PATH, color: '#FF2442', wordmark: true },
         ],
@@ -186,11 +191,47 @@ const CREDITS: readonly Credit[] = [
         url: 'https://github.com/platers/obsidian-linter',
         what: '「改完走开就替你整理」这件事本来该装它。排版模块那九条规则是照着它的行为重写的，为的是让学员少装一个插件。',
     },
+    {
+        name: 'File Explorer Note Count',
+        url: 'https://github.com/ozntel/file-explorer-note-count',
+        what: '「计数该长在文件夹名右侧」这个交互结论是它给的。它读的是文件浏览器视图的 view.fileItems——正是看清那个字段不在 obsidian.d.ts 里，我们才改走公开的 getLeavesOfType。',
+    },
+    {
+        name: 'Recent Files',
+        url: 'https://github.com/tgrosinger/recent-files-obsidian',
+        what: '「最近」的成员是你**打开过**的、而不是库里改动过的。这条语义分得清清楚楚，于是一个从没打开过的文件不会突然出现在清单里让人愣一下。',
+    },
+    {
+        name: 'Remember cursor position',
+        url: 'https://github.com/dy-sh/obsidian-remember-cursor-position',
+        what: '光标位置该在**离开一篇时**记下，而不是边打字边记——就这一条把定时器从方案里彻底去掉了。',
+    },
+    {
+        name: 'Paste URL into selection',
+        url: 'https://github.com/denolehov/obsidian-url-into-selection',
+        what: '「选中文字 + 粘贴网址 = 外链」这个动作本身。它没有许可证，一个字节都不能转发，但这个动作值得留下来。',
+    },
+    {
+        name: 'Show Current File Path',
+        url: 'https://github.com/ravimashru/obsidian-show-file-path',
+        what: '当前路径该住在右下角状态栏、点一下就复制——位置与交互都照它。',
+    },
+    {
+        name: 'Legacy Vault Switcher',
+        url: 'https://github.com/Quorafind/Obsidian-Legacy-Vault-Switcher',
+        what: 'Obsidian 1.6 挪走的那三个按钮请得回来。它同样没有许可证不能转发，但它先证明了这件事做得成。',
+    },
 ];
 
 /** 随库或随 main.js 交付的第三方资产：这一段是许可要求的署名，不是客套 */
 const BUNDLED: readonly Credit[] = [
     { name: 'Dataview', url: 'https://github.com/blacksmithgu/obsidian-dataview', what: 'MIT' },
+    { name: 'Outliner', url: 'https://github.com/vslinko/obsidian-outliner', what: 'MIT' },
+    {
+        name: 'Quiet Outline',
+        url: 'https://github.com/guopenghui/obsidian-quiet-outline',
+        what: 'MIT',
+    },
     { name: 'Minimal', url: 'https://github.com/kepano/obsidian-minimal', what: 'MIT' },
     {
         name: 'Style Settings',

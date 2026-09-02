@@ -9,7 +9,8 @@
  *        服务型（认识的人找你办事，有项目有过程）问的是欠谁的活、哪类问题该做成课。
  *        客户身份一律从事实推断而非标注：名下有 client 指向他的项目就是客户，
  *        给谁干过活谁才算——零标注、不会撒谎，也因此身份不互斥，
- *        同一个人可以既在人脉名录里又在客户名录里，因为他本来就是两者
+ *        同一个人可以既在人脉名录里又在客户名录里，因为他本来就是两者。
+ *        服务历史可以保留，当前客户名录仍必须排除已归档人物，与人脉的「谁还算数」判据一致
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -272,10 +273,12 @@ const caseLibrary: ViewDefinition = {
 const serviceClients: ViewDefinition = {
     name: '服务客户',
     render: async (view: ViewContext): Promise<void> => {
+        const archive = archiveFolderOf(view.ctx);
         const stats = new Map<string, { note: TFile; open: number; total: number }>();
 
         for (const { project, client } of clientProjects(view)) {
-            if (!client) continue;
+            // 项目史实可以保留，但已归档的人不应重新出现在当前客户名录。
+            if (!client || !isLivePath(archive, client.path)) continue;
 
             const bucket = stats.get(client.path) ?? { note: client, open: 0, total: 0 };
 

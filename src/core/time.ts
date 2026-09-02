@@ -11,6 +11,7 @@
  *        原始脚本里存在手写 padStart 与 moment 两套实现，此处统一为 moment 一种
  *        （输出字符串完全一致，属消重而非行为改变）；原脚本「同一时刻派生 created 与 UID」
  *        的原子性由 nowStampAndUid 承载，跨秒边界下两个字段不会各说各话。
+ *        dayText 对 ISO 前缀做严格日历校验，形似日期的不存在日不进入视图区间。
  *        全仓库禁止再就地 new Date() 拼时间，格式必须走这里，dateTimeFormat 设置才真正生效
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -142,17 +143,25 @@ export function dayText(value: unknown): string | null {
 
     if (value instanceof Date) {
         const time = value.getTime();
+        const parsed = momentFactory(time);
 
-        return Number.isNaN(time) ? null : momentFactory(time).format(DAY_FORMAT);
+        return Number.isNaN(time) || !parsed.isValid() ? null : parsed.format(DAY_FORMAT);
     }
 
     if (typeof value === 'number') {
-        return Number.isFinite(value) ? momentFactory(value).format(DAY_FORMAT) : null;
+        if (!Number.isFinite(value)) return null;
+
+        const parsed = momentFactory(value);
+
+        return parsed.isValid() ? parsed.format(DAY_FORMAT) : null;
     }
 
     const text = String(value).trim();
+    const day = /^\d{4}-\d{2}-\d{2}/.exec(text)?.[0];
 
-    return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
+    if (!day) return null;
+
+    return momentFactory(day, DAY_FORMAT, true).isValid() ? day : null;
 }
 
 /** 把文件时间戳（毫秒）转成日粒度，供 frontmatter 缺字段时兜底 */

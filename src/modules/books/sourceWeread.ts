@@ -24,6 +24,8 @@
  *        断开时要记得一并清掉的凭据——全插件的持久凭据仍然只有 Cookie 一份。
  *        章节名有两个来源：划线接口自带的章节表，以及想法条目自带的 chapterName；
  *        后者不是冗余——一本书可能一条纯划线都没有，那时章节表是空的
+ *        部分取数也必须诚实：想法接口失败时可以保留已取回的划线，
+ *        但结果必须带 note，不得把「只成功一半」伪装成完整同步
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -426,6 +428,8 @@ export async function readWereadBookHighlights(
     }
 
     // 想法单独一趟：接口不同、失败也不该让划线跟着丢
+    let note = '';
+
     try {
         const reviews = await gateway(ctx, '/review/list/mine', key, {
             bookid: book.id,
@@ -438,9 +442,13 @@ export async function readWereadBookHighlights(
         // 但若划线也一条没有，这次失败就是全部真相，必须抛出去——
         // 否则学员得到的是「这本书没有划线」，而事实是「微读没让我们看」
         if (!highlights.length) throw error;
+
+        const message = error instanceof Error ? error.message : String(error);
+
+        note = `微信读书想法取数失败：${message || '未知错误'}；本次只同步了划线。`;
     }
 
-    return { highlights, note: '' };
+    return { highlights, note };
 }
 
 /**

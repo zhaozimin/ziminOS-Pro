@@ -1,6 +1,7 @@
 /**
- * [INPUT]: 依赖 ./constants 的 VIEW_BLOCK_LANG
- * [OUTPUT]: 对外提供 insertIntoSection（把一行插进指定标题的小节内）
+ * [INPUT]: 依赖 ./constants 的 VIEW_BLOCK_LANG，依赖 ./lineEndings 保留原文换行约定
+ * [OUTPUT]: 对外提供 toggleTaskLine（安全翻转指定任务行）与
+ *           insertIntoSection（把一行插进指定标题的小节内）
  * [POS]: core 的 Markdown 文本操作层，纯函数，不碰磁盘也不认识业务。
  *        它服务于同一类动作：命令要往一篇既有笔记的某个小节里追加一行记录
  *        （记人情写进日记、增加付费写进客户档案、记收款写进项目 MOC）。
@@ -13,6 +14,7 @@
  */
 
 import { VIEW_BLOCK_LANG } from './constants';
+import { joinTextLines, splitTextLines } from './lineEndings';
 
 /** 视图代码块的起始围栏 */
 const VIEW_FENCE = '```' + VIEW_BLOCK_LANG;
@@ -23,13 +25,6 @@ const ANY_HEADING = /^#{1,6}\s/;
 /** 模板在小节里留下的空列表占位行 */
 const PLACEHOLDER = '-';
 
-/**
- * 把一行插进指定标题的小节里。
- *
- * 找不到该标题就追加到文件末尾：位置不理想好过拒绝写入。
- * 小节内若有视图代码块，新行插在它前面——那个块是对这些行的汇总，
- * 汇总排在原始数据后面才读得顺。
- */
 /** 任务行的复选框，捕获缩进与标记以便原样写回 */
 const TASK_BOX = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([^\]])(\]\s)/;
 
@@ -45,7 +40,7 @@ export function toggleTaskLine(
     line: number,
     expectedChecked: boolean,
 ): string | null {
-    const lines = content.split('\n');
+    const { lines, lineEnding } = splitTextLines(content);
     const current = lines[line];
 
     if (typeof current !== 'string') return null;
@@ -60,14 +55,23 @@ export function toggleTaskLine(
 
     lines[line] = current.replace(TASK_BOX, `$1${checked ? ' ' : 'x'}$3`);
 
-    return lines.join('\n');
+    return joinTextLines(lines, lineEnding);
 }
 
+/**
+ * 把一行插进指定标题的小节里。
+ *
+ * 找不到该标题就追加到文件末尾：位置不理想好过拒绝写入。
+ * 小节内若有视图代码块，新行插在它前面——那个块是对这些行的汇总，
+ * 汇总排在原始数据后面才读得顺。
+ */
 export function insertIntoSection(content: string, heading: string, line: string): string {
-    const lines = content.split('\n');
+    const { lines, lineEnding } = splitTextLines(content);
     const headingIndex = lines.findIndex((text) => text.trim() === heading);
 
-    if (headingIndex < 0) return `${content.replace(/\s*$/, '')}\n\n${heading}\n\n${line}\n`;
+    if (headingIndex < 0) {
+        return [content.replace(/\s*$/, ''), '', heading, '', line, ''].join(lineEnding);
+    }
 
     let sectionEnd = lines.length;
 
@@ -95,10 +99,10 @@ export function insertIntoSection(content: string, heading: string, line: string
     if (insertAt > headingIndex + 1 && lines[insertAt - 1].trim() === PLACEHOLDER) {
         lines[insertAt - 1] = line;
 
-        return lines.join('\n');
+        return joinTextLines(lines, lineEnding);
     }
 
     lines.splice(insertAt, 0, line);
 
-    return lines.join('\n');
+    return joinTextLines(lines, lineEnding);
 }

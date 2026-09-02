@@ -9,3 +9,11 @@
 /vault/.obsidian/plugins/dataview/manifest.json -text -diff
 /vault/.obsidian/plugins/dataview/styles.css -text -diff
 /vault/.obsidian/plugins/dataview/LICENSE.txt -text -diff
+/vault/.obsidian/plugins/obsidian-outliner/main.js -text -diff
+/vault/.obsidian/plugins/obsidian-outliner/manifest.json -text -diff
+/vault/.obsidian/plugins/obsidian-outliner/styles.css -text -diff
+/vault/.obsidian/plugins/obsidian-outliner/LICENSE -text -diff
+/vault/.obsidian/plugins/obsidian-quiet-outline/main.js -text -diff
+/vault/.obsidian/plugins/obsidian-quiet-outline/manifest.json -text -diff
+/vault/.obsidian/plugins/obsidian-quiet-outline/styles.css -text -diff
+/vault/.obsidian/plugins/obsidian-quiet-outline/LICENSE -text -diff

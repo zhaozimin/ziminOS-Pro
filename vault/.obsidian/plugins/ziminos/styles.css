@@ -1,10 +1,13 @@
 /*
  * ziminOS 视图样式
  *
- * 服务插件自渲染的二十二个笔记内视图、中国日历 ItemView、外观开关浮层，
- * 以及设置页的七张标签页与开荒页尾的落款，
+ * 服务插件自渲染的二十二个笔记内视图、中国日历与最近文件两个 ItemView、外观开关浮层、
+ * 文件浏览器里那串文件夹计数、状态栏那一块当前路径，
+ * 以及设置页的九张标签页与开荒页尾的落款，
  * 全部选择器都带 ziminos- 前缀，不碰用户笔记正文。
  * 除文末那一条藏边栏图标的规则外，不覆盖主题的任何既有规则——那一条的理由写在它自己头上。
+ * 文件夹计数那两条以 .nav-folder-title 打头，看着像在碰主题，其实只选我们自己插进去的那个
+ * 子元素：主题的规则一条没动，我们只是说清了自己那个节点在别人的 flex 行里怎么站。
  * 颜色一律取 Obsidian 的语义变量，因此跟随主题与 Style Settings 的配色走，
  * 换主题、切明暗、改配色都不需要动这个文件。
  */
@@ -962,6 +965,104 @@ div.ziminos-table-wrap > table.ziminos-table tbody tr:hover {
     font-size: var(--font-ui-small);
     font-weight: var(--font-semibold);
     cursor: pointer;
+}
+
+/* ── 文件浏览器：文件夹右侧那个计数 ── */
+
+/*
+ * 挂在 .nav-folder-title 里的最后一个子元素上，所以它天然排在文件夹名之后。
+ * 靠右不靠 position/float，靠 margin-left:auto——那一行是 flex（Obsidian 的 .tree-item-self
+ * 就是 flex），auto 外边距会把余量全吃到左边，数字于是贴着右缘；
+ * 而主题若把文件夹名设成 flex:1，数字同样落在右缘，两种情形结果一致。
+ * flex-shrink:0 是为了让挤压发生在文件夹名上而不是数字上：名字可以省略号，数字不能只剩一半。
+ */
+.ziminos-folder-count {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-left: 6px;
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+
+    /* 等宽数字：1 和 8 一样宽，一列数字的右缘才对得齐，翻看时不会左右跳 */
+    font-variant-numeric: tabular-nums;
+}
+
+/* 鼠标停在那一行上时抬一档：正在看的那一行把数字说清楚，其余的继续退到背景里 */
+.nav-folder-title:hover .ziminos-folder-count,
+.nav-folder-title.is-active .ziminos-folder-count {
+    color: var(--text-muted);
+}
+
+/* ── 最近文件：右侧栏那张清单 ── */
+
+.workspace-leaf-content[data-type="ziminos-recent-files"] .view-content {
+    padding: 0;
+}
+
+.ziminos-recent {
+    overflow: auto;
+    padding: 8px 6px 12px;
+}
+
+.ziminos-recent-empty {
+    padding: 12px 10px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.6;
+}
+
+.ziminos-recent-list {
+    display: flex;
+    flex-direction: column;
+}
+
+/*
+ * 一行一篇，只有名字——与文件树里的一行长一个样。
+ *
+ * 「长一个样」不是靠抄一遍主题的规则，而是取它自己给出的那套 --nav-item-* 变量：
+ * 行高、字号、字重、颜色、悬停底色全从那里来，于是换主题、在 Style Settings 里
+ * 调过侧栏字号之后，这张清单跟着一起变，不会变成侧栏里唯一一块「别人家的控件」。
+ * 变量取不到时每条都回落到语义变量，两头都不会出错。
+ */
+.ziminos-recent-row {
+    padding: var(--nav-item-padding, 4px 8px);
+    overflow: hidden;
+    border-radius: var(--radius-s);
+    color: var(--nav-item-color, var(--text-muted));
+    font-size: var(--nav-item-size, var(--font-ui-small));
+    font-weight: var(--nav-item-weight, inherit);
+    line-height: var(--line-height-tight);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ziminos-recent-row:hover {
+    background: var(--nav-item-background-hover, var(--background-modifier-hover));
+    color: var(--nav-item-color-hover, var(--text-normal));
+}
+
+/* ── 状态栏：当前笔记路径 ── */
+
+/*
+ * 路径可以很长，而状态栏是所有插件共用的一条。给它一个上限并自己截断，
+ * 而不是把别人的状态栏项挤出屏幕——完整路径在悬停提示里，也在点一下就到手的剪贴板里。
+ *
+ * 刻意**不**用 direction: rtl 把省略号挪到左边（那样能留下文件名，看着更划算）：
+ * 那是一个双向文字技巧，而库里的路径里全是中文书名号与括号——
+ * 这类中性字符落在字符串末尾时会被 bidi 算法搬到最前面，得到一个看着像坏了的路径。
+ * 一个偶尔截掉尾巴的路径只是少几个字，一个偶尔乱序的路径会让人怀疑插件在乱写。
+ */
+.ziminos-file-path {
+    max-width: 32ch;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ziminos-file-path:hover {
+    color: var(--text-normal);
 }
 
 /* ── 开荒页尾：作者名片当落款 ── */

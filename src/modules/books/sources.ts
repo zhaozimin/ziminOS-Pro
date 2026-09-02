@@ -12,7 +12,8 @@
  *        其二，**书名匹配从严到宽**——先逐字，再去标点空白，最后互相包含；
  *        宁可漏一本让学员手动指，也不能把《人类简史》的划线倒进《未来简史》；
  *        其三，来源之间**不去重**——那是 mergeHighlights 的活儿，它按归一文本去重，
- *        同一句话从两个设备来也只会写进去一次
+ *        同一句话从两个设备来也只会写进去一次；任何可用来源没匹配到目标书时也返回 note，
+ *        不把漏匹配伪装成「这本书没有划线」
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -110,6 +111,8 @@ export async function collectHighlightsFor(
                 if (highlights.length || note) {
                     hits.push({ label: '微信读书', title: matched.title, highlights, note });
                 }
+            } else {
+                hits.push(unmatchedHit('微信读书', names));
             }
         }
     } catch (error) {
@@ -127,6 +130,8 @@ export async function collectHighlightsFor(
                 if (highlights.length) {
                     hits.push({ label: '苹果图书', title: matched.title, highlights });
                 }
+            } else {
+                hits.push(unmatchedHit('苹果图书', names));
             }
         }
     } catch (error) {
@@ -149,6 +154,8 @@ export async function collectHighlightsFor(
                 if (highlights.length) {
                     hits.push({ label: 'Kindle', title: matched.title, highlights });
                 }
+            } else {
+                hits.push(unmatchedHit('Kindle', names));
             }
         }
     } catch (error) {
@@ -167,6 +174,16 @@ function failedHit(label: string, names: readonly string[], error: unknown): Sou
         title: names.find((name) => name.trim()) ?? '',
         highlights: [],
         note: `${label}取数失败：${message || '未知错误'}`,
+    };
+}
+
+/** 来源能读、书单也拿到了，但没有一本能安全认成目标书；它不等于“这本书没有划线” */
+function unmatchedHit(label: string, names: readonly string[]): SourceHit {
+    return {
+        label,
+        title: names.find((name) => name.trim()) ?? '',
+        highlights: [],
+        note: `${label}没有匹配到这本书（可能是书名或副标题不同），没有把其他书的划线混进来。`,
     };
 }
 

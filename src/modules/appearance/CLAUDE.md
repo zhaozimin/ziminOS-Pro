@@ -8,7 +8,7 @@
 
 ## 成员清单
 
-snippets.ts: 事实层与动作层，也是全仓库唯一接触 Obsidian 非公开 API 的地方。事实全部走公开 API——片段清单来自 `vault.configDir` + `DataAdapter.list`，启用清单来自 `appearance.json`，因此开关里看到的与「设置 → 外观」看到的永远是同一份，不依赖任何内部实现。只有「让改动此刻生效」没有公开替代品：`obsidian.d.ts` 全文既无 `customCss` 也无 `snippet`，唯一能做到的是 `app.customCss.setCssEnabledStatus`。它被模块增强声明成**可选**成员并在运行时二次验形，于是内部实现哪天变了，后果被锁死在「退回改配置文件 + 提示重载」，而不是在用户库里抛异常。筛片段的后缀判据与 Obsidian 一致取小写 `.css`——放宽成大小写不敏感，开关里就会出现一条 Obsidian 根本没加载、点了也没反应的片段。
+snippets.ts: 事实层与动作层，也是全仓库两处接触 Obsidian 非公开 API 的**第一处**（v0.17.0 起另有 modules/legacy 那三处，同一套三条纪律收窄）。事实全部走公开 API——片段清单来自 `vault.configDir` + `DataAdapter.list`，启用清单来自 `appearance.json`，因此开关里看到的与「设置 → 外观」看到的永远是同一份，不依赖任何内部实现。这个配置不只属于插件：文件存在却读不懂或顶层不是对象时必须拒绝开关，绝不能拿空对象覆盖用户的主题、强调色与其他外观设置（v0.16.0 审计补入）。只有「让改动此刻生效」没有公开替代品：`obsidian.d.ts` 全文既无 `customCss` 也无 `snippet`，唯一能做到的是 `app.customCss.setCssEnabledStatus`。它被模块增强声明成**可选**成员并在运行时二次验形，于是内部实现哪天变了，后果被锁死在「退回改配置文件 + 提示重载」，而不是在用户库里抛异常。筛片段的后缀判据与 Obsidian 一致取小写 `.css`——放宽成大小写不敏感，开关里就会出现一条 Obsidian 根本没加载、点了也没反应的片段。
 statusBar.ts: 呈现层，右下角状态栏按钮与它弹出的浮层。它只认识 snippets.ts 给出的四个字段（name/group/label/enabled），不认识 Obsidian 的 CSS 子系统。分组直接读用户文件名开头的【】前缀，不另发明一套分类：命名习惯是用户的，我们只是照着显示。每次打开现读一次磁盘，因此用户在设置页里的改动、或刚丢进目录的新文件，下一次打开就都在——无缓存、无监听、无轮询。
 
 ## 与外部的接线

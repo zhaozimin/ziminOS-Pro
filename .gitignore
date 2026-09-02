@@ -23,6 +23,8 @@ id_ed25519
 /vault/.obsidian/plugins/ziminos/recent-files.json
 /vault/.obsidian/plugins/ziminos/cursor-positions.json
 /vault/.obsidian/plugins/dataview/data.json
+/vault/.obsidian/plugins/obsidian-outliner/data.json
+/vault/.obsidian/plugins/obsidian-quiet-outline/data.json
 
 # 三库的运行时私有状态，与 vault/ 同理
 /vault-pro/*/.obsidian/workspace*.json

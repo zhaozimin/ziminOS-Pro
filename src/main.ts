@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Plugin 基类；依赖 core 的 SelfWriteGuard、CommandRegistry、
- *          INIT_VAULT_COMMAND、normalizeRibbonCommands、DEFAULT_SETTINGS、
+ *          INIT_VAULT_COMMAND、DEFAULT_SETTINGS/normalizeSettings、
  *          ZiminosSettings/ZiminosContext/VaultSeed 契约、PERIODS 与 registerViewCodeBlock；
  *          依赖 modules/setup 的 initializeVault/applySeed，以及项目管理、读书笔记、灵感收集、
  *          日历、复盘、人脉与客户七个模块各自的 seed、register 函数与视图数组，
@@ -9,7 +9,11 @@
  *          的 loginWeread/disconnectWeread/disposeWereadSession 来管理登录窗口、断开与卸载清理；
  *          复盘的打开命令还要 theme 的 promptThemeIfMissing 来填「日记已打开」那个洞；
  *          再加 modules/format 的 registerFormatter、modules/appearance 的 registerAppearanceSwitch、
- *          modules/ribbon 的 registerRibbon 与 modules/about 的 aboutViews/renderAboutPanel
+ *          modules/ribbon 的 registerRibbon、
+ *          modules/editing 的 registerPasteLink/registerCursorMemory、
+ *          modules/explorer 的 registerFolderCount/registerRecentFiles/registerFilePath、
+ *          modules/legacy 的 registerLegacyDock
+ *          与 modules/about 的 aboutViews/renderAboutPanel
  * [OUTPUT]: 默认导出 ZiminosPlugin，即 Obsidian 加载 main.js 时实例化的插件入口类
  * [POS]: 插件唯一入口与唯一装配点。它只做四件事：把磁盘上的设置读成一个对象、
  *        把它连同 app/plugin/guard 装配成 ZiminosContext、把上下文分发给各模块去自行注册、
@@ -18,8 +22,10 @@
  *        记人情要往当天日记里写一行，客户模块要按需长出自己的产物，
  *        建一本书要走项目模块那套「文件夹 + MOC」的流程，
  *        设置页要能开出读书模块那个扫码登录窗口，
- *        还要能让状态栏那个按钮与左侧边栏那列图标按新设置重新显隐——
- *        它们分别需要复盘模块、开荒模块、项目模块、读书模块、外观模块与 ribbon 模块的能力。
+ *        还要能让状态栏那两块、左侧边栏那列图标与文件模块画出来的三样东西按新设置重画——
+ *        它们分别需要复盘模块、开荒模块、项目模块、读书模块、外观模块、ribbon 模块
+ *        与 explorer 模块的能力。explorer 那三样只占一个洞：它们同属一个模块，
+ *        设置页不该知道那个模块内部由几个文件把它们画出来。
  *        它们都不 import 对方，而是各自声明一个函数类型的洞，由这里填上。
  *        于是依赖图仍是一棵树：main 认识所有模块，模块之间彼此不认识，
  *        加一个模块只是在这里多几行，删一个模块只需删掉那几行。
@@ -30,12 +36,11 @@
 
 import { Plugin } from 'obsidian';
 import { registerViewCodeBlock } from './core/codeblock';
-import { CommandRegistry, INIT_VAULT_COMMAND, normalizeRibbonCommands } from './core/commands';
+import { CommandRegistry, INIT_VAULT_COMMAND } from './core/commands';
 import { readEdition } from './core/edition';
-import { normalizeFormatRules } from './core/markdownStyle';
 import { PERIODS } from './core/constants';
 import { SelfWriteGuard } from './core/guard';
-import { DEFAULT_SETTINGS } from './core/types';
+import { DEFAULT_SETTINGS, normalizeSettings } from './core/types';
 import type { VaultSeed, ZiminosContext, ZiminosSettings } from './core/types';
 import { aboutViews, renderAboutPanel } from './modules/about/view';
 import { registerAppearanceSwitch } from './modules/appearance/statusBar';
@@ -48,7 +53,13 @@ import {
     registerSyncHighlightsCommand,
 } from './modules/books/readBook';
 import { disconnectWeread, disposeWereadSession, loginWeread } from './modules/books/sourceWeread';
+import { registerCursorMemory } from './modules/editing/cursorMemory';
+import { registerPasteLink } from './modules/editing/pasteLink';
+import { registerFolderCount } from './modules/explorer/badge';
+import { registerFilePath } from './modules/explorer/filePath';
+import { registerRecentFiles } from './modules/explorer/recentFiles';
 import { registerFormatter } from './modules/format/formatter';
+import { registerLegacyDock } from './modules/legacy/vaultDock';
 import { registerCalendar } from './modules/calendar/view';
 import { circleViews } from './modules/contacts/circleViews';
 import { clientViews } from './modules/contacts/clientViews';
@@ -188,12 +199,48 @@ export default class ZiminosPlugin extends Plugin {
 
         // 排版整理横跨全库、不属于任何一套笔记，它注册的是一条命令与一个编辑监听，一篇笔记都不生产。
         // 位置排在这里而不是更早：注册顺序就是左侧边栏的分组顺序，它该落在客户与外观之间，
-        // 与设置页那九张标签的先后对齐——两处只要有一处自作主张，学员就会觉得是两套东西
+        // 与设置页那八张标签的先后对齐——两处只要有一处自作主张，学员就会觉得是两套东西。
+        // v0.17.0 起排版是「编辑」页的后半截（同一个时刻发生的事），装配顺序不变
         registerFormatter(ctx);
 
         // 外观开关在状态栏常驻一个按钮，而设置页只会改设置对象、没法让已经画出来的按钮消失，
         // 因此它交回一个「按当前设置重新决定显隐」的函数，由下面转交给设置页
         const syncAppearanceSwitch = registerAppearanceSwitch(ctx);
+
+        // ============================================================
+        // 编辑：粘贴与光标，两个监听、一条命令都不注册
+        // ============================================================
+
+        // 它们不交回任何同步函数：监听与记忆每次触发都现读设置对象，天然看得见新值。
+        // 需要有人去推一把的，永远只是「已经画在屏幕上」的东西
+        registerPasteLink(ctx);
+        registerCursorMemory(ctx);
+
+        // ============================================================
+        // 文件：文件夹计数、最近文件与状态栏路径
+        // ============================================================
+
+        // 三样东西回答同一个问题（我在哪、有哪些、刚才去过哪儿），因此只向设置页交回
+        // **一个**同步函数：设置页不必知道那个模块内部由几个文件把这三样画出来。
+        // 装配位置从「边栏之后」挪到了这里（v0.17.0）——最近文件与复制路径是两条命令，
+        // 而边栏是照着花名册摆图标的，摆的时候花名册必须已经收齐。
+        // 这也让装配顺序重新等于设置页那八张标签的先后：编辑（含排版）→ 文件 → 边栏
+        const syncFolderCount = registerFolderCount(ctx);
+        const syncRecentFiles = registerRecentFiles(ctx);
+        const syncFilePath = registerFilePath(ctx);
+        const syncExplorer = (): void => {
+            syncFolderCount();
+            syncRecentFiles();
+            syncFilePath();
+        };
+
+        // ============================================================
+        // 旧版入口：Obsidian 1.6 挪走的那三个按钮
+        // ============================================================
+
+        // 三条命令，做的是 Obsidian 自己的事，因此单列一组并着中性灰。
+        // 它们默认就摆进左侧边栏——一个需要先去设置页勾选才回来的按钮，等于没有回来
+        registerLegacyDock(ctx);
 
         // ============================================================
         // 左侧边栏：必须在全部命令注册完之后，它摆的就是上面那些命令
@@ -237,6 +284,7 @@ export default class ZiminosPlugin extends Plugin {
                 disconnectWeread: () => disconnectWeread(ctx),
                 syncAppearanceSwitch,
                 syncRibbon,
+                syncExplorer,
                 // 设置页的「关于作者」区与导航页尾的视图块画同一张名片，实现只有 about 一份
                 renderAbout: renderAboutPanel,
             }),
@@ -244,18 +292,11 @@ export default class ZiminosPlugin extends Plugin {
     }
 
     /**
-     * 读取持久化设置并补齐缺省值。
-     * 用「默认值打底、存档覆盖」的顺序合并：新版本新增的字段对老库自动生效，
-     * 老库里已有的选择则一个都不会被冲掉。首次安装时 loadData 返回 null，结果即纯默认值。
+     * 读取持久化设置并在唯一入口逐字段验形。
+     * 合法旧值原样保留，缺失或类型错误的字段各自回落默认；数组与枚举再走自己的白名单，
+     * 因此损坏或手改过的 data.json 不会把错误形态带进模块。首次安装仍得到纯默认值。
      */
     private async loadSettings(): Promise<void> {
-        const stored = (await this.loadData()) as Partial<ZiminosSettings> | null;
-
-        this.settings = { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
-        // 唯一需要额外收敛的字段。浅合并对坏值毫无抵抗力，而它是全部设置里唯一一个
-        // 「值坏了会让设置页画到一半炸掉」的——理由与做法见 normalizeRibbonCommands
-        this.settings.ribbonCommands = normalizeRibbonCommands(this.settings.ribbonCommands);
-        // 同因同治：formatRules 也被 .includes 直接使用，坏值会让整趟排版在第一条规则上炸掉
-        this.settings.formatRules = normalizeFormatRules(this.settings.formatRules);
+        this.settings = normalizeSettings(await this.loadData());
     }
 }

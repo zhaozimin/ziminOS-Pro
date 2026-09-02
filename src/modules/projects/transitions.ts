@@ -15,11 +15,14 @@
  *        动作而非人的编辑），因此归档时刻若不在这里落笔，就再也无处可查。
  *        全部守卫（必须站在约定路径的同名 MOC 上、type 必须在 MOVABLE_TYPES 内（project 或 book，
  *        v0.12.0 起书与项目共用这台状态机）、当前 status 必须在
- *        allowedStatuses 内、目标位置不得已有同名项目）都前置在搬移之前；搬移之后任一步失败
+ *        allowedStatuses 内、目标位置不得已有同名项目）先在搬移前校验；确认后的写入回调再复核实时
+ *        status，防止弹窗停留期间的并发修改被旧计划覆盖；搬移之后任一步失败
  *        都整体回滚，绝不留下「文件夹已搬走但状态没改」的半截状态。这是全插件唯一会移动
  *        用户整个目录的写路径，因此它对确认框与回滚的谨慎程度必须高于其他模块，
  *        自写登记也必须覆盖整棵子树而非仅那一个被重命名的节点——搬移会连带重写项目内
  *        每张卡片的 up 双链，那是插件的动作，不该被 updatedMaintainer 记成用户的编辑。
+ *        回滚不相信 await 前后维护的内存旗标，而是在异常后重新读取源/目标路径与 MOC；
+ *        文件系统已经提交、Promise 随后拒绝的模糊状态也因此能够按磁盘事实恢复。
  *        v0.16.0 起它多了一个出口而非多了一段流程：归档成功之后，若上游递进来了
  *        ArchivedHook，就把刚归档的容器身份交出去。本文件不知道接住它的是谁、
  *        更不知道《赛博永生》是什么——第二版把它接到出库单上，第一版根本不递这个参数，
@@ -76,6 +79,8 @@ interface TransitionPlan {
     readonly projectName: string;
     /** 流转前 MOC 中的 status，回滚时要写回去 */
     readonly currentStatus: string;
+    /** 流转前 archived 的原始值，回滚时不依赖写入 Promise 是否成功返回 */
+    readonly previousArchived: unknown;
     /** 搬移前的项目文件夹路径 */
     readonly sourceProjectPath: string;
     /** 目标根目录（项目目录或归档目录），搬移前需确保存在 */
@@ -92,20 +97,13 @@ interface TransitionPlan {
     readonly uid: string;
 }
 
-/** 执行过程中已经走到哪一步，决定回滚要撤销哪几件事 */
-interface TransitionProgress {
-    /** 文件夹是否已经搬走 */
-    moved: boolean;
-    /** MOC 的 status 是否已经改写 */
-    statusChanged: boolean;
-    /** MOC 里的 Base 筛选路径是否已经改写 */
+/**
+ * 只记录写入回调是否真正触达某份内容，不根据 Promise 成败猜磁盘状态。
+ * 标记在回调内部落下，因此“已经提交、随后拒绝”与“回调从未执行”仍可区分。
+ */
+interface TransitionMutationTrace {
+    frontmatterVisited: boolean;
     basePathChanged: boolean;
-    /**
-     * 改写前的 archived 原值，回滚时原样放回。
-     * 记原值而不是「回滚就删掉」：重新开始一个已归档项目时，
-     * 若流转中途失败却把归档日抹了，那篇项目会变成一个没有完成时间的完成项目。
-     */
-    previousArchived: unknown;
 }
 
 // ============================================================
@@ -271,6 +269,7 @@ function resolveTransitionPlan(
         projectFolder,
         projectName,
         currentStatus,
+        previousArchived: frontmatter?.[FIELDS.archived],
         sourceProjectPath,
         targetRoot,
         targetProjectPath,
@@ -283,27 +282,27 @@ function resolveTransitionPlan(
 
 /**
  * 落地一次流转：搬目录 → 改状态 → 修 Base 路径，返回 Base 路径是否真的被改过。
- * 三步共用一个 progress 记录，任一步抛错就按记录逐项回滚；
+ * 任一步抛错都重新读取源/目标路径与 MOC 后按磁盘事实回滚；
  * 回滚也失败时把两个原因合并成一条消息抛出，让用户知道库处于何种状态。
  */
 async function applyTransition(ctx: ZiminosContext, plan: TransitionPlan): Promise<boolean> {
     const { app, guard } = ctx;
+    const original = {
+        status: plan.currentStatus,
+        archived: plan.previousArchived,
+    };
+    const trace: TransitionMutationTrace = {
+        frontmatterVisited: false,
+        basePathChanged: false,
+    };
 
     await ensureFolderPath(app, plan.targetRoot);
-
-    const progress: TransitionProgress = {
-        moved: false,
-        statusChanged: false,
-        basePathChanged: false,
-        previousArchived: undefined,
-    };
 
     try {
         // 使用 FileManager 移动整个 TFolder，让 Obsidian 按设置维护内部链接。
         // 登记必须覆盖整棵子树：Obsidian 维护链接时会逐个改写卡片，那些也是本次搬移的一部分。
         markFolderTree(ctx, plan.projectFolder, plan.targetProjectPath);
         await app.fileManager.renameFile(plan.projectFolder, plan.targetProjectPath);
-        progress.moved = true;
 
         const movedMoc = app.vault.getAbstractFileByPath(plan.targetMocPath);
 
@@ -314,8 +313,19 @@ async function applyTransition(ctx: ZiminosContext, plan: TransitionPlan): Promi
         // 通过 Obsidian Frontmatter API 修改唯一 YAML，不直接拼接文本。
         guard.mark(movedMoc.path);
         await app.fileManager.processFrontMatter(movedMoc, (movedFrontmatter: Frontmatter) => {
+            // 确认框打开期间用户仍可能编辑 MOC；回滚必须恢复执行瞬间的最新事实
+            original.status = normalizeText(movedFrontmatter.status);
+            original.archived = movedFrontmatter[FIELDS.archived];
+            trace.frontmatterVisited = true;
+
             if (!MOVABLE_TYPES.includes(normalizeText(movedFrontmatter.type))) {
                 throw new Error('移动后的 MOC 缺少 type: project（项目）或 type: book（书）。');
+            }
+
+            if (!plan.transition.allowedStatuses.includes(original.status)) {
+                throw new Error(
+                    `确认期间项目状态已变为“${formatStatusForDisplay(original.status)}”，本次流转已停止。`,
+                );
             }
 
             movedFrontmatter.status = plan.transition.status;
@@ -324,8 +334,6 @@ async function applyTransition(ctx: ZiminosContext, plan: TransitionPlan): Promi
             // 「哪个项目在本月完成」这件事没有别的可信来源：文件系统时间会被同步与脚本改写，
             // frontmatter 的 updated 又恰恰被自写抑制挡住（归档是插件的动作，不是人的编辑），
             // 于是不写它的话，一次归档在数据上根本没有发生过。
-            progress.previousArchived = movedFrontmatter[FIELDS.archived];
-
             if (plan.transition.target === 'archive') {
                 movedFrontmatter[FIELDS.archived] = today();
             } else {
@@ -333,17 +341,19 @@ async function applyTransition(ctx: ZiminosContext, plan: TransitionPlan): Promi
                 delete movedFrontmatter[FIELDS.archived];
             }
         });
-        progress.statusChanged = true;
 
         // 同步修正 MOC Base 中硬编码的 file.folder 查询路径。
-        progress.basePathChanged = await updateMocBaseFolderPath(
+        return await updateMocBaseFolderPath(
             ctx,
             movedMoc,
             plan.sourceProjectPath,
             plan.targetProjectPath,
+            () => {
+                trace.basePathChanged = true;
+            },
         );
     } catch (operationError) {
-        const rollbackError = await rollbackTransition(ctx, plan, progress);
+        const rollbackError = await rollbackTransition(ctx, plan, original, trace);
 
         if (rollbackError) {
             throw new Error(
@@ -353,8 +363,6 @@ async function applyTransition(ctx: ZiminosContext, plan: TransitionPlan): Promi
 
         throw operationError;
     }
-
-    return progress.basePathChanged;
 }
 
 /**
@@ -414,16 +422,18 @@ async function updateMocBaseFolderPath(
     mocFile: TFile,
     oldProjectPath: string,
     newProjectPath: string,
+    onChange?: () => void,
 ): Promise<boolean> {
     const oldFilter = `file.folder == ${JSON.stringify(oldProjectPath)}`;
     const newFilter = `file.folder == ${JSON.stringify(newProjectPath)}`;
     let changed = false;
 
-    ctx.guard.mark(mocFile.path);
     await ctx.app.vault.process(mocFile, (content) => {
         if (!content.includes(oldFilter)) return content;
 
         changed = true;
+        onChange?.();
+        ctx.guard.mark(mocFile.path);
         return content.split(oldFilter).join(newFilter);
     });
 
@@ -431,34 +441,57 @@ async function updateMocBaseFolderPath(
 }
 
 /**
- * 关键步骤失败时尽力恢复原目录、原状态与原 Base 路径。
- * 成功返回 null，失败返回捕获到的异常——由调用方决定如何呈现，
- * 回滚过程本身绝不再抛出，否则原始失败原因会被掩盖。
+ * 关键步骤失败时按磁盘事实恢复原目录、原状态与原 Base 路径。
+ *
+ * 不能依赖「某个 await 成功返回后才置位」的进度旗标：文件系统可能已经提交改名或写入，
+ * 随后的链接维护、同步适配器或事件后处理才让 Promise 拒绝。异常后的源/目标路径才是事实。
+ * 成功返回 null，失败返回捕获到的异常；回滚本身不再抛出，以免掩盖原始失败原因。
  */
 async function rollbackTransition(
     ctx: ZiminosContext,
     plan: TransitionPlan,
-    progress: TransitionProgress,
+    original: { readonly status: string; readonly archived: unknown },
+    trace: Readonly<TransitionMutationTrace>,
 ): Promise<unknown> {
-    if (!progress.moved) return null;
-
     const { app, guard } = ctx;
 
     try {
-        const currentFolder =
-            app.vault.getAbstractFileByPath(plan.targetProjectPath) ?? plan.projectFolder;
+        const sourceEntry = app.vault.getAbstractFileByPath(plan.sourceProjectPath);
+        const targetEntry = app.vault.getAbstractFileByPath(plan.targetProjectPath);
 
-        if (!(currentFolder instanceof TFolder)) {
-            throw new Error(`回滚时没有找到项目目录：${plan.targetProjectPath}`);
+        if (sourceEntry && targetEntry) {
+            throw new Error('回滚时原位置与目标位置同时存在，已停止以免覆盖任何一边');
         }
 
-        if (app.vault.getAbstractFileByPath(plan.sourceProjectPath)) {
-            throw new Error(`原位置已经被占用：${plan.sourceProjectPath}`);
+        if (!sourceEntry && !targetEntry) {
+            throw new Error('回滚时原位置与目标位置都不存在，无法定位项目目录');
         }
 
-        // 反向搬移同样会牵动整棵子树的链接改写，登记范围与正向一致
-        markFolderTree(ctx, currentFolder, plan.sourceProjectPath);
-        await app.fileManager.renameFile(currentFolder, plan.sourceProjectPath);
+        if (sourceEntry && !(sourceEntry instanceof TFolder)) {
+            throw new Error(`回滚时原位置不是项目目录：${plan.sourceProjectPath}`);
+        }
+
+        if (targetEntry) {
+            if (!(targetEntry instanceof TFolder)) {
+                throw new Error(`回滚时目标位置不是项目目录：${plan.targetProjectPath}`);
+            }
+
+            // 反向搬移同样会牵动整棵子树的链接改写，登记范围与正向一致
+            markFolderTree(ctx, targetEntry, plan.sourceProjectPath);
+
+            try {
+                await app.fileManager.renameFile(targetEntry, plan.sourceProjectPath);
+            } catch (renameError) {
+                // 反向搬移也可能“已经提交、随后拒绝”；只有磁盘仍未归位时才认定失败
+                const restored = app.vault.getAbstractFileByPath(plan.sourceProjectPath);
+                const remains = app.vault.getAbstractFileByPath(plan.targetProjectPath);
+
+                if (!(restored instanceof TFolder) || remains) throw renameError;
+            }
+        }
+
+        // rename 在触达任何内容前就失败时，目录事实确认原位即可；不可用旧计划覆盖并发编辑。
+        if (!trace.frontmatterVisited && !trace.basePathChanged) return null;
 
         const restoredMoc = app.vault.getAbstractFileByPath(plan.expectedMocPath);
 
@@ -466,18 +499,19 @@ async function rollbackTransition(
             throw new Error(`回滚后没有找到项目 MOC：${plan.expectedMocPath}`);
         }
 
-        if (progress.statusChanged) {
+        if (trace.frontmatterVisited) {
+            // 标记在正向回调内部落下：即使写盘已提交后 Promise 才拒绝，这里也会恢复
             guard.mark(restoredMoc.path);
             await app.fileManager.processFrontMatter(restoredMoc, (frontmatter: Frontmatter) => {
-                frontmatter.status = plan.currentStatus;
+                frontmatter.status = original.status;
 
-                // 状态与归档日是一次写入落的两个字段，回滚也必须一起还原
-                if (progress.previousArchived === undefined) delete frontmatter[FIELDS.archived];
-                else frontmatter[FIELDS.archived] = progress.previousArchived;
+                if (original.archived === undefined) delete frontmatter[FIELDS.archived];
+                else frontmatter[FIELDS.archived] = original.archived;
             });
         }
 
-        if (progress.basePathChanged) {
+        if (trace.basePathChanged) {
+            // 正向 Base 回调已经产出新内容；无论 Promise 是否成功返回，都尝试反向恢复
             await updateMocBaseFolderPath(
                 ctx,
                 restoredMoc,

@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 零 import。它只认字符串，不认识 Obsidian、不认识业务、也不认识设置对象
+ * [INPUT]: 依赖 ./lineEndings 的 lineEndingOf；其余只认字符串，不认识 Obsidian 与业务
  * [OUTPUT]: 对外提供规则目录 FORMAT_RULES 与它的键 FormatRuleKey、默认启用清单 DEFAULT_FORMAT_RULES、
  *           读取侧兜底 normalizeFormatRules，以及保留原换行风格的唯一入口 formatMarkdown
  * [POS]: core 的 Markdown 排版层，与 markdown.ts 分工明确：那边动的是「往哪一行插什么」，
@@ -12,6 +12,8 @@
  *        而断链既不报错也没人当天发现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
+
+import { lineEndingOf } from './lineEndings';
 
 // ============================================================
 // 规则目录
@@ -323,13 +325,6 @@ export function formatMarkdown(content: string, enabled: readonly string[]): str
     const formatted = assemble(frontmatter, out.join('\n'), on);
 
     return lineEnding === '\n' ? formatted : formatted.replace(/\n/g, lineEnding);
-}
-
-/** 保留文件原有的换行约定；无换行的单行文件按通用 LF 输出 */
-function lineEndingOf(content: string): '\r\n' | '\n' | '\r' {
-    const matched = content.match(/\r\n|\n|\r/)?.[0];
-
-    return matched === '\r\n' || matched === '\r' ? matched : '\n';
 }
 
 /**

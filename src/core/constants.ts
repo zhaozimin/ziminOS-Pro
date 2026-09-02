@@ -11,6 +11,10 @@
  *           付费流水字段 PAYMENT_FIELDS，读书笔记契约 BOOK_HEADINGS/BOOK_CHAPTER_PREFIX/
  *           BOOK_THOUGHT_PREFIX 与标签契约 BOOK_TAG_COUNTS/BOOK_TAG_DEFAULTS，外观开关契约 SNIPPET_FOLDER_NAME/SNIPPET_EXTENSION/
  *           APPEARANCE_FILE_NAME/ENABLED_SNIPPETS_KEY，
+ *           文件夹计数契约 FOLDER_COUNT_TARGETS/FOLDER_COUNT_DEFAULTS 及其类型 FolderCountTarget，
+ *           最近文件契约 RECENT_FILES_FILE/RECENT_FILES_KEEP/RECENT_FILES_LIMITS/
+ *           RECENT_FILES_SORTS/RECENT_FILES_DEFAULTS 及其类型 RecentFilesSort，
+ *           光标记忆契约 CURSOR_STATE_FILE/CURSOR_MEMORY_LIMIT，
  *           视图代码块契约 VIEW_BLOCK_LANG/VIEW_REFRESH_DEBOUNCE_MS，
  *           以及第二版三库系统的赛博永生契约 EXPORT_MANIFEST_FILE/EXPORT_MANIFEST_HEADING/
  *           EXPORT_MANIFEST_SEPARATOR 与 ETERNAL_FOLDERS/ETERNAL_INDEX_FILE/ETERNAL_LOG_FILE/
@@ -604,6 +608,93 @@ export const APPEARANCE_FILE_NAME = 'appearance.json';
 
 /** appearance.json 中登记已启用片段的键；值是不含扩展名的文件基名数组 */
 export const ENABLED_SNIPPETS_KEY = 'enabledCssSnippets';
+
+// ============================================================
+// 文件浏览器：文件夹计数
+// ============================================================
+
+/**
+ * 文件夹右侧那个数字数的是什么。
+ *
+ * 三个取值就是学员看着文件浏览器时会问的三个问题：这里面有多少篇笔记、
+ * 我有几个项目（也就是几个子文件夹）、这个文件夹一共装了多少东西。
+ * 三者刻意都收成**一个**数字：侧边栏宽度以像素计，两个数并排会把文件夹名挤成省略号，
+ * 而完整的三项拆分改由数字自己的悬停提示给出——常驻的那一个安静，问一句才把话说全。
+ *
+ * 「全部条目」把附件也算进去，是因为它承诺的是「一共」；
+ * 少算图片的「一共」是句假话，而假话不会报错。
+ */
+export const FOLDER_COUNT_TARGETS = ['notes', 'folders', 'all'] as const;
+
+/** 计数口径的联合类型，供设置页与读取侧共用；写错一个字母在编译期倒下 */
+export type FolderCountTarget = (typeof FOLDER_COUNT_TARGETS)[number];
+
+/**
+ * 全新库的计数默认值，也是读取侧的回落值。
+ *
+ * 默认数笔记且**含子文件夹**：这是唯一一档在任何层级上都说得通的口径。
+ * 只数本层的话，01-projects 这种「只装文件夹」的层会显示 0——
+ * 一个空文件夹与一个装着八个项目、两百篇卡片的文件夹长得一模一样，
+ * 那个数字于是既不解释什么，还让人以为功能坏了。
+ */
+export const FOLDER_COUNT_DEFAULTS = {
+    target: 'notes',
+    recursive: true,
+} as const;
+
+// ============================================================
+// 文件浏览器：最近文件
+// ============================================================
+
+/**
+ * 状态文件名，与日历的 holiday-cache.json 同一档：它们是**状态**不是设置。
+ *
+ * 分家的理由很具体：升级契约承诺 data.json 的 SHA-256 前后不变，
+ * 而「我刚翻过哪几篇」「光标停在第几行」每分钟都在改。
+ * 混进 data.json 之后那条承诺就永远验不过，验不过的承诺等于没有承诺。
+ */
+export const RECENT_FILES_FILE = 'recent-files.json';
+
+/** 光标记忆的状态文件名。同上，同一条判据 */
+export const CURSOR_STATE_FILE = 'cursor-positions.json';
+
+/**
+ * 记录里最多留几条（与「显示几条」是两个数）。
+ *
+ * 留得比能显示的多，是为了让「显示 10 条」的人改成「显示 50 条」时立刻就有 50 条，
+ * 而不是从此刻重新攒；留得有上限，是因为一份永远只增不减的清单迟早变成一份日志。
+ */
+export const RECENT_FILES_KEEP = 50;
+
+/** 「显示几条」的候选。既是设置页下拉框的选项，又是读取侧的合法性判据，故必须同源 */
+export const RECENT_FILES_LIMITS: readonly number[] = [10, 20, 30, 50];
+
+/**
+ * 清单的两种排法。
+ *
+ * 成员永远是「你打开过的」，两个取值只改排序：opened 按打开时刻，modified 按文件的最后修改时间。
+ * 分成两种而不是只留一种，是因为「我刚才在哪」与「我最近改了什么」是两个真实且不同的问题——
+ * 读了一天资料没动笔的人问前者，写了一天的人问后者。
+ */
+export const RECENT_FILES_SORTS = ['opened', 'modified'] as const;
+
+/** 排法的联合类型，供设置页与读取侧共用 */
+export type RecentFilesSort = (typeof RECENT_FILES_SORTS)[number];
+
+/** 全新库的最近文件默认值，也是读取侧的回落值 */
+export const RECENT_FILES_DEFAULTS = {
+    limit: 30,
+    sort: 'opened',
+} as const;
+
+/**
+ * 光标记忆最多记几篇笔记。
+ *
+ * 它不是设置：记 200 篇还是 500 篇，用户永远没法从界面上察觉差别，
+ * 而一个察觉不到差别的开关只是让设置页更长。取 200 是「常用笔记全都在里面」
+ * 与「状态文件仍然只有几十 KB」之间的取值。
+ */
+export const CURSOR_MEMORY_LIMIT = 200;
 
 // ============================================================
 // 视图代码块

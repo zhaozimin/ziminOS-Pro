@@ -1,0 +1,9 @@
+# ziminOS：只隔离每位用户自己的本地状态，公共插件与外观配置仍可正常跟踪。
+workspace*.json
+plugins/ziminos/data.json
+plugins/ziminos/holiday-cache.json
+plugins/ziminos/recent-files.json
+plugins/ziminos/cursor-positions.json
+plugins/dataview/data.json
+plugins/obsidian-outliner/data.json
+plugins/obsidian-quiet-outline/data.json

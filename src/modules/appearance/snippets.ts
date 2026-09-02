@@ -9,6 +9,7 @@
  *        事实与生效刻意分成两条路，不是啰嗦：
  *        事实只认磁盘（snippets 目录 + appearance.json），因此开关里看到的清单
  *        与「设置 → 外观」看到的永远是同一份，哪怕内部实现哪天变了也不会说谎；
+ *        appearance.json 若已损坏则拒绝开关，不拿空对象覆盖用户主题、强调色等其他配置；
  *        生效那一步没有公开替代品，故做成可选调用 + 能力探测 + 公开 API 兜底，
  *        探不到就改 appearance.json 并告知重载，功能降级但绝不崩。
  *        不缓存、不监听、不轮询：每次有人问就现读一次磁盘，这是最便宜也最不会过期的做法
@@ -163,7 +164,7 @@ function appearancePath(app: App): string {
     return `${app.vault.configDir}/${APPEARANCE_FILE_NAME}`;
 }
 
-/** 读出已启用片段名集合。文件缺失、不是合法 JSON、键不存在，一律当作「一个都没开」 */
+/** 读出已启用片段名集合。文件缺失或键不存在可视为空；损坏文件必须拒绝写入 */
 async function readEnabledNames(app: App): Promise<Set<string>> {
     return extractEnabledNames(await readAppearanceConfig(app));
 }
@@ -199,8 +200,9 @@ async function writeEnabledNames(app: App, name: string, enabled: boolean): Prom
 /**
  * 读出 appearance.json 的全部键值。
  *
- * 逐键搬进一个新对象而不是直接用解析结果，是为了让类型收敛成 Record 而不需要任何断言；
- * 顺带也挡掉了「文件里是个数组或一个数字」这类畸形内容。
+ * 逐键搬进一个新对象而不是直接用解析结果，是为了让类型收敛成 Record 而不需要任何断言。
+ * 文件存在却读不懂时绝不返回空对象：appearance.json 属于 Obsidian 与用户，拿空对象继续写
+ * 会顺手抹掉 cssTheme、accentColor 等不属于本插件的配置。
  */
 async function readAppearanceConfig(app: App): Promise<Record<string, unknown>> {
     const config: Record<string, unknown> = {};
@@ -212,12 +214,15 @@ async function readAppearanceConfig(app: App): Promise<Record<string, unknown>> 
 
     try {
         parsed = JSON.parse(await app.vault.adapter.read(path));
-    } catch {
-        // 用户手改坏了 appearance.json 不该连累开关；当作空配置继续，下一次写入会把它修回合法 JSON
-        return config;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        throw new Error(`无法读取外观配置 ${path}：${message || '文件不是合法 JSON'}`);
     }
 
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return config;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error(`外观配置 ${path} 的顶层必须是 JSON 对象，已拒绝覆盖原文件`);
+    }
 
     for (const [key, value] of Object.entries(parsed)) config[key] = value;
 

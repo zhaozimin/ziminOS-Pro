@@ -14,7 +14,9 @@
  *        抓详情 → 建《书名》文件夹与 MOC（YAML 与书籍信息小节都已填好，
  *        UID 直接取这本书的 ISBN、标签直接取豆瓣的分类词）→
  *        遍历本机可用的划线来源 → 按书名认出这本书 → 划线直接落进「全部划线」小节。
- *        中间不产生任何需要学员再搬一次的中转文件，这正是「一步」的全部含义
+ *        中间不产生任何需要学员再搬一次的中转文件，这正是「一步」的全部含义。
+ *        三条异步命令共用异常边界，取数进度提示由 finally 收口；底层异常不会变成未处理拒绝，
+ *        同步也只在合并真正改变文本时标记自写，幂等同步不伪造文件变更事实
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -54,7 +56,14 @@ export function registerReadBookCommand(
     create: BookContainerCreator,
 ): void {
     ctx.commands.register(BOOK_COMMANDS.read, () => {
-        void readBook(ctx, create);
+        runBookCommand(() => readBook(ctx, create), '读一本书失败：');
+    });
+}
+
+/** 命令边界统一接住异步异常；内部步骤可以专注业务，用户仍永远得到中文收场 */
+function runBookCommand(task: () => Promise<void>, failurePrefix: string): void {
+    void task().catch((error) => {
+        new Notice(failurePrefix + (describe(error) || '未知错误'), 10000);
     });
 }
 
@@ -186,9 +195,14 @@ export async function pullHighlights(
 
     const title = names[0] ?? '';
     const pulling = new Notice(MESSAGES.pulling, 0);
-    const hits = await collectHighlightsFor(ctx, names, author);
+    let hits;
 
-    pulling.hide();
+    try {
+        hits = await collectHighlightsFor(ctx, names, author);
+    } finally {
+        // 即使未来汇流层出现未预料异常，无限时长的进度提示也必须收掉
+        pulling.hide();
+    }
 
     // 来源自己交代的「这次少了什么」，一律带到学员眼前
     const notes = hits.map((hit) => hit.note ?? '').filter(Boolean);
@@ -210,9 +224,12 @@ export async function pullHighlights(
 
     const mergeRun: { outcome?: MergeOutcome } = {};
 
-    ctx.guard.mark(moc.path);
     await ctx.app.vault.process(moc, (content) => {
         mergeRun.outcome = mergeHighlights(content, all);
+
+        if (mergeRun.outcome.content === content) return content;
+
+        ctx.guard.mark(moc.path);
 
         return mergeRun.outcome.content;
     });
@@ -268,7 +285,7 @@ function describe(error: unknown): string {
  */
 export function registerSyncHighlightsCommand(ctx: ZiminosContext): void {
     ctx.commands.register(BOOK_COMMANDS.sync, () => {
-        void syncCurrentBook(ctx);
+        runBookCommand(() => syncCurrentBook(ctx), '同步读书划线失败：');
     });
 }
 
@@ -339,7 +356,7 @@ function stripBraces(name: string): string {
  */
 export function registerConnectWereadCommand(ctx: ZiminosContext): void {
     ctx.commands.register(BOOK_COMMANDS.connectWeread, () => {
-        void (async () => {
+        runBookCommand(async () => {
             const ok = await loginWeread(ctx);
 
             new Notice(
@@ -348,6 +365,6 @@ export function registerConnectWereadCommand(ctx: ZiminosContext): void {
                     : '没有连上微信读书。窗口关掉了、或者还没扫码；随时可以再按一次。',
                 8000,
             );
-        })();
+        }, '连接微信读书失败：');
     });
 }

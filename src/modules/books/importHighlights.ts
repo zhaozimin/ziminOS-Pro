@@ -1,9 +1,11 @@
 /**
  * [INPUT]: 依赖 obsidian 的 ButtonComponent/Modal/Notice/TFile 与 App 类型；
  *          依赖 core/commands 的 BOOK_COMMANDS、core/constants 的 BOOK_CHAPTER_PREFIX/
- *          BOOK_HEADINGS/BOOK_THOUGHT_PREFIX/BOOK_CALLOUTS、core/modals 的 ChoiceModal/TextAreaModal、
+ *          BOOK_HEADINGS/BOOK_THOUGHT_PREFIX/BOOK_CALLOUTS、core/lineEndings 的行尾保真、
+ *          core/modals 的 ChoiceModal/TextAreaModal、
  *          core/types 的 ZiminosContext；依赖同目录 identity 的三个判定函数、
- *          parsers 的 parseHighlightExport 与 templates 的行形态四函数
+ *          parsers 的 parseHighlightExport、highlightIdentity 的批次归并与身份键、
+ *          templates 的行形态四函数
  * [OUTPUT]: 对外提供 registerImportHighlightsCommand（命令 import-book-highlights）
  *           与 mergeHighlights（合并去重的纯函数，导出以供检验）
  * [POS]: books 模块的导入编排：选书 → 粘贴 → 解析 →（多本书时选一本）→ 确认 → 合并写入。
@@ -26,9 +28,15 @@ import {
     BOOK_HEADINGS,
     BOOK_THOUGHT_PREFIX,
 } from '../../core/constants';
+import { joinTextLines, splitTextLines } from '../../core/lineEndings';
 import { ChoiceModal, TextAreaModal } from '../../core/modals';
 import type { ZiminosContext } from '../../core/types';
 import { allBookMocs, bookNameOf, isArchivedBook, isBookMoc } from './identity';
+import {
+    coalesceHighlights,
+    highlightKey,
+    normalizedHighlightKey,
+} from './highlightIdentity';
 import { parseHighlightExport } from './parsers';
 import type { ParsedBook, ParsedHighlight } from './parsers';
 import {
@@ -184,13 +192,24 @@ async function runImport(ctx: ZiminosContext): Promise<void> {
             await ctx.app.workspace.getLeaf(false).openFile(target, { active: true });
         }
 
-        // 写入时在最新内容上重算一遍：确认框弹着的时候文件可能被改，试算结果只当预告
-        ctx.guard.mark(target.path);
-        await ctx.app.vault.process(target, (content) =>
-            mergeHighlights(content, book.highlights).content,
-        );
+        // 写入时在最新内容上重算；预览只负责授权，完成提示只认这次真实落盘的账
+        let outcome: MergeOutcome | null = null;
 
-        new Notice(describeImported(preview, targetName));
+        await ctx.app.vault.process(target, (content) => {
+            const merged = mergeHighlights(content, book.highlights);
+
+            outcome = merged;
+
+            if (merged.content === content) return content;
+
+            ctx.guard.mark(target.path);
+
+            return merged.content;
+        });
+
+        if (!outcome) throw new Error('划线合并没有返回结果');
+
+        new Notice(describeImported(outcome, targetName));
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
@@ -206,6 +225,10 @@ async function runImport(ctx: ZiminosContext): Promise<void> {
  * 而第二次因为想法也已存在，会撞上「没有新增内容」，把误判坐得更实。
  */
 function describeImported(outcome: MergeOutcome, targetName: string): string {
+    if (!outcome.added && !outcome.attachedThoughts) {
+        return `确认期间${targetName}已被其他同步补齐，没有重复写入。`;
+    }
+
     const parts: string[] = [];
 
     if (outcome.added) parts.push(`${outcome.added} 条划线`);
@@ -318,7 +341,7 @@ function stripQuote(line: string, depth: number): string {
     return body.trim();
 }
 
-/** 独立想法条目的键前缀，与 keyOfHighlight 共用 */
+/** 独立想法条目的键前缀，与 highlightKey 共用 */
 const THOUGHT_MARKER = BOOK_THOUGHT_PREFIX.trim();
 
 const TOP_BULLET = /^- /;
@@ -334,36 +357,24 @@ const NESTED_BULLET = /^[ \t]+- /;
  * 小节里若出现围栏（学员挪过 base 块），插入点一律停在围栏之前。
  * 全部插入点按原始行号计算、从后往前落刀，因此既有行一个都不动。
  */
-/**
- * 把一条划线压平成单行。
- *
- * 划线可以跨段：微信读书的 `markText` 里真的带着换行（划过一整段又续到下一段时）。
- * 原样写进去的结果是**它自己撑破了自己那一行**——`- 第一段` 之后那个换行让第二段
- * 变成一条与列表无关的裸行，Markdown 上不再属于这一条，去重时也读不回来：
- * 下次同步算出的键含两段，文件里那条只有第一段，于是每同步一次就重复一次，且没有上限。
- *
- * 真机实测抓到过（2026-08-14，《思维》4 条划线里有 2 条跨段）：第二次同步新增 2 条。
- * 压平放在入口而不是写入处，是为了让**写入与去重看到的是同一份文本**——
- * 这正是本模块「去重键与写入格式必须同源」那条纪律的延伸；分开做就会再次分叉。
- */
-function flatten(highlight: ParsedHighlight): ParsedHighlight {
-    return {
-        chapter: highlight.chapter.replace(/\s+/g, ' ').trim(),
-        text: highlight.text.replace(/\s+/g, ' ').trim(),
-        thoughts: highlight.thoughts.map((thought) => thought.replace(/\s+/g, ' ').trim()),
-    };
-}
-
 export function mergeHighlights(
     content: string,
     incoming: readonly ParsedHighlight[],
 ): MergeOutcome {
-    const highlights = incoming.map(flatten);
-    let lines = content.split('\n');
+    // 先把本批重复键归并：同一条划线后来才带来的想法不能被先到的空记录吃掉。
+    const highlights = coalesceHighlights(incoming);
+    const split = splitTextLines(content);
+    const lineEnding = split.lineEnding;
+    let lines = split.lines;
     let headingIndex = lines.findIndex((line) => line.trim() === BOOK_HEADINGS.highlights);
 
     if (headingIndex < 0) {
-        lines = `${content.replace(/\s*$/, '')}\n\n${BOOK_HEADINGS.highlights}\n`.split('\n');
+        const rebuilt = joinTextLines(
+            [content.replace(/\s*$/, ''), '', BOOK_HEADINGS.highlights, ''],
+            lineEnding,
+        );
+
+        lines = splitTextLines(rebuilt).lines;
         headingIndex = lines.findIndex((line) => line.trim() === BOOK_HEADINGS.highlights);
     }
 
@@ -390,7 +401,10 @@ export function mergeHighlights(
             // 键要归一：章节标题同样会被排版整理改写（「第1章 A的意义」→「第 1 章 A 的意义」），
             // 不归一的话每导入一次就新开一个同名章节块，同一章在页面上被切成好几段。
             // 这与划线键归一是同一条理由，漏了章节名是两套判据的不对称
-            chapterHeadingAt.set(normalizedKey(raw.slice(BOOK_CHAPTER_PREFIX.length)), cursor);
+            chapterHeadingAt.set(
+                normalizedHighlightKey(raw.slice(BOOK_CHAPTER_PREFIX.length)),
+                cursor,
+            );
             owner = null;
             continue;
         }
@@ -407,13 +421,15 @@ export function mergeHighlights(
 
         // 嵌一层的备注块是上面那条划线的想法；顶层的是一条没有划线的独立笔记
         if (isCalloutHead(raw, BOOK_CALLOUTS.thought, 1)) {
-            owner?.thoughts.add(normalizedKey(stripQuote(lines[cursor + 1] ?? '', 2)));
+            owner?.thoughts.add(
+                normalizedHighlightKey(stripQuote(lines[cursor + 1] ?? '', 2)),
+            );
             cursor += 1;
             continue;
         }
 
         if (isCalloutHead(raw, BOOK_CALLOUTS.thought)) {
-            const body = normalizedKey(stripQuote(lines[cursor + 1] ?? '', 1));
+            const body = normalizedHighlightKey(stripQuote(lines[cursor + 1] ?? '', 1));
 
             owner = { line: cursor + 1, thoughts: new Set([body]), legacy: false };
             existingHighlights.set(body ? THOUGHT_MARKER + body : '', owner);
@@ -430,7 +446,7 @@ export function mergeHighlights(
 
         if (NESTED_BULLET.test(raw)) {
             owner?.thoughts.add(
-                normalizedKey(stripThoughtPrefix(raw.replace(NESTED_BULLET, '').trim())),
+                normalizedHighlightKey(stripThoughtPrefix(raw.replace(NESTED_BULLET, '').trim())),
             );
         }
     }
@@ -510,7 +526,7 @@ export function mergeHighlights(
     let attachedThoughts = 0;
 
     for (const highlight of highlights) {
-        const key = keyOfHighlight(highlight);
+        const key = highlightKey(highlight);
 
         if (!key) continue;
 
@@ -524,7 +540,7 @@ export function mergeHighlights(
             // 「重要」「同意」这类短评一旦在别处出现过，学员这次写的就被静默丢掉了
             if (highlight.text && existing.line >= 0) {
                 const fresh = highlight.thoughts.filter(
-                    (thought) => !existing.thoughts.has(normalizedKey(thought)),
+                    (thought) => !existing.thoughts.has(normalizedHighlightKey(thought)),
                 );
 
                 if (fresh.length) {
@@ -546,7 +562,9 @@ export function mergeHighlights(
 
                     pushThought(at, rendered);
 
-                    for (const thought of fresh) existing.thoughts.add(normalizedKey(thought));
+                    for (const thought of fresh) {
+                        existing.thoughts.add(normalizedHighlightKey(thought));
+                    }
 
                     attachedThoughts += fresh.length;
                 }
@@ -555,12 +573,11 @@ export function mergeHighlights(
             continue;
         }
 
-        // 行号 -1 表示「本批次新加的，还没有真实行号」——同批次重复照样挡，想法补挂则挂不上。
-        // 想法记在它自己名下而不是一个全局集合，否则同批次另一条划线用了同一句短评，
-        // 这一条的想法就会被认成「已经有了」
+        // coalesceHighlights 已保证本批一个身份只到达一次。
+        // 行号 -1 只表示「本次刚加、还没有真实行号」，防御后续逻辑误当成旧行补挂。
         existingHighlights.set(key, {
             line: -1,
-            thoughts: new Set(highlight.thoughts.map(normalizedKey)),
+            thoughts: new Set(highlight.thoughts.map(normalizedHighlightKey)),
             legacy: false,
         });
 
@@ -575,7 +592,7 @@ export function mergeHighlights(
         }
 
         // 查表用归一键，写标题用原文：认得出排版整理改写过的旧标题，新开的块仍写导出里的原名
-        const chapterKey = normalizedKey(chapter);
+        const chapterKey = normalizedHighlightKey(chapter);
         const headingLine = chapterHeadingAt.get(chapterKey);
 
         if (headingLine !== undefined) {
@@ -600,7 +617,7 @@ export function mergeHighlights(
         if (bucket) lines.splice(at, 0, ...bucket.thoughts, ...bucket.lines);
     }
 
-    return { content: lines.join('\n'), added, skipped, attachedThoughts };
+    return { content: joinTextLines(lines, lineEnding), added, skipped, attachedThoughts };
 }
 
 /** 这一行是不是代码围栏的起止（容忍缩进） */
@@ -608,32 +625,15 @@ function isFenceLine(line: string): boolean {
     return line.replace(/^\s+/, '').startsWith('```');
 }
 
-/**
- * 去重键：去掉全部空白与常见强调符。
- * 空白因为排版整理会往汉英之间补空格；强调符因为学员会顺手加粗划线——
- * 两种编辑都不该让同一条划线在下次导入时变成「新的」。
- */
-function normalizedKey(text: string): string {
-    return text.replace(/[\s*_~=`]/g, '');
-}
-
-/** 一条解析出的划线的键。独立想法行以想法标记开头，与同文字的划线不同键 */
-function keyOfHighlight(highlight: ParsedHighlight): string {
-    if (highlight.text) return normalizedKey(highlight.text);
-
-    // 没有划线的独立笔记：拿它第一条想法当身份（Kindle 里这种条目本来就只有一条）
-    const thoughtKey = normalizedKey(highlight.thoughts[0] ?? '');
-
-    return thoughtKey ? BOOK_THOUGHT_PREFIX.trim() + thoughtKey : '';
-}
-
-/** 一条既有顶层行的键，规则与 keyOfHighlight 严格对偶 */
+/** 一条既有顶层行的键，规则与 highlightKey 严格对偶 */
 function keyOfLineBody(body: string): string {
     const marker = BOOK_THOUGHT_PREFIX.trim();
 
-    if (body.startsWith(marker)) return marker + normalizedKey(body.slice(marker.length));
+    if (body.startsWith(marker)) {
+        return marker + normalizedHighlightKey(body.slice(marker.length));
+    }
 
-    return normalizedKey(body);
+    return normalizedHighlightKey(body);
 }
 
 /** 剥掉想法行的图形前缀 */

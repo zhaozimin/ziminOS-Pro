@@ -3,7 +3,8 @@
  *          child_process/os/fs/path，确保移动端加载插件时不解析桌面运行时依赖
  * [OUTPUT]: 对外提供 appleBooksAvailable、listAppleBooks、readAppleBookHighlights 与 AppleBook 契约
  * [POS]: 划线来源之一：苹果图书。它是三个来源里最确定的一个——数据就在本机两个 SQLite 里，
- *        零网络、零登录、同输入同结果，「脚本驱动」这条红线在这一支上原样成立。
+ *        零网络、零登录、同输入同结果，「脚本驱动」这条红线在这一支上原样成立；
+ *        多个历史 SQLite 共存时先按修改时间排序、再验目标表，只读取最新的兼容主库
  *        取数方式是 `spawn('sqlite3', [库, SQL, '-json'])`：macOS 自带 sqlite3（实测 3.51.0），
  *        因此不必打包任何 sqlite 库，也不必碰原生模块——Obsidian 插件带原生模块是个死结。
  *        它比「让学员在图书里复制粘贴」多给两样东西：**章节名**（ZFUTUREPROOFING5）
@@ -45,6 +46,7 @@ interface AppleNodeTools {
     readonly homedir: typeof import('os').homedir;
     readonly existsSync: typeof import('fs').existsSync;
     readonly readdirSync: typeof import('fs').readdirSync;
+    readonly statSync: typeof import('fs').statSync;
     readonly join: typeof import('path').join;
 }
 
@@ -66,6 +68,7 @@ function nodeTools(): AppleNodeTools | null {
             homedir: os.homedir,
             existsSync: fs.existsSync,
             readdirSync: fs.readdirSync,
+            statSync: fs.statSync,
             join: path.join,
         };
     } catch {
@@ -75,20 +78,30 @@ function nodeTools(): AppleNodeTools | null {
     return cachedNodeTools;
 }
 
-/** 目录里的第一个 .sqlite；没有就返回 null（没装图书、或从没打开过） */
-function firstSqliteIn(relative: string): string | null {
+/**
+ * 目录里的 SQLite 主库，按修改时间从新到旧排列。
+ * readdirSync 的顺序没有业务含义，历史版本库共存时拿 found[0] 会随机读到旧快照。
+ */
+function sqliteCandidatesIn(relative: string): string[] {
     const tools = nodeTools();
 
-    if (!tools) return null;
+    if (!tools) return [];
 
     const dir = tools.join(tools.homedir(), relative);
 
-    if (!tools.existsSync(dir)) return null;
+    if (!tools.existsSync(dir)) return [];
 
     // 排除 -wal / -shm 这些同名旁支，只要主库文件
-    const found = tools.readdirSync(dir).filter((name) => name.endsWith('.sqlite'));
+    const found = tools.readdirSync(dir)
+        .filter((name) => name.endsWith('.sqlite'))
+        .map((name) => {
+            const path = tools.join(dir, name);
 
-    return found.length ? tools.join(dir, found[0]) : null;
+            return { path, modified: tools.statSync(path).mtimeMs };
+        })
+        .sort((left, right) => right.modified - left.modified);
+
+    return found.map(({ path }) => path);
 }
 
 /**
@@ -98,7 +111,7 @@ function firstSqliteIn(relative: string): string | null {
 export function appleBooksAvailable(): boolean {
     if (!Platform.isDesktopApp || process.platform !== 'darwin') return false;
 
-    return !!firstSqliteIn(LIBRARY_DIR) && !!firstSqliteIn(ANNOTATION_DIR);
+    return sqliteCandidatesIn(LIBRARY_DIR).length > 0 && sqliteCandidatesIn(ANNOTATION_DIR).length > 0;
 }
 
 // ============================================================
@@ -188,14 +201,41 @@ function quote(value: string): string {
 }
 
 /**
+ * 从新到旧寻找真正兼容当前查询的数据库。
+ * 文件名和修改时间只能排序，目标表才是兼容性的事实；坏库被跳过，但全部打不开时保留最后异常。
+ */
+async function compatibleSqliteIn(relative: string, requiredTable: string): Promise<string | null> {
+    let lastError: unknown = null;
+
+    for (const candidate of sqliteCandidatesIn(relative)) {
+        try {
+            const table = await query(
+                candidate,
+                `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${quote(requiredTable)} LIMIT 1`,
+            );
+
+            if (table.length) return candidate;
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    if (lastError) throw lastError;
+
+    return null;
+}
+
+/**
  * 图书库里全部有划线的书。
  *
  * 只列有划线的：图书库里躺着一堆买了没读的书，全列出来会让选书弹窗变成一份购物记录。
  * 两个库分属两个文件、sqlite3 一次只连一个，所以先取有划线的 assetId 集合，再回图书库要书名。
  */
 export async function listAppleBooks(): Promise<readonly AppleBook[]> {
-    const libraryDb = firstSqliteIn(LIBRARY_DIR);
-    const annotationDb = firstSqliteIn(ANNOTATION_DIR);
+    const [libraryDb, annotationDb] = await Promise.all([
+        compatibleSqliteIn(LIBRARY_DIR, 'ZBKLIBRARYASSET'),
+        compatibleSqliteIn(ANNOTATION_DIR, 'ZAEANNOTATION'),
+    ]);
 
     if (!libraryDb || !annotationDb) return [];
 
@@ -237,7 +277,7 @@ export async function listAppleBooks(): Promise<readonly AppleBook[]> {
  * 照收会把学员明确删掉的句子又搬回来。
  */
 export async function readAppleBookHighlights(assetId: string): Promise<readonly ParsedHighlight[]> {
-    const annotationDb = firstSqliteIn(ANNOTATION_DIR);
+    const annotationDb = await compatibleSqliteIn(ANNOTATION_DIR, 'ZAEANNOTATION');
 
     if (!annotationDb) return [];
 

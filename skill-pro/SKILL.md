@@ -57,7 +57,7 @@ system_root="$(pwd -P)"
 
 施工源有两种来路，**先看用户手里有没有分发包**。多数用户拿到的是一个压缩包而不是仓库地址。
 
-两条来路取的是**同一个仓库**，只是形态不同：第二版的事实源是 Gitee 上的 `ziminzhao/ziminos-pro`。**GitHub 上的 `zhaozimin/ziminOS` 是第一版仓库，里面没有 `vault-pro/` 与 `skill-pro/`**，拿它装第二版会卡在下面那张交付物清单上——这是最容易走错的一步，因为第一版的契约里写的正是那个地址。
+两条来路取的是**同一个仓库**，只是形态不同：第二版的事实源是 Gitee 上的 `ziminzhao/ziminos-pro`。**第一版住在另一个仓库 `ziminzhao/zimin-os-v1`，那里没有 `vault-pro/` 与 `skill-pro/`**，拿它装第二版会卡在下面那张交付物清单上——这是最容易走错的一步，因为第一版的契约里写的正是那个地址。（GitHub 上的 `zhaozimin/ziminOS` 已 403，两个版次都不要用它。）
 
 ### 来路一：用户给了分发包（最常见）
 
@@ -79,7 +79,7 @@ git clone --depth 1 "https://gitee.com/ziminzhao/ziminos-pro.git" "$install_stag
 src="$install_staging_dir/repo"
 ```
 
-**地址是 Gitee 的 `ziminzhao/ziminos-pro`，不是 GitHub 的 `zhaozimin/ziminOS`。** 后者是第一版仓库，clone 下来是能成功的——失败要等到交付物清单那一步才发作，报的还是「仓库不完整」这种听上去像网络出错的话。用户如果给的是 GitHub 地址，直接告诉他那是第一版的，换成上面这个。
+**地址是 `ziminzhao/ziminos-pro`，不是第一版那个 `ziminzhao/zimin-os-v1`。** 后者 clone 下来是能成功的——失败要等到交付物清单那一步才发作，报的还是「仓库不完整」这种听上去像网络出错的话。用户如果给的是第一版地址或已经 403 的 GitHub 地址，直接告诉他那不是第二版的，换成上面这个。
 
 clone 需要认证或直接失败时，**不要让用户去创建账号、也不要去找别的镜像**：说明情况，请他改用来路一的分发包。仓库的可见性是作者随时可能调整的东西，而一条装不上的指令好过一条把人引去别处的指令。
 
