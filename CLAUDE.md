@@ -45,7 +45,7 @@ V2 起的二十二个笔记内视图由插件自渲染：笔记里只留一行 `
 AGENTS.md - 智能体任务路由；安装请求强制进入 skill/SKILL.md，开发请求进入项目规格
 README.md - GitHub 公开首页与安装入口；「一分钟安装」以单个可复制 `text` 代码块把桌面智能体导向默认分支的 skill/SKILL.md，不在首页复制第二份安装逻辑
 package.json - 依赖与四条脚本：dev 常驻 watch，test 跑插件审计回归，build 先 tsc 严格检查再 esbuild 打包，check 串行测试与构建
-make-pro-package.sh - 第二版唯一分发出口；先跑插件与智能体两层回归，再组装、校验并产出 zip 与 SHA-256
+make-pro-package.sh - 第二版的打包出口；先跑插件与智能体两层回归，再组装、校验并产出 zip 与 SHA-256。第二版的**事实源仓库是 Gitee 的 `ziminzhao/ziminos-pro`**（GitHub 上的 `zhaozimin/ziminOS` 只有第一版，没有 vault-pro/ 与 skill-pro/），因此 skill-pro/SKILL.md 的两条来路——分发包与 clone——取的是同一个仓库的两种形态
 tsconfig.json - 严格模式 + noEmit；类型检查与代码产出彻底分工，产出只由 esbuild 负责
 esbuild.config.mjs - 唯一构建出口；产物直接写入 vault 插件目录，构建即就位，无需任何同步脚本
 .gitignore - 只忽略 node_modules 与 .DS_Store；main.js 不忽略，学员克隆即可用

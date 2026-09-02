@@ -110,6 +110,21 @@ if (existsSync(manifestPath)) {
     });
 
     /**
+     * 第二版契约必须 clone 第二版的仓库。
+     *
+     * 这条钉的是一个不会在出错那一步报错的错：GitHub 上的 zhaozimin/ziminOS 是第一版仓库，
+     * clone 它完全成功，缺 vault-pro/ 与 skill-pro/ 要等到交付物清单才发作，
+     * 而那时报的是「仓库不完整」——听上去像网络抖了一下，于是用户会去重试而不是换地址。
+     * 第一版契约里写的正是那个地址，抄错一次的代价就是这个。
+     */
+    test('第二版安装契约取的是第二版仓库，不是第一版那个', () => {
+        const contract = readFileSync(path.join(ROOT, 'skill-pro/SKILL.md'), 'utf8');
+
+        assert.match(contract, /git clone[^\n]*gitee\.com\/ziminzhao\/ziminos-pro/);
+        assert.doesNotMatch(contract, /git clone[^\n]*github\.com\/zhaozimin\/ziminOS/);
+    });
+
+    /**
      * 汉化之前写下的账本行用的是英文 `ingest`。少认这一个标记不会报错，
      * 只会让那几份原料整体退回「待提炼」，接着被重复消化一遍、知识层跟着重一遍。
      * 这条钉着它，免得某次「清理遗留」把它顺手删了。

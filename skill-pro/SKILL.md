@@ -55,7 +55,9 @@ system_root="$(pwd -P)"
 
 ## 二、在工作区外取得施工源
 
-施工源有两种来路，**先看用户手里有没有分发包**。第二版是付费版，多数用户拿到的是一个压缩包而不是仓库地址。
+施工源有两种来路，**先看用户手里有没有分发包**。多数用户拿到的是一个压缩包而不是仓库地址。
+
+两条来路取的是**同一个仓库**，只是形态不同：第二版的事实源是 Gitee 上的 `ziminzhao/ziminos-pro`。**GitHub 上的 `zhaozimin/ziminOS` 是第一版仓库，里面没有 `vault-pro/` 与 `skill-pro/`**，拿它装第二版会卡在下面那张交付物清单上——这是最容易走错的一步，因为第一版的契约里写的正是那个地址。
 
 ### 来路一：用户给了分发包（最常见）
 
@@ -67,15 +69,19 @@ unzip -q "<用户给的 zip 路径>" -d "$install_staging_dir"
 src="$(find "$install_staging_dir" -maxdepth 2 -type d -name vault-pro | head -1 | xargs dirname)"
 ```
 
-`$src` 应当是那个同时含 `vault/`、`vault-pro/`、`skill-pro/`、`fonts/` 的目录。找不到就停止并说明包不完整，**不要**试图去 GitHub 补——付费版不在公开仓库里。
+`$src` 应当是那个同时含 `vault/`、`vault-pro/`、`skill-pro/`、`fonts/` 的目录。找不到就停止并说明包不完整，**不要**试图去 GitHub 补那几个缺的目录——那个仓库里根本没有它们。要补只能走来路二，从 Gitee 的第二版仓库重新取一份完整的。
 
 ### 来路二：用户给了仓库地址
 
 ```bash
 install_staging_dir="$(mktemp -d /tmp/ziminos-install.XXXXXX)"
-git clone --depth 1 "https://github.com/zhaozimin/ziminOS.git" "$install_staging_dir/repo"
+git clone --depth 1 "https://gitee.com/ziminzhao/ziminos-pro.git" "$install_staging_dir/repo"
 src="$install_staging_dir/repo"
 ```
+
+**地址是 Gitee 的 `ziminzhao/ziminos-pro`，不是 GitHub 的 `zhaozimin/ziminOS`。** 后者是第一版仓库，clone 下来是能成功的——失败要等到交付物清单那一步才发作，报的还是「仓库不完整」这种听上去像网络出错的话。用户如果给的是 GitHub 地址，直接告诉他那是第一版的，换成上面这个。
+
+clone 需要认证或直接失败时，**不要让用户去创建账号、也不要去找别的镜像**：说明情况，请他改用来路一的分发包。仓库的可见性是作者随时可能调整的东西，而一条装不上的指令好过一条把人引去别处的指令。
 
 两种来路之后的每一步完全相同，因为**分发包内部就是仓库的目录结构**——这么打包正是为了让契约里的路径一个字都不用改。
 
