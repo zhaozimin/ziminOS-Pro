@@ -13,8 +13,12 @@
  *        后者管「动画还没跑完用户就禁用了插件」。
  *        其二，**尊重系统的减少动效设置**。那是无障碍偏好，不是审美偏好；
  *        开着它的人多半是前庭功能敏感，满屏飞行的粒子对他不是庆祝是不适。
- *        其三，**它绝不吃鼠标**。覆盖层铺满整个工作区，若不设 pointer-events: none，
+ *        其三，**它绝不吃鼠标**。覆盖层铺满整个视口，若不设 pointer-events: none，
  *        礼花飞的那一秒钟用户点什么都没反应，而他不会把这归咎于一个动画。
+ *
+ *        定位取 fixed 而不是 absolute：absolute 的 inset: 0 要靠「宿主恰好是个定位祖先」
+ *        才成立，而那是别人家 DOM 的实现细节，今天成立不代表下个版本还成立——
+ *        赌错的表现是整层贴到别的元素上，礼花在屏幕角落里飞。fixed 不问祖先。
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -75,7 +79,10 @@ export function celebrate(ctx: ZiminosContext): void {
         layer.addClass('ziminos-confetti');
         host.appendChild(layer);
 
-        const { width, height } = host.getBoundingClientRect();
+        // 尺寸取窗口而不是宿主元素的 rect：那一层是 position: fixed，
+        // 铺的是整个视口；拿宿主的尺寸算轨迹会让粒子在窗口没铺满工作区时飞错地方
+        const width = win.innerWidth;
+        const height = win.innerHeight;
         const animations: Animation[] = [];
 
         for (const side of ['left', 'right'] as const) {

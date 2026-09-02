@@ -21417,7 +21417,8 @@ function celebrate(ctx) {
     const layer = doc.createElement("div");
     layer.addClass("ziminos-confetti");
     host.appendChild(layer);
-    const { width, height } = host.getBoundingClientRect();
+    const width = win.innerWidth;
+    const height = win.innerHeight;
     const animations = [];
     for (const side of ["left", "right"]) {
       for (let index = 0; index < PIECES_PER_SIDE; index += 1) {

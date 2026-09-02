@@ -1100,7 +1100,9 @@ div.ziminos-table-wrap > table.ziminos-table tbody tr:hover {
  * ============================================================ */
 
 .ziminos-confetti {
-    position: absolute;
+    /* fixed 而不是 absolute：absolute 的 inset: 0 要靠「宿主恰好是个定位祖先」才成立，
+       那是别人家 DOM 的实现细节，赌错的表现是整层贴到别的元素上、礼花在角落里飞 */
+    position: fixed;
     inset: 0;
     /* 绝不吃鼠标：覆盖层铺满整个工作区，不设这条，礼花飞的那两秒用户点什么都没反应，
        而他不会把这归咎于一个动画 */
