@@ -425,6 +425,35 @@ if (existsSync(proContractPath)) {
         assert.ok(contract.includes(`mkdir -p "$eternal/${ETERNAL_FOLDERS.raw}"`), ETERNAL_FOLDERS.raw);
     });
 
+    /**
+     * 系统根必须有一份自己的认路文件，而且安装契约必须真的铺它。
+     *
+     * 这条钉的是「新会话冷启动」那个问题：契约躺在 .ziminos/skills/ 里没有用——
+     * 没有任何东西告诉一个刚打开这个文件夹的智能体去读它，而智能体会自动读的
+     * 恰恰是 CLAUDE.md 与 AGENTS.md。模板在仓库里却没被安装契约拷过去，
+     * 表现不是报错，是用户每开一个窗口都要重新解释一遍这套系统是什么。
+     *
+     * 两头都要验：模板存在、契约里有那两行 cp。少哪一头都等于没有。
+     */
+    test('系统根的认路文件既有模板，也真的被安装契约铺开', () => {
+        const contract = readFileSync(path.join(ROOT, 'skill-pro/SKILL.md'), 'utf8');
+
+        for (const name of ['CLAUDE.md', 'AGENTS.md']) {
+            const template = path.join(ROOT, 'skill-pro/system-root', name);
+
+            assert.ok(existsSync(template), `缺模板 skill-pro/system-root/${name}`);
+            assert.ok(
+                contract.includes(`"$src/skill-pro/system-root/${name}" "$system_root/${name}"`),
+                `安装契约没有把 system-root/${name} 铺到系统根`,
+            );
+        }
+
+        // 认路文件不许写死三本库的目录名当事实源——升级上来的用户那本工作台是他自己取的名字
+        const boot = readFileSync(path.join(ROOT, 'skill-pro/system-root/CLAUDE.md'), 'utf8');
+
+        assert.ok(boot.includes('edition.json'), '认路文件必须指向 edition.json 这个布局事实源');
+    });
+
     /** AGENTS.md 必须说得出三本库的名字，否则「工作区不是笔记库」这件事讲不清楚 */
     test('AGENTS.md 说得出三库的布局', () => {
         const agents = readFileSync(path.join(ROOT, 'AGENTS.md'), 'utf8');

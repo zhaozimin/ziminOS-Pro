@@ -225,6 +225,19 @@ cp -R "$src/skill-pro/scripts"  "$system_root/.ziminos/skills/"
 
 `.ziminos` 是点开头的隐藏目录，且它在三本库之外——Obsidian 永远不会把它当成笔记。
 
+### 6. 让系统根自己会认路
+
+```bash
+cp "$src/skill-pro/system-root/CLAUDE.md" "$system_root/CLAUDE.md"
+cp "$src/skill-pro/system-root/AGENTS.md" "$system_root/AGENTS.md"
+```
+
+**这一步和第 5 步是一件事的两半，缺了它第 5 步等于白做。** 契约躺在 `.ziminos/skills/` 里没有用——没有任何东西告诉一个刚打开这个文件夹的智能体去读它。而智能体打开一个目录时**会自动读**的恰恰是 `CLAUDE.md` 与 `AGENTS.md`，系统根里原本一个都没有。
+
+后果很具体：用户每开一个新会话都得从头解释「我这是个三库系统、库在哪儿、你该读哪份契约」，解释不全智能体就开始猜。铺下这两份之后，他打开文件夹说一句「记一下：……」就能直接干活。
+
+这两份是**给智能体的指令**，不是笔记：Obsidian 打开的是里面那三个文件夹，永远看不到它们；用户可以随手改，改坏了重装即可恢复。
+
 ---
 
 ## 三、B 从第一版升级到第二版
@@ -271,7 +284,7 @@ mkdir -p "$human/.obsidian/plugins/ziminos"
 同样要改 `$eternal/.obsidian/plugins/ziminos/edition.json` 里的 `vaults.human`。**三份标记里的 `vaults` 必须完全一致**，它是系统布局的唯一事实源，不一致会让出库单指向一个不存在的地方。
 
 5. 现有库的 `main.js` / `manifest.json` / `styles.css` 更新到施工源的版本（第二版的功能就在这份产物里）。
-6. 按 A 的第 4、5 步装字体、留说明书。
+6. 按 A 的第 4、5、6 步装字体、留说明书、铺系统根的认路文件。
 7. **现有库的一切「选择」一律不动**：`data.json`、`holiday-cache.json`、`types.json` 已调过的键、`appearance.json` 里用户选过的主题/字体/片段、`app.json`、`templates.json`、用户自己的片段与全部笔记。规则与第一版 `skill/SKILL.md` 第三节的所有权表逐条相同。
 
 升级后**不要**让用户重新点「初始化」——他的库早就开过荒了。
@@ -287,6 +300,7 @@ mkdir -p "$human/.obsidian/plugins/ziminos"
 - `main.js` / `manifest.json` / `styles.css`：整份更新（只有装了插件的「以人为本」与「赛博永生」有）。
 - Dataview / Style Settings 的运行文件、Minimal 主题、十二个实名片段：整份更新。
 - `.ziminos/skills/`：整份更新。
+- **系统根的 `CLAUDE.md` / `AGENTS.md`：缺就补，在就按第三节第 6 步整份更新。** 这两份是 v0.19.0 新增的，此前装好的系统里没有——不补上，用户每开一个新会话仍要从头解释一遍这是什么地方。它们是程序说明不是用户内容；他如果改过，先把差异摆给他看再决定。
 - **`edition.json`：存在就一个字节都不许碰。** 它里面的 `vaults.human` 可能是用户升级时的真实库名，覆盖成模板里的「以人为本」会让出库单指向一个不存在的目录。
 - **`data.json` / `holiday-cache.json` / `types.json` 已有的键 / `appearance.json` 的用户选择 / `app.json` / `templates.json` / 用户自带片段 / 全部笔记：一律不动。**
 
@@ -327,6 +341,8 @@ v0.17.0 把《赛博永生》的三层目录名从英文改成中文。**只有�
 以人为本/
 赛博永生/
 .ziminos/
+CLAUDE.md
+AGENTS.md
 ```
 
 逐条确认：
@@ -337,6 +353,7 @@ v0.17.0 把《赛博永生》的三层目录名从英文改成中文。**只有�
 - `兼收并蓄/灵感集.md` 与 `兼收并蓄/剪藏/` 存在；`.obsidian/plugins/dataview/main.js` 存在。
 - **三份 `edition.json` 里的 `vaults` 三个值两两一致**，且每个值都是 `$system_root` 下真实存在的目录名。
 - `.ziminos/skills/capture/SKILL.md`、`.ziminos/skills/distill/SKILL.md`、`.ziminos/skills/scripts/notectl.py` 存在。
+- 系统根的 `CLAUDE.md` 与 `AGENTS.md` 存在，且**除它们之外系统根没有第三个 `.md`**。自检方式：换一个全新会话打开系统根，只说一句「记一下：测试」，它应当不再反问「你的笔记库在哪」。
 - 用户字体目录里五个字体文件齐全。
 - **三本库里都不存在 `data.json`。** 全新安装不该生成它——它由插件在用户第一次改设置时自己写出来。
 - `$system_root` 内不存在 `.git/`、`src/`、`docs/`、`skill/`、`skill-pro/`、`vault/`、`vault-pro/`、`fonts/`、`node_modules/`、`package.json`。
@@ -391,7 +408,7 @@ esac
 ## 红线
 
 - **先确认版次。** 用户没提三库 / pro / 付费，就去执行 `skill/SKILL.md`。
-- 系统根不是笔记库，绝不往它根目录写 Markdown。
+- 系统根不是笔记库，绝不往它根目录写**笔记**。唯一的例外是第三节第 6 步那两份 `CLAUDE.md` / `AGENTS.md`——它们是给智能体读的指令而不是给人读的笔记，也正是「新会话认不出这是什么地方」这个问题的唯一解法。除它们之外一个 `.md` 都不许建。
 - 不在系统根内克隆 GitHub 仓库；不让用户打开仓库或仓库里的 `vault/`、`vault-pro/`。
 - **绝不移动、改名或删除用户已有的笔记库。** 升级靠在旁边新建，不靠搬家。
 - 在工作区之外写任何东西（B 模式那两个新目录）之前必须问，用户说不行就停。
