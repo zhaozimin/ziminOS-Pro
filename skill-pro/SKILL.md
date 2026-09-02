@@ -46,9 +46,9 @@ system_root="$(pwd -P)"
 
 1. 当前目录是 `/`、用户主目录、「文档 / Documents」根目录、桌面根目录或其他宽泛目录 → 停止，请用户专门创建一个文件夹再用 Agent 打开它。
 2. 当前目录含 `src/`、`vault/`、`skill/` 与 `package.json` → Agent 打开的是源码仓库 → 停止，绝不把源码仓库改造成笔记库。
-3. 当前目录存在 `.obsidian/` **但不存在** `以人为本/` → 这是一本**第一版的单库**，进入「二、B 升级模式」。
-4. 当前目录存在 `以人为本/.obsidian/` 或 `.ziminos/` → 已经是三库系统，进入「二、C 三库升级模式」。
-5. 以上都不是，且除 `.DS_Store` 外目录为空 → 「二、A 全新安装」。
+3. 当前目录存在 `.obsidian/` **但不存在** `以人为本/` → 这是一本**第一版的单库**，先做第二节取得施工源，再进入「三、B 从第一版升级到第二版」。
+4. 当前目录存在 `以人为本/.obsidian/` 或 `.ziminos/` → 已经是三库系统，先做第二节取得施工源，再进入「三、C 三库系统的日常升级」。
+5. 以上都不是，且除 `.DS_Store` 外目录为空 → 先做第二节取得施工源，再进入「三、A 全新安装」。
 6. 目录非空、又不符合 3 与 4 → 停止，不覆盖任何文件。
 
 ---
@@ -295,7 +295,78 @@ mkdir -p "$human/.obsidian/plugins/ziminos"
 
 已经是三库系统，只更新程序、不动选择。
 
-对三本库分别执行：
+**动手前必须先做完第二节取得 `$src`。** 这一步最容易被跳过——本节从头到尾在说「更新成施工源的版本」，而没有施工源时那句话没有对象，于是整个升级安静地什么都不做：没有报错、没有警告，用户重启 Obsidian 后发现插件还是旧的，却找不到哪一步失败了。
+
+### 1. 认路并记下升级前的版本
+
+```bash
+system_root="$(pwd -P)"
+
+# 三本库的名字从版次标记读，不要写死——升级上来的用户那本工作台是他自己取的名字
+# 深度是 5：<库名>/.obsidian/plugins/ziminos/edition.json，一层都不能少
+edition="$(find "$system_root" -maxdepth 5 -name edition.json -path '*/plugins/ziminos/*' | head -1)"
+[ -n "$edition" ] || { echo "找不到 edition.json，这里可能不是三库系统"; exit 1; }
+
+human="$system_root/$(grep -o '"human"[^"]*"[^"]*"' "$edition" | sed 's/.*"\([^"]*\)"$/\1/')"
+capture="$system_root/$(grep -o '"capture"[^"]*"[^"]*"' "$edition" | sed 's/.*"\([^"]*\)"$/\1/')"
+eternal="$system_root/$(grep -o '"eternal"[^"]*"[^"]*"' "$edition" | sed 's/.*"\([^"]*\)"$/\1/')"
+
+# 升级前后各读一次，收尾时必须对照——这是本节唯一能自证「真的干了活」的证据
+version_of() { grep -o '"version"[^,]*' "$1/.obsidian/plugins/ziminos/manifest.json" 2>/dev/null | head -1; }
+before="$(version_of "$human")"
+echo "升级前：$before ；施工源：$(grep -o '"version"[^,]*' "$src/vault/.obsidian/plugins/ziminos/manifest.json" | head -1)"
+```
+
+### 2. 更新程序
+
+```bash
+# 插件三件套：只有装了插件的两本库有
+for v in "$human" "$eternal"; do
+    for f in main.js manifest.json styles.css; do
+        cp "$src/vault/.obsidian/plugins/ziminos/$f" "$v/.obsidian/plugins/ziminos/$f"
+    done
+done
+
+# 主题与十二个实名片段：三本库都要。只覆盖施工源里那十二个文件，
+# 用户自己放进 snippets/ 的其他 .css 一个都不动、不删、不改名
+for v in "$human" "$capture" "$eternal"; do
+    mkdir -p "$v/.obsidian/themes/Minimal" "$v/.obsidian/snippets"
+    cp -R "$src/vault/.obsidian/themes/Minimal/." "$v/.obsidian/themes/Minimal/"
+    for snippet in "$src/vault/.obsidian/snippets/"*.css; do
+        cp "$snippet" "$v/.obsidian/snippets/$(basename "$snippet")"
+    done
+done
+
+# 第三方插件的运行文件：装了哪个就更新哪个，绝不新装用户没有的
+for v in "$human" "$capture" "$eternal"; do
+    for plug in dataview obsidian-style-settings; do
+        [ -d "$v/.obsidian/plugins/$plug" ] || continue
+        for f in main.js manifest.json styles.css; do
+            [ -f "$src/vault/.obsidian/plugins/$plug/$f" ] && cp "$src/vault/.obsidian/plugins/$plug/$f" "$v/.obsidian/plugins/$plug/$f"
+        done
+    done
+done
+
+# 智能体自己的契约副本，与系统根的两份认路文件
+rm -rf "$system_root/.ziminos/skills/capture" "$system_root/.ziminos/skills/distill" "$system_root/.ziminos/skills/scripts"
+mkdir -p "$system_root/.ziminos/skills"
+cp -R "$src/skill-pro/capture" "$src/skill-pro/distill" "$src/skill-pro/scripts" "$system_root/.ziminos/skills/"
+cp "$src/skill-pro/system-root/CLAUDE.md" "$system_root/CLAUDE.md"
+cp "$src/skill-pro/system-root/AGENTS.md" "$system_root/AGENTS.md"
+```
+
+### 3. 自证：版本必须真的前进
+
+```bash
+after="$(version_of "$human")"
+echo "升级后：$after"
+[ "$before" != "$after" ] || echo "⚠️ 版本没变。若施工源本来就是同一版则正常，否则上面某一步没落地，回头查 \$src 是否为空"
+```
+
+**这三个数字要报给用户看**（升级前 / 施工源 / 升级后）。不报，一次什么都没干的升级与一次成功的升级在他眼里长得一模一样。
+
+### 4. 这些一律不动
+
 
 - `main.js` / `manifest.json` / `styles.css`：整份更新（只有装了插件的「以人为本」与「赛博永生」有）。
 - Dataview / Style Settings 的运行文件、Minimal 主题、十二个实名片段：整份更新。
@@ -358,7 +429,9 @@ AGENTS.md
 - **三本库里都不存在 `data.json`。** 全新安装不该生成它——它由插件在用户第一次改设置时自己写出来。
 - `$system_root` 内不存在 `.git/`、`src/`、`docs/`、`skill/`、`skill-pro/`、`vault/`、`vault-pro/`、`fonts/`、`node_modules/`、`package.json`。
 
-升级模式（B / C）额外确认：升级前已存在的 `data.json` 的 SHA-256 全部不变；`types.json` 里用户原有的属性类型一个都没被改写；用户原有插件、非空自选主题、自选正文字体、自己放进 `snippets/` 的片段与全部 Markdown 笔记一个不少；`enabledCssSnippets` 里升级前已有的名字一个没少，被用户关掉的片段一个都没被重新打开。
+升级模式（B / C）**先确认程序真的前进了**：`以人为本` 与 `赛博永生` 的 `manifest.json` 版本号等于施工源的版本号；两本库的 `main.js` 与施工源的 `main.js` SHA-256 相同；`.ziminos/skills/` 下三个目录齐全；系统根的 `CLAUDE.md` 与 `AGENTS.md` 存在。**这四条缺一条，这次升级就是没做成**——而它不会自己报错，用户只会在重启 Obsidian 后发现插件还是旧的。
+
+然后额外确认：升级前已存在的 `data.json` 的 SHA-256 全部不变；`types.json` 里用户原有的属性类型一个都没被改写；用户原有插件、非空自选主题、自选正文字体、自己放进 `snippets/` 的片段与全部 Markdown 笔记一个不少；`enabledCssSnippets` 里升级前已有的名字一个没少，被用户关掉的片段一个都没被重新打开。
 
 ---
 

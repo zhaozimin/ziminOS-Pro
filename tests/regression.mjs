@@ -426,6 +426,49 @@ if (existsSync(proContractPath)) {
     });
 
     /**
+     * 三种安装模式都必须真实存在，且每一种都得给得出可执行的命令。
+     *
+     * 这条钉的是一次真实事故：模式判定写着「进入二、C 三库升级模式」，而文档里
+     * 根本没有「二、C」——真实标题是「三、C」；那一节又通篇是散文，一行 cp 都没有。
+     * 于是智能体照着升级，什么都没拷，而**没有任何东西报错**：用户重启 Obsidian
+     * 才发现插件还是旧的，却找不到哪一步失败了。
+     *
+     * 两头都验：判定里引用的小节标题必须真的存在；每种模式的正文里必须有命令。
+     * 只验前者，散文照样能骗过去；只验后者，指错门的判定照样能把人送到空处。
+     */
+    test('三种安装模式的入口都指得对，且都给得出可执行命令', () => {
+        const contract = readFileSync(path.join(ROOT, 'skill-pro/SKILL.md'), 'utf8');
+        const headings = contract.split('\n').filter((line) => line.startsWith('## '));
+
+        for (const mode of ['A', 'B', 'C']) {
+            const heading = headings.find((line) => line.startsWith(`## 三、${mode}`));
+
+            assert.ok(heading, `缺少「三、${mode}」这一节`);
+            assert.ok(
+                contract.includes(`进入「${heading.slice(3)}`) || mode === 'A',
+                `模式判定没有指向真实存在的「${heading.slice(3)}」`,
+            );
+
+            // 该节正文里必须有 bash 代码块，且块里有真的在动文件的命令
+            const start = contract.indexOf(heading);
+            const rest = contract.slice(start + heading.length);
+            const end = rest.indexOf('\n## ');
+            const body = end < 0 ? rest : rest.slice(0, end);
+
+            assert.match(body, /```bash/, `「三、${mode}」没有任何 bash 代码块`);
+            assert.match(
+                body,
+                /^(cp|mkdir|rm|rsync|for) /m,
+                `「三、${mode}」没有一行真的在动文件的命令——它只是在用散文描述该发生什么`,
+            );
+        }
+
+        // 升级模式必须自证程序真的前进了；只检查「没被改坏」的验收，
+        // 会让一次什么都没干的升级顺利通过
+        assert.match(contract, /先确认程序真的前进了/);
+    });
+
+    /**
      * 系统根必须有一份自己的认路文件，而且安装契约必须真的铺它。
      *
      * 这条钉的是「新会话冷启动」那个问题：契约躺在 .ziminos/skills/ 里没有用——
