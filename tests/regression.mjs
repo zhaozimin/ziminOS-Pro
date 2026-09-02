@@ -438,24 +438,37 @@ if (existsSync(proContractPath)) {
     });
 
     /**
-     * 首页那段升级口令必须点得到契约里真实存在的那一节。
+     * 首页那两段升级口令，必须点得到各自契约里真实存在的小节。
      *
-     * 它是给用户复制粘贴的，里面写死了小节标题「三、C 三库系统的日常升级」。
-     * 契约那边改一次标题，这段口令就开始指向一个不存在的小节——而智能体不会因此报错，
-     * 它会自己找一个看起来差不多的地方接着干，于是「百分之百走升级」这句承诺
-     * 悄悄退回成「它自己判断」。这正是这段口令存在的理由被抵消掉的那一刻。
+     * 它们是给用户复制粘贴的，里面写死了小节标题。契约那边改一次标题，口令就开始
+     * 指向一个不存在的小节——而智能体不会因此报错，它会自己找一个看起来差不多的地方
+     * 接着干，于是「百分之百走升级」这句承诺悄悄退回成「它自己判断」，
+     * 也就是这两段口令存在的理由被抵消掉的那一刻。
      */
-    test('首页的升级口令指向契约里真实存在的那一节', () => {
+    test('首页的升级口令指向两份契约里真实存在的小节', () => {
         const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
-        const contract = readFileSync(path.join(ROOT, 'skill-pro/SKILL.md'), 'utf8');
-        const section = '三、C 三库系统的日常升级';
+        const cited = {
+            'skill/SKILL.md': ['## 三、原地搭建当前工作区', '### 升级', '## 五、清理临时施工源'],
+            'skill-pro/SKILL.md': ['## 三、C 三库系统的日常升级', '## 四、验证'],
+        };
 
-        assert.ok(readme.includes(section), 'README 的升级口令没有点名 C 模式那一节');
-        assert.ok(contract.includes(`## ${section}`), `契约里没有「${section}」这一节`);
+        for (const [contractPath, headings] of Object.entries(cited)) {
+            const contract = readFileSync(path.join(ROOT, contractPath), 'utf8');
 
-        // 口令必须同时要求取施工源与自证版本，这两条是它区别于「原样再发一次」的全部价值
-        assert.ok(readme.includes('二、在工作区外取得施工源'));
+            for (const heading of headings) {
+                const title = heading.replace(/^#+ /, '');
+
+                assert.ok(readme.includes(title), `README 的升级口令没有点名「${title}」`);
+                assert.ok(contract.includes(heading), `${contractPath} 里没有「${title}」这一节`);
+            }
+
+            // 取施工源那一步两份契约同名，且是最容易被跳过的一步：跳过了升级就静默地什么都不做
+            assert.ok(contract.includes('## 二、在工作区外取得施工源'));
+        }
+
+        // 自证真的干了活，这一条是口令区别于「把安装那段再发一次」的全部价值
         assert.ok(readme.includes('升级前后的插件版本号'));
+        assert.ok(readme.includes('升级前后的 ziminOS 版本号'));
     });
 
     /**
