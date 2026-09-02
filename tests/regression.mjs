@@ -78,6 +78,36 @@ test('本机书源不在模块顶层静态引入 Node 内建模块', () => {
     }
 });
 
+/**
+ * 安装入口不许指向已经打不开的仓库。
+ *
+ * GitHub 的 zhaozimin/ziminOS 现在返回 403（账号封禁），而 README 的一键指令与
+ * skill/SKILL.md 的克隆行都曾写着它。这个错的形状与「第二版契约 clone 第一版仓库」同族：
+ * 它不在写错的那一行报错，而是让安装停在克隆那一步，报出来的话听上去像网络抖了一下，
+ * 于是用户去重试而不是换地址。两份契约与首页因此一起钉住。
+ *
+ * 只禁完整的可点/可克隆 URL。README 与 skill/SKILL.md 里各有一句「旧地址已失效」的说明，
+ * 那是写给人看的提示，用行内代码写成不带协议的裸域名，必须留着——
+ * 告诉用户旧指令为什么不灵，比让他对着一条沉默失败的指令重试三遍强。
+ */
+test('README 与两份契约的安装入口都指向 Gitee，不指向已 403 的 GitHub 仓库', () => {
+    const dead = 'https://github.com/zhaozimin/ziminOS';
+
+    for (const relativePath of ['README.md', 'skill/SKILL.md', 'skill-pro/SKILL.md']) {
+        const full = path.join(ROOT, relativePath);
+
+        if (!existsSync(full)) continue;
+
+        assert.equal(readFileSync(full, 'utf8').includes(dead), false, relativePath);
+    }
+
+    const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+
+    // 首页两段指令各导向一份契约；少一段，智能体就得自己猜版次
+    assert.match(readme, /gitee\.com\/ziminzhao\/ziminos-pro\/blob\/main\/skill\/SKILL\.md/);
+    assert.match(readme, /gitee\.com\/ziminzhao\/ziminos-pro\/blob\/main\/skill-pro\/SKILL\.md/);
+});
+
 const manifestPath = path.join(ROOT, 'src/modules/eternal/manifest.ts');
 
 if (existsSync(manifestPath)) {
