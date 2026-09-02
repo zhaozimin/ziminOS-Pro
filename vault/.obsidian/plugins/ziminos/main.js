@@ -302,13 +302,13 @@ var EXPORT_MANIFEST_FILE = `${FOLDERS.system}/\u8D5B\u535A\u6C38\u751F\u51FA\u5E
 var EXPORT_MANIFEST_HEADING = "## \u5F85\u642C\u8FD0";
 var EXPORT_MANIFEST_SEPARATOR = " \xB7 ";
 var ETERNAL_FOLDERS = {
-  raw: "10-raw",
-  wiki: "20-wiki",
-  system: "90-system"
+  raw: "10-\u539F\u6599",
+  wiki: "20-\u77E5\u8BC6",
+  system: "90-\u7CFB\u7EDF"
 };
-var ETERNAL_INDEX_FILE = `${ETERNAL_FOLDERS.wiki}/index.md`;
-var ETERNAL_LOG_FILE = `${ETERNAL_FOLDERS.system}/log.md`;
-var ETERNAL_LOG_INGEST_MARK = "ingest";
+var ETERNAL_INDEX_FILE = `${ETERNAL_FOLDERS.wiki}/\u7D22\u5F15.md`;
+var ETERNAL_LOG_FILE = `${ETERNAL_FOLDERS.system}/\u8D26\u672C.md`;
+var ETERNAL_LOG_INGEST_MARKS = ["\u6D88\u5316", "ingest"];
 
 // src/core/table.ts
 function noteLink(file, display) {
@@ -4535,7 +4535,7 @@ var HolidayService = class {
   }
 };
 
-// node_modules/lunar-typescript/dist/index.mjs
+// ../../../node_modules/lunar-typescript/dist/index.mjs
 var _SolarUtil = class {
   static isLeapYear(year) {
     if (year < 1600) {
@@ -18891,7 +18891,7 @@ var pendingIngest = {
       ["\u539F\u6599", "\u7C7B\u578B", "\u5F52\u6863\u4E8E"],
       pending2.slice(0, MAX_ROWS2).map((file) => [
         noteLink(file),
-        fieldOf(view, file, FIELDS.type) || "\u2014",
+        kindLabelOf(view, file),
         fieldOf(view, file, FIELDS.archived) || "\u2014"
       ]),
       0
@@ -18930,7 +18930,7 @@ async function ingestedUids(view) {
   const uids = /* @__PURE__ */ new Set();
   if (content === null) return uids;
   for (const line of proseLines(content)) {
-    if (!line.includes(ETERNAL_LOG_INGEST_MARK)) continue;
+    if (!ETERNAL_LOG_INGEST_MARKS.some((mark) => line.includes(mark))) continue;
     for (const matched of line.matchAll(/\d{8,}/g)) {
       uids.add(matched[0]);
     }
@@ -18944,6 +18944,11 @@ async function readNote(view, path) {
 function linkTo(view, name) {
   const file = view.index.resolve(name, view.sourcePath);
   return file ? noteLink(file, name) : name;
+}
+function kindLabelOf(view, file) {
+  var _a;
+  const type = fieldOf(view, file, FIELDS.type);
+  return (_a = KIND_LABELS[type]) != null ? _a : type || "\u2014";
 }
 function fieldOf(view, file, field2) {
   return toText(view.index.fieldOf(file, field2)).trim();

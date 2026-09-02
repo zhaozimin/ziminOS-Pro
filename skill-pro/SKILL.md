@@ -120,7 +120,7 @@ cp -R "$src/vault-pro/赛博永生/." "$eternal/"
 
 # 空目录不进 git，这两个得自己建
 mkdir -p "$capture/剪藏"
-mkdir -p "$eternal/10-raw"
+mkdir -p "$eternal/10-原料"
 ```
 
 `cp -R .../.` 里那个 `/.` 不得省略，否则会多出一层目录。
@@ -286,6 +286,27 @@ mkdir -p "$human/.obsidian/plugins/ziminos"
 
 一句话记住边界，与第一版同一条总纲：**受管的是「程序」，不受管的是「选择」。**
 
+### 一次性：《赛博永生》三层目录的汉化迁移
+
+v0.17.0 把《赛博永生》的三层目录名从英文改成中文。**只有在那本库里还留着旧名字时才做这一步**，做过一次就永远不会再触发：
+
+```bash
+# $eternal 从任意一份 edition.json 的 vaults.eternal 得出，不要写死「赛博永生」
+[ -d "$eternal/10-raw"    ] && mv "$eternal/10-raw"    "$eternal/10-原料"
+[ -d "$eternal/20-wiki"   ] && mv "$eternal/20-wiki"   "$eternal/20-知识"
+[ -d "$eternal/90-system" ] && mv "$eternal/90-system" "$eternal/90-系统"
+[ -f "$eternal/20-知识/index.md" ] && mv "$eternal/20-知识/index.md" "$eternal/20-知识/索引.md"
+[ -f "$eternal/90-系统/log.md"   ] && mv "$eternal/90-系统/log.md"   "$eternal/90-系统/账本.md"
+```
+
+**是 `mv` 不是 `cp`。** 这不是分发一份新资产，是给用户已有的内容改名；拷一份会让「待提炼」在两处各数一遍，同一份原料显示成两份。
+
+`CLAUDE.md` 与 `README.md` 这两篇属于**受管的程序说明**，整份更新成施工源的版本——它们讲的是三层结构怎么用，旧版本讲的是已经不存在的目录。但用户如果改过 `CLAUDE.md`（那是我们明说过他可以改的），**先问再覆盖**，并把他改动的段落搬进新版本。
+
+`10-原料/` 里的原料一个字节都不许动，`90-系统/账本.md` 里已有的记录一行都不许改——旧记录写的是英文 `ingest`，插件读账本时两种标记都认，不需要也不许去批量替换。改它等于重写用户的账。
+
+改完提醒一句：Obsidian 若正开着这本库，要重开一次才会认到新目录。
+
 ---
 
 ## 四、验证
@@ -303,7 +324,7 @@ mkdir -p "$human/.obsidian/plugins/ziminos"
 
 - 三本库各自有 `.obsidian/`，各自有 `.obsidian/themes/Minimal/theme.css` 与 12 个 `.css` 片段（`ls .obsidian/snippets/*.css | wc -l` ≥ 12）。
 - `以人为本/.obsidian/plugins/ziminos/{main.js,manifest.json,styles.css,edition.json}` 齐全；`edition.json` 是合法 JSON 且 `role` 为 `human`。
-- `赛博永生/.obsidian/plugins/ziminos/edition.json` 的 `role` 为 `eternal`；`10-raw/`、`20-wiki/index.md`、`90-system/log.md`、`CLAUDE.md`、`README.md` 齐全。
+- `赛博永生/.obsidian/plugins/ziminos/edition.json` 的 `role` 为 `eternal`；`10-原料/`、`20-知识/索引.md`、`90-系统/账本.md`、`CLAUDE.md`、`README.md` 齐全（这本库的三层目录名是中文的，不是 `10-raw` / `20-wiki` / `90-system`）。
 - `兼收并蓄/灵感集.md` 与 `兼收并蓄/剪藏/` 存在；`.obsidian/plugins/dataview/main.js` 存在。
 - **三份 `edition.json` 里的 `vaults` 三个值两两一致**，且每个值都是 `$system_root` 下真实存在的目录名。
 - `.ziminos/skills/capture/SKILL.md`、`.ziminos/skills/distill/SKILL.md`、`.ziminos/skills/scripts/notectl.py` 存在。

@@ -14,7 +14,7 @@
  *           视图代码块契约 VIEW_BLOCK_LANG/VIEW_REFRESH_DEBOUNCE_MS，
  *           以及第二版三库系统的赛博永生契约 EXPORT_MANIFEST_FILE/EXPORT_MANIFEST_HEADING/
  *           EXPORT_MANIFEST_SEPARATOR 与 ETERNAL_FOLDERS/ETERNAL_INDEX_FILE/ETERNAL_LOG_FILE/
- *           ETERNAL_LOG_INGEST_MARK。
+ *           ETERNAL_LOG_INGEST_MARKS。
  *           三十条命令的身份（id/名字/图标/分组）不在这里，在 ./commands——
  *           本文件回答「系统里有哪些东西」，那里回答「用户能让系统做哪些事」
  * [POS]: 全仓库唯一的常量源。规格要求「禁魔法字符串」，任何目录名、字段名、状态名、时间格式
@@ -667,14 +667,22 @@ export const EXPORT_MANIFEST_SEPARATOR = ' · ';
  * 往原料里写一个 ingested 字段，它就不再是当初归档时的那份东西了。
  */
 export const ETERNAL_FOLDERS = {
-    raw: '10-raw',
-    wiki: '20-wiki',
-    system: '90-system',
+    raw: '10-原料',
+    wiki: '20-知识',
+    system: '90-系统',
 } as const;
 
 /** wiki 的目录页与账本，两者都是卡帕西原文点名的关键文件 */
-export const ETERNAL_INDEX_FILE = `${ETERNAL_FOLDERS.wiki}/index.md`;
-export const ETERNAL_LOG_FILE = `${ETERNAL_FOLDERS.system}/log.md`;
+export const ETERNAL_INDEX_FILE = `${ETERNAL_FOLDERS.wiki}/索引.md`;
+export const ETERNAL_LOG_FILE = `${ETERNAL_FOLDERS.system}/账本.md`;
 
-/** 账本里一条 ingest 记录的行首标记；「待提炼」视图靠它认出哪些原料已经消化过 */
-export const ETERNAL_LOG_INGEST_MARK = 'ingest';
+/**
+ * 账本里一条「消化」记录的标记；「待提炼」视图靠它认出哪些原料已经提炼过。
+ *
+ * 写只写第一个，读认全部。留着英文 `ingest` 不是念旧：这本库的三层结构本来是英文的，
+ * 而账本是**智能体逐行追加、用户也会去手改**的文件——万一某台机器上 `.ziminos/skills/`
+ * 还是汉化之前那份契约，它写下的仍是 `ingest`。少认一个标记的表现不是报错，
+ * 是那几份原料整体退回「待提炼」，接着一次重复提炼把 wiki 写重一遍。
+ * 认错方向的代价在这里高度不对称，因此宽松在安全侧。
+ */
+export const ETERNAL_LOG_INGEST_MARKS: readonly string[] = ['消化', 'ingest'];

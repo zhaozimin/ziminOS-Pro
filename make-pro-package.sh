@@ -133,7 +133,7 @@ cat > "$stage/安装说明.md" << 'GUIDE'
 3. **口述日记**：说「记一下今天：……」，它应当问一次今天的主题，当天第二次记录不再问。
 4. **人名双链**：在《以人为本》里先建一个人脉档案，再口述一句提到他，看名字有没有变成双链。
 5. **归档出库**：完成并归档一个项目，看 `90-system/赛博永生出库单.md` 有没有多出一行。
-6. **提炼**：跟智能体说「提炼一下」，看项目有没有搬进《赛博永生》的 `10-raw/` 并长出 wiki 页。
+6. **提炼**：跟智能体说「提炼一下」，看项目有没有搬进《赛博永生》的 `10-原料/` 并长出知识页；再把那篇 MOC 的路径单独粘给它一次，走通路径驱动那个入口。
 7. **第一版没被弄坏**：如果你是从第一版升级的，确认笔记、设置与边栏摆放一个都没变。
 
 有任何一步卡住，把当时的原话和它的回复一起发回来。
@@ -153,8 +153,8 @@ required=(
     "vault-pro/兼收并蓄/README.md"
     "vault-pro/赛博永生/CLAUDE.md"
     "vault-pro/赛博永生/README.md"
-    "vault-pro/赛博永生/20-wiki/index.md"
-    "vault-pro/赛博永生/90-system/log.md"
+    "vault-pro/赛博永生/20-知识/索引.md"
+    "vault-pro/赛博永生/90-系统/账本.md"
     "vault-pro/赛博永生/.obsidian/plugins/ziminos/edition.json"
     "skill-pro/SKILL.md"
     "skill-pro/capture/SKILL.md"

@@ -1,16 +1,16 @@
 /**
  * [INPUT]: 依赖 obsidian 的 TFile；依赖 core/codeblock 的 ViewContext/ViewDefinition；
  *          依赖 core/constants 的 EXPORT_MANIFEST_FILE/ETERNAL_FOLDERS/ETERNAL_LOG_FILE/
- *          ETERNAL_LOG_INGEST_MARK/FIELDS；依赖 core/folders 的 isInFolder；
+ *          ETERNAL_LOG_INGEST_MARKS/FIELDS；依赖 core/folders 的 isInFolder；
  *          依赖 core/table 的 noteLink/renderEmpty/renderNote/renderSummary/renderTable 与 Cell 类型；
- *          依赖 core/vaultIndex 的 toText；依赖 ./manifest 的 parseManifestLine
+ *          依赖 core/vaultIndex 的 toText；依赖 ./manifest 的 KIND_LABELS/parseManifestLine
  * [OUTPUT]: 对外提供 humanEternalViews（待搬运）与 eternalRawViews（待提炼）两个视图数组
  * [POS]: eternal 模块的读取侧。两张清单住在两本不同的库里，回答的是同一条流水线上
  *        前后两道工序的问题：**「以人为本」那张问「还有什么没送出去」，
  *        《赛博永生》那张问「送进来的还有什么没消化」。**
  *        它们刻意不合并成一个视图，因为插件看不见隔壁库——一张跨库的清单只能靠猜，
  *        而猜出来的数字会让人以为活儿干完了。两张各自只讲自己库里的事实，各自都能自证。
- *        「待提炼」判定已消化与否的依据是 log.md 而不是原料上的标记：
+ *        「待提炼」判定已消化与否的依据是账本而不是原料上的标记：
  *        原料层是不可变的事实层（卡帕西那三层里的 Raw），往里写一个 ingested 字段，
  *        它就不再是当初归档时的那份东西了。账本在外面记，原料保持原样。
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -22,7 +22,7 @@ import type { ViewContext, ViewDefinition } from '../../core/codeblock';
 import {
     ETERNAL_FOLDERS,
     ETERNAL_LOG_FILE,
-    ETERNAL_LOG_INGEST_MARK,
+    ETERNAL_LOG_INGEST_MARKS,
     EXPORT_MANIFEST_FILE,
     FIELDS,
 } from '../../core/constants';
@@ -31,7 +31,7 @@ import { noteLink, renderEmpty, renderNote, renderSummary, renderTable } from '.
 import type { Cell } from '../../core/table';
 import { toText } from '../../core/vaultIndex';
 import type { ManifestEntry } from './manifest';
-import { parseManifestLine } from './manifest';
+import { KIND_LABELS, parseManifestLine } from './manifest';
 
 /** 一张表最多列多少行。与复盘那几张同一个口径：清单要的是判断，不是流水账 */
 const MAX_ROWS = 20;
@@ -147,7 +147,7 @@ const pendingIngest: ViewDefinition = {
             ['原料', '类型', '归档于'],
             pending.slice(0, MAX_ROWS).map((file): Cell[] => [
                 noteLink(file),
-                fieldOf(view, file, FIELDS.type) || '—',
+                kindLabelOf(view, file),
                 fieldOf(view, file, FIELDS.archived) || '—',
             ]),
             0,
@@ -219,10 +219,10 @@ function rawContainers(view: ViewContext): readonly TFile[] {
 }
 
 /**
- * log.md 里已经记过 ingest 的 UID 集合。
+ * 账本里已经记过「消化」的 UID 集合。
  *
- * 判据宽松是刻意的：只要那一行里同时出现 ingest 标记与一串数字 UID，就算数。
- * log.md 是智能体逐行追加、人也会去读去改的账本，对它的格式要求越严，
+ * 判据宽松是刻意的：只要那一行里同时出现消化标记与一串数字 UID，就算数。
+ * 账本是智能体逐行追加、人也会去读去改的文件，对它的格式要求越严，
  * 它越容易在某次手改之后整体失效——而失效的表现是「所有原料忽然都变成待提炼」，
  * 接着一次重复提炼就把 wiki 写乱了。宽松在这里是安全侧。
  */
@@ -235,7 +235,7 @@ async function ingestedUids(view: ViewContext): Promise<ReadonlySet<string>> {
     // 走 proseLines 而不是 split：账本正文开头就写着三行格式示例，
     // 那行示例里的 UID 若被登记成已提炼，撞上它的真项目会永远显示成消化过了
     for (const line of proseLines(content)) {
-        if (!line.includes(ETERNAL_LOG_INGEST_MARK)) continue;
+        if (!ETERNAL_LOG_INGEST_MARKS.some((mark) => line.includes(mark))) continue;
 
         for (const matched of line.matchAll(/\d{8,}/g)) {
             uids.add(matched[0]);
@@ -262,6 +262,22 @@ function linkTo(view: ViewContext, name: string): Cell {
     const file = view.index.resolve(name, view.sourcePath);
 
     return file ? noteLink(file, name) : name;
+}
+
+/**
+ * 原料的类型，取中文显示名。
+ *
+ * 原料是从《以人为本》原样拷来的项目 MOC，它的 `type` 是 `project` / `book` 这类机器值——
+ * 那是给视图认身份用的，不是给人读的。这本库里除了它，用户看得见的每一个词都是中文；
+ * 单让这一列说英文，等于在一张中文表格里留一个没人解释的字段。
+ * 显示名与出库单共用 KIND_LABELS 那一份，两张清单讲同一件事时不会各叫各的。
+ */
+function kindLabelOf(view: ViewContext, file: TFile): string {
+    const type = fieldOf(view, file, FIELDS.type);
+
+    // 认不出的 type 原样显示而不是画成「—」：那是用户自己造的身份，
+    // 抹成横杠等于告诉他这份原料没有类型，而它明明有
+    return KIND_LABELS[type] ?? (type || '—');
 }
 
 /** 取一个 frontmatter 字段并收敛成可比较的文本。缺失、null、数字统一成字符串 */
