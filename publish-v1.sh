@@ -16,7 +16,10 @@
 #
 set -euo pipefail
 
-V1_REMOTE="https://gitee.com/ziminzhao/zimin-os-v1.git"
+# SSH 而不是 HTTPS：这条通道要**推**，而 Gitee 的 HTTPS 推送要用户名密码，
+# 非交互环境下它读不到输入，报的是「could not read Username」——
+# 看上去像没权限，其实只是没人能回答那个提示。克隆两种都行，取能推的那种。
+V1_REMOTE="git@gitee.com:ziminzhao/zimin-os-v1.git"
 
 # ============================================================
 # 两份清单：搬什么、绝不搬什么
