@@ -2,7 +2,8 @@
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译并载入 src 中的纯 TypeScript 模块
  * [OUTPUT]: 提供 npm test 的审计回归集，覆盖版本镜像、ISBN 校验、日期严格性、
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
- *           项目回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界与
+ *           项目回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
+ *           片段出境口的桌面端闸门与
  *           智能体路由完整性，并在专业版源码存在时额外覆盖出库单往返、《赛博永生》路径同构
  *           与第二版安装入口
  * [POS]: tests 的唯一可执行入口；只验证公开行为与关键平台边界，不复制业务实现
@@ -325,6 +326,26 @@ test('本机书源不在模块顶层静态引入 Node 内建模块', () => {
         assert.doesNotMatch(source, /from ['"](?:fs|path|child_process|os)['"]/);
         assert.ok(source.indexOf('Platform.isDesktopApp') < source.indexOf("require('"));
     }
+});
+
+test('片段出境口不在顶层引入 Node 内建模块，且先挡住非桌面端再探 Electron', () => {
+    const source = readFileSync(path.join(ROOT, 'src/modules/appearance/reveal.ts'), 'utf8');
+
+    assert.doesNotMatch(source, /from ['"](?:fs|path|child_process|os)['"]/);
+
+    // 只截探测函数那一段来比先后：文件头的 [INPUT] 里也写着 require('electron')，
+    // 拿整份源码比会把一句注释当成调用
+    const resolver = source.slice(source.indexOf('function resolveShell'));
+
+    assert.ok(resolver.indexOf('Platform.isDesktopApp') < resolver.indexOf("require('electron')"));
+});
+
+test('探不到本机文件系统时，两个出门按钮一个都不画', () => {
+    const source = readFileSync(path.join(ROOT, 'src/modules/appearance/statusBar.ts'), 'utf8');
+
+    // 手机上没有文件管理器可去。画一个点了只会道歉的按钮，比不画更让人以为系统坏了
+    assert.match(source, /if \(!canReveal\(this\.ctx\.app\)\) return;/);
+    assert.match(source, /if \(revealable\) this\.renderOpenButton\(row, snippet\);/);
 });
 
 test('可用书源漏匹配时逐一交代，不伪装成没有划线', () => {

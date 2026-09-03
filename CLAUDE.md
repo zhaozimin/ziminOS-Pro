@@ -28,7 +28,7 @@ vault-pro/ - 第二版特有的笔记库成品 (3子目录: 兼收并蓄 进料�
 vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，manifest.json 是构建链自动同步出来的发布镜像（回归测试里有一条专盯这对数字），main.js 是刻意入库的构建产物（三十五枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 服务二十二个笔记内视图、中国日历与最近文件两个 ItemView、外观开关浮层、文件夹计数、状态栏当前路径、八张设置页与作者名片（手工维护，不经 esbuild）；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
 vault/.obsidian/snippets/ - 十二个 CSS 片段，外观包的可拆装部分；十个默认启用，全部由右下角外观开关逐个开关。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源
 tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，覆盖数据合并、划线身份、日期、换行符、ISBN、设置验形、外观拒写、数据库选择、项目回滚、版本同构、灵感行与灵感集版式两侧同源、公开源码隐私边界与移动端 Node 边界
-src/ - 插件源码 (2子目录: core 无业务的基础设施、命令注册台、视图引擎与版次闸门 edition.ts、modules 含 setup 开荒、projects 项目领域与容器流程、books 读书笔记与划线导入、inspiration 灵感收集、calendar 中国日历与节假日缓存、review 五级复盘、contacts 人脉与客户、appearance 外观开关、format 排版整理、editing 粘贴成链接与光标记忆、explorer 文件夹计数与最近文件与当前路径、legacy 旧版三入口、ribbon 左侧边栏命令、about 作者名片)
+src/ - 插件源码 (2子目录: core 无业务的基础设施、命令注册台、视图引擎与版次闸门 edition.ts、modules 含 setup 开荒、projects 项目领域与容器流程、books 读书笔记与划线导入、inspiration 灵感收集、calendar 中国日历与节假日缓存、review 五级复盘、contacts 人脉与客户、appearance 外观开关与片段出境口、format 排版整理、editing 粘贴成链接与光标记忆、explorer 文件夹计数与最近文件与当前路径、legacy 旧版三入口、ribbon 左侧边栏命令、about 作者名片)
 </directory>
 
 <commands>
@@ -72,11 +72,11 @@ esbuild.config.mjs - 唯一构建出口；打包前把 package.json 版本同步
 .gitignore - 忽略依赖、系统杂项、历史发布压缩包、常见凭据文件与开发库运行时私有状态；main.js 与公共 vault 交付资产不忽略，学员浅克隆即可用
 .gitattributes - 锁定 Dataview、Minimal、Style Settings 与 fonts/ 字体发布资产的原始字节，防止 Git 换行/格式化破坏 SHA-256
 docs/第三方组件.md - lunar-typescript / holiday-cn / Dataview / Outliner / Quiet Outline / Minimal / Style Settings / Pikaicons / Simple Icons / 四款正文字体的版本、上游、许可与升级边界
-docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26 中国农历日历（v0.15.0）、§27 三轮代码审计加固、§28 Gitee 公开部署源（§28.2 公开源码隐私边界：凭据、本机路径与设备状态一律不进公开树）、§29 文件夹计数（v0.16.0）、§30 七个社区功能的取舍（v0.17.0：五个自己写、两个打包，含红线第二处缺口与设置页第二次分家）。§29/§30 原编 §27/§28，v0.18.0 合线时让号——两条线撞号，后到的一方改，没有任何一节被覆盖。与 V1 规格并存，交集处以它为准
+docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26 中国农历日历（v0.15.0）、§27 三轮代码审计加固、§28 Gitee 公开部署源（§28.2 公开源码隐私边界：凭据、本机路径与设备状态一律不进公开树）、§29 文件夹计数（v0.16.0）、§30 七个社区功能的取舍（v0.17.0：五个自己写、两个打包，含红线第二处缺口与设置页第二次分家）、§33 片段的两个出境口（v0.20.0，含红线第四处缺口）。§29/§30 原编 §27/§28，v0.18.0 合线时让号——两条线撞号，后到的一方改，没有任何一节被覆盖。与 V1 规格并存，交集处以它为准
 </delivery>
 
 <deviations>
-八处偏离，在此备案，不是疏漏：
+九处偏离，在此备案，不是疏漏：
 1. tsconfig 的 moduleResolution 取 bundler 而非规格书 §2 写的 node —— 实际装到的 TypeScript 7.0.2 已移除 node10 解析模式（TS5108），规格的 node 与规格的「依赖用最新稳定版」自相冲突；bundler 是 esbuild 打包场景下的等价现代取值，其余编译选项全按规格保留。
 2. src/core/time.ts 存在全仓库唯一一处类型断言 —— obsidian 把 moment 作为命名空间导出，其类型不携带调用签名，断言只还原类型不改变运行时行为。
 4. 读书笔记模块联网 —— 见开头那段：用户明令放宽第二条红线。落地上只有两个出口：`modules/books/douban.ts`（豆瓣搜索页与详情页，走 Obsidian **公开** API requestUrl）与 `modules/books/sourceWeread.ts`（微信读书：书架走 Cookie 的 /api/user/notebook，划线与想法走取数网关 i.weread.qq.com/api/agent/gateway，令牌在 /api/skills/apikeyGet 用登录态换，全部经 requestUrl）。两处都不碰账号密码；豆瓣不需要登录，微读的登录态由用户扫码后从会话里取。删掉 modules/books 即让零网络重新成立。
@@ -86,4 +86,5 @@ docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26 中国农
 8. src/modules/legacy/vaultDock.ts 借三处 Obsidian 非公开成员——`app.setting.open`、`app.openVaultChooser`、`app.openHelp`。这是「只用官方公开 API」这条红线的**第二处**缺口，v0.17.0 由用户明确授权后开的。`obsidian.d.ts`（1.13.1）里 App 的公开成员只有十项（keymap / scope / workspace / vault / metadataCache / fileManager / lastEvent / renderContext / secretStorage / isDarkMode），开设置、开库选择器、开帮助一件都不在其中；按 id 执行命令的 executeCommandById 同样不在，所以那条路也不是出路。判据与第 3 条同源：不碰，「把那三个按钮拿回来」就不成为一个功能。上游那个插件没有许可证，因此打包交付这个选项也不存在。三条纪律逐条对齐第 3 条：只借「点下去要发生什么」这一步（摆按钮走公开的 addRibbonIcon 与命令注册台）、模块增强声明成可选并在**点下去的那一刻**验形、探不到只弹一句人话（照 CommandRegistry 的纪律，命令不因探不到而消失——一个会隐身的图标比一句提示更让人困惑）、声明与调用同处一个文件，删掉 modules/legacy 即让本条消失。
 3. src/modules/appearance/snippets.ts 借了一次 Obsidian 非公开 API，是这条红线的**第一处**缺口（v0.17.0 之前是唯一一处，另一处见第 8 条）—— 「让某个 CSS 片段此刻生效或失效」在 obsidian.d.ts（1.13.1，8482 行）里没有入口，全文既搜不到 customCss 也搜不到 snippet；能做到的只有 app.customCss.setCssEnabledStatus。不碰它，开关就退化成「改配置文件 + 请重启」，也就不再是开关。缺口按三条纪律收窄：其一，只有「让改动生效」这一步借用，片段清单与启用状态全部走公开的 vault.configDir + DataAdapter，因此开关显示的永远是磁盘上的事实；其二，用模块增强声明成可选成员并在运行时二次验形，TypeScript 强制判空，探不到就降级为改 appearance.json 并提示重载，功能退化但绝不抛异常；其三，声明与调用同处一个文件，不散进 .d.ts，删掉 modules/appearance 即可让红线重新完整。
 9. 第二版的跨库拷贝**没有**成为第四处红线缺口，这条记下来是因为它差一点就是。归档时要把项目副本送进《赛博永生》，而 Obsidian 的 vault API 被沙箱锁在本库内；借 Node `fs` 写隔壁库能做到，代价是「只用官方公开 API」第三次破例，且手机上归档必炸。选择的是 `src/modules/eternal/`：插件只往本库一篇可见的 Markdown 上追加一行出库单，真正的拷贝与提炼由桌面智能体完成。判据不是保守——**提炼本来就只有 LLM 干得了**，让它一次进门把搬运与提炼一起做完，比让文件先躺过去等着更顺。代价是拷贝不是「点完立刻出现」而是「下次和智能体说话时出现」，这一点必须在对用户的说明里说实话，不许含糊成「自动同步」。
+10. src/modules/appearance/reveal.ts 运行时 `require('electron')` 取 shell —— 「只用官方公开 API」这条红线的第四处缺口，也是**第二次直接向 Electron 伸手**（第一次是第 5 条那个扫码窗口）。为的是让外观开关从「只能开关」变成「能改」：面板列得出十二个片段，此前却没有任何办法把其中一个交到用户的编辑器手上，而从「看见它」到「改到它」中间隔着退出面板、找到笔记库文件夹、打开系统默认隐藏的 `.obsidian`、进 `snippets`、在十二个中文文件名里认出刚才那一个。`obsidian.d.ts`（1.13.1，8482 行）全文搜不到 shell、openPath 与 showInFolder，App 的十个公开成员也没有一个沾边，不碰就不成为功能——判据与第 3、8 两条同源。**借的只有最后一步**：绝对路径走公开的 `FileSystemAdapter.getBasePath()`（标着 @public 的导出类），因此「文件在哪」全程由 Obsidian 回答，Electron 哪天没了，坏掉的是两个按钮而不是路径、清单与开关。三条纪律逐条对齐第 5 条：只借「打开」这一个动作（清单、状态、路径全部走公开 API）、先验 Platform.isDesktopApp 再 require 且全程 try/catch 返回可空（手机端与换掉运行时都只让按钮消失或说一句人话，绝不让插件加载失败）、声明与调用同处一个文件，删掉 modules/appearance 即让本条消失。「画不画」与「点了会怎样」刻意分开答：前者只认公开且稳定的事实（桌面端 + 本机文件系统），手机上静默缺席；后者在点下去的那一刻才验形，桌面上按钮照画，探不到时给一句为什么而不是让按钮凭空少掉。
 </deviations>

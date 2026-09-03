@@ -548,12 +548,94 @@ div.ziminos-table-wrap > table.ziminos-table tbody tr:hover {
     background-color: var(--background-modifier-hover);
 }
 
-/* 片段名可能很长，让它自己截断，绝不把开关挤出浮层 */
+/*
+ * 片段名可能很长，让它自己截断，绝不把开关挤出浮层。
+ * flex 与 min-width 是行里有了第三个孩子（出门按钮）之后必须的：
+ * 只靠 space-between 会把三个孩子均匀摊开，按钮飘到行中间；
+ * min-width:0 则是 flex 子项能真正截断的前提——不写它，
+ * 子项的最小宽度是内容宽度，长名字会把两个控件顶出浮层。
+ */
 .ziminos-appearance-name {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     color: var(--text-normal);
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/*
+ * 每行开关左边那个「打开这个 CSS 文件」。
+ * 常驻可见而非悬停才现：它是这个面板的一半用途，藏起来等于没做。
+ * 但常驻十二个图标会跟片段名抢眼睛，所以静默时压到 --text-faint，
+ * 只有指到它那一行才提亮——看得见、但不喊。
+ */
+.ziminos-appearance-open {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-s);
+    color: var(--text-faint);
+    cursor: pointer;
+}
+
+.ziminos-appearance-open svg {
+    width: 15px;
+    height: 15px;
+}
+
+.ziminos-appearance-row:hover .ziminos-appearance-open {
+    color: var(--text-muted);
+}
+
+.ziminos-appearance-open:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+}
+
+/*
+ * 页脚：右下角那个「片段文件夹」。
+ * 一道分隔线把它与片段清单隔开——它不是第十三个片段，是这张面板的出口。
+ *
+ * sticky 是必须的而不是讲究：浮层有 460px 的高度上限，十二个片段一定滚动，
+ * 页脚若随内容走，「右下角那个按钮」就变成了「滚到底才看得见的按钮」。
+ * 三个负数各有各的活：左右 -4px 抵掉浮层的横向内衬，让分隔线画到面板两边、
+ * 与页眉那道线对齐；下方的 -8px 与 bottom: -8px 一起抵掉浮层的底部内衬，
+ * 让页脚真正贴住底边——否则它会悬在离底 8px 处，片段从那道缝里穿过去。
+ * 底色不能省：sticky 元素默认透明，滚动的片段会从字底下爬过去。
+ */
+.ziminos-appearance-footer {
+    position: sticky;
+    bottom: -8px;
+    display: flex;
+    justify-content: flex-end;
+    margin: 8px -4px -8px;
+    padding: 8px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+}
+
+.ziminos-appearance-folder {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: var(--radius-s);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.ziminos-appearance-folder:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+}
+
+.ziminos-appearance-folder svg {
+    width: 15px;
+    height: 15px;
 }
 
 /* ── 左侧边栏：本次会话内被取消勾选的图标 ── */
