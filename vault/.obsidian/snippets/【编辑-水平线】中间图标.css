@@ -2,17 +2,28 @@
 来源：guangtou.me
 作者：光头obsidian教程
 功能：更换水平线样式
+ziminOS 调整：原片段没给中间那个 § 指定颜色，它便继承正文色，与两侧的灰线
+              几乎同色——图标退化成线上的一个小疙瘩，看不出是个记号。这里
+              把颜色单独拎成 --hr-icon-color，取插件自己那套命令分组色里的
+              金与红，不另造新色号。
+              明暗两套不是同一个值：琥珀黄 #E3A93C 在深色底上对比度 8.1，
+              在白底上只有 2.1——比它要盖过的那条灰线（3.2）还弱，照搬等于
+              白改；浅色底因此取同色相压暗的一档 #B07D14（3.6）。
+              想换红色，把两个 --hr-icon-color 都改成 #C15449（朱批红）即可，
+              那一个值在明暗两底上分别是 4.5 与 3.7，一处顶两处。
 ==================== */
 
 
 .theme-light {
   --hr-color-side: var(--background-primary);
   --hr-color-center: #8f8f8f;
+  --hr-icon-color: #B07D14; /* 琥珀黄压暗一档（红色备选：#C15449） */
 }
 
 .theme-dark {
   --hr-color-side: var(--background-primary);
   --hr-color-center: #949292;
+  --hr-icon-color: #E3A93C; /* 琥珀黄，与灵感组同色（红色备选：#C15449） */
 }
 
 .markdown-source-view.mod-cm6 hr,
@@ -30,4 +41,6 @@
   transform: translate(-50%, -50%) rotate(60deg);
   padding: 1rem;
   background-color: var(--background-primary);
+  color: var(--hr-icon-color);
+  font-weight: 700;
 }
