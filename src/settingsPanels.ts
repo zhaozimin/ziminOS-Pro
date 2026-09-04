@@ -1,9 +1,9 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Platform、Setting 与 setIcon；依赖 ./settingsModel 的 TEXTS/
- *          BOOK_TAG_PREFIX_FIELD/FOLDER_COUNT_LABELS/RECENT_SORT_LABELS 与
+ *          BOOK_TAG_PREFIX_FIELD/FOLDER_COUNT_LABELS/RECENT_SORT_LABELS/FILE_PATH_SCOPE_LABELS 与
  *          TabId/BooleanSettingKey/TextField/SettingActions 类型；
  *          依赖 core/commands 的 GROUP_COLORS 与 CommandSpec 类型、
- *          core/constants 的 BOOK_TAG_COUNTS/灵感与文件夹计数/最近文件的候选与默认值、
+ *          core/constants 的 BOOK_TAG_COUNTS/灵感与文件夹计数/最近文件/状态栏路径的候选与默认值、
  *          core/markdownStyle 的 FORMAT_RULES、core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 PanelRenderer/PanelHost 两个契约与 SettingsPanels 一个类，
  *           后者交出 render 一张 Record<TabId, PanelRenderer> 表
@@ -25,6 +25,8 @@ import { GROUP_COLORS } from './core/commands';
 import type { CommandSpec } from './core/commands';
 import {
     BOOK_TAG_COUNTS,
+    FILE_PATH_DEFAULTS,
+    FILE_PATH_SCOPES,
     FOLDER_COUNT_DEFAULTS,
     FOLDER_COUNT_TARGETS,
     INSPIRATION_DEFAULTS,
@@ -34,6 +36,7 @@ import {
     RECENT_FILES_SORTS,
 } from './core/constants';
 import type {
+    FilePathScope,
     FolderCountTarget,
     InspirationInsertPosition,
     RecentFilesSort,
@@ -43,6 +46,7 @@ import { DEFAULT_SETTINGS } from './core/types';
 import type { ZiminosContext } from './core/types';
 import {
     BOOK_TAG_PREFIX_FIELD,
+    FILE_PATH_SCOPE_LABELS,
     FOLDER_COUNT_LABELS,
     RECENT_SORT_LABELS,
     TEXTS,
@@ -560,8 +564,19 @@ export class SettingsPanels {
 
         this.renderRecentSection(containerEl);
 
-        // 状态栏那一块排在最后：它与上面两段服务同一个问题（我在哪、有哪些），
-        // 但它住在屏幕的另一端，放在一起会让人以为它也是侧栏里的东西
+        this.renderFilePathSection(containerEl);
+    }
+
+    /**
+     * 状态栏路径那一段：一个开关加一个口径下拉框。
+     *
+     * 它排在最后：与上面两段服务同一个问题（我在哪、有哪些、去过哪儿），
+     * 但它住在屏幕的另一端，混进去会让人以为它也是侧栏里的东西。
+     * 段内两项是「要不要摆出来」与「拿走的那串字给谁看」，先后即因果；
+     * 口径在开关关着时照样可改，与计数那一段同一条理由——命令在关掉之后照常可用，
+     * 绑在一起就没法表达「我不要那一块，但我要命令复制完整路径」。
+     */
+    private renderFilePathSection(containerEl: HTMLElement): void {
         this.host.renderToggle(
             containerEl,
             'showFilePath',
@@ -569,6 +584,25 @@ export class SettingsPanels {
             TEXTS.filePathDesc,
             this.actions.syncExplorer,
         );
+
+        new Setting(containerEl)
+            .setName(TEXTS.filePathScopeName)
+            .setDesc(TEXTS.filePathScopeDesc)
+            .addDropdown((dropdown) => {
+                for (const scope of FILE_PATH_SCOPES) {
+                    dropdown.addOption(scope, FILE_PATH_SCOPE_LABELS[scope]);
+                }
+
+                dropdown
+                    .setValue(this.normalizeFilePathScope(this.ctx.settings.filePathScope))
+                    .onChange(async (value) => {
+                        this.ctx.settings.filePathScope = this.normalizeFilePathScope(value);
+
+                        await this.ctx.saveSettings();
+                        // 状态栏那一块的悬停提示写着「这一下会复制什么」，口径一改它就过期了
+                        this.actions.syncExplorer();
+                    });
+            });
     }
 
     /** 最近文件那一段：一句说明，加「显示几条」与「怎么排」两个下拉框 */
@@ -670,5 +704,12 @@ export class SettingsPanels {
         const candidate = value as RecentFilesSort;
 
         return RECENT_FILES_SORTS.includes(candidate) ? candidate : RECENT_FILES_DEFAULTS.sort;
+    }
+
+    /** 同上。下拉框只可能产生合法值，验一次是为了让「合法集合」在两侧都只有一个定义 */
+    private normalizeFilePathScope(value: string): FilePathScope {
+        const candidate = value as FilePathScope;
+
+        return FILE_PATH_SCOPES.includes(candidate) ? candidate : FILE_PATH_DEFAULTS.scope;
     }
 }

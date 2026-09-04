@@ -1,11 +1,11 @@
 /**
  * [INPUT]: 依赖 ./core/commands 的 COMMAND_ICONS（标签页图标与左侧边栏同源），
- *          依赖 ./core/constants 的 FolderCountTarget 与 RecentFilesSort 类型
- *          （计数口径与最近文件排法的显示名各按它们建一张表）
+ *          依赖 ./core/constants 的 FolderCountTarget、RecentFilesSort 与 FilePathScope 类型
+ *          （计数口径、最近文件排法与复制口径的显示名各按它们建一张表）
  * [OUTPUT]: 对外提供设置页的注入契约 SettingActions，与它的三张数据表——
  *           TABS（八张标签页的身份）、TEXTS（全部界面文案）、
- *           TEXT_FIELDS 与 BOOK_TAG_PREFIX_FIELD（文本框）、FOLDER_COUNT_LABELS 与
- *           RECENT_SORT_LABELS（两个下拉框的显示名），
+ *           TEXT_FIELDS 与 BOOK_TAG_PREFIX_FIELD（文本框）、FOLDER_COUNT_LABELS、
+ *           RECENT_SORT_LABELS 与 FILE_PATH_SCOPE_LABELS（三个下拉框的显示名），
  *           连同它们的类型 TabId/SettingsTab/BooleanSettingKey/TextSettingKey/TextField/TextFieldSpec
  * [POS]: 设置页的**数据模型**，回答「这一页有什么」；隔壁 settings.ts 回答「它怎么画出来」。
  *        两者分家不是为了凑行数，是因为它们的变更理由不同：
@@ -17,7 +17,7 @@
  */
 
 import { COMMAND_ICONS } from './core/commands';
-import type { FolderCountTarget, RecentFilesSort } from './core/constants';
+import type { FilePathScope, FolderCountTarget, RecentFilesSort } from './core/constants';
 
 // ============================================================
 // 八张标签页：一页一个系统模块
@@ -299,8 +299,16 @@ export const TEXTS = {
 
     filePathName: '状态栏显示当前笔记路径',
     filePathDesc:
-        '在右下角状态栏显示你此刻这一篇在哪个文件夹里，点一下把完整路径复制走。' +
+        '在右下角状态栏显示你此刻这一篇在哪个文件夹里，点一下把路径复制走（复制哪一种见下面那项）。' +
         '关掉只是收起那一块，命令「复制当前笔记路径」照常可用（可以去设置 → 快捷键给它绑个键）。',
+    filePathScopeName: '复制哪一种路径',
+    filePathScopeDesc:
+        '屏幕上那一块永远显示库内路径——它短，且每篇都不同；这一项决定的是「复制走的那一串」。' +
+        '库内路径（01-projects/开源之道/开源之道.md）说给 Obsidian 自己听：写双链、跟同一个库的人说我那篇在哪儿。' +
+        '本机完整路径（/你的用户目录/笔记库/01-projects/开源之道/开源之道.md）说给库外面听：' +
+        '在终端里 cd 过去、拖进别的程序、交给一个智能体去读那个文件。' +
+        '把鼠标停在状态栏那一块上，会先告诉你这一下将复制什么。' +
+        '手机上没有本机路径这回事，那时它自动退回库内路径，并说一声为什么。',
 
     recentHeading: '最近文件',
     recentIntro:
@@ -357,6 +365,18 @@ export const FOLDER_COUNT_LABELS: Readonly<Record<FolderCountTarget, string>> = 
     notes: '笔记',
     folders: '文件夹',
     all: '全部条目（含附件）',
+};
+
+/**
+ * 状态栏那一块点下去复制哪一种路径，两个取值在下拉框里各自叫什么。
+ *
+ * 与上面两张表同因同法：往 FILE_PATH_SCOPES 里加一种口径却忘了给它起名，在这里是编译错。
+ * 名字刻意不用「相对 / 绝对」这对术语——学员分不清相对于谁，而「笔记库」与「这台电脑」
+ * 是他看得见的两样东西。
+ */
+export const FILE_PATH_SCOPE_LABELS: Readonly<Record<FilePathScope, string>> = {
+    vault: '库内路径（从笔记库根算起）',
+    system: '本机完整路径（从这台电脑的根算起）',
 };
 
 /** 走开关控件的设置项，全部是布尔字段 */

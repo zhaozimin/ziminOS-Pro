@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 obsidian 的 App/Plugin 类型，依赖 ./constants 的 PARA、时间、灵感、读书、
- *          文件夹计数与最近文件的默认值与合法集合，
+ *          文件夹计数、最近文件与状态栏路径口径的默认值与合法集合，
  *          依赖 ./commands 的 DEFAULT_RIBBON_COMMANDS/normalizeRibbonCommands 与 CommandRegistry 类型，
  *          依赖 ./markdownStyle 的 DEFAULT_FORMAT_RULES/normalizeFormatRules，依赖 ./guard 的 SelfWriteGuard 类型，
  *          依赖 ./edition 的 EditionInfo 类型
@@ -23,6 +23,8 @@ import {
     CLIENT_FOLDER,
     CONTACT_FOLDER,
     DEFAULT_DATETIME_FORMAT,
+    FILE_PATH_DEFAULTS,
+    FILE_PATH_SCOPES,
     FOLDER_COUNT_DEFAULTS,
     FOLDERS,
     INSPIRATION_DEFAULTS,
@@ -34,6 +36,7 @@ import {
     FOLDER_COUNT_TARGETS,
 } from './constants';
 import type {
+    FilePathScope,
     FolderCountTarget,
     InspirationInsertPosition,
     RecentFilesSort,
@@ -155,6 +158,15 @@ export interface ZiminosSettings {
      * 关掉只是收起那一块，命令「复制当前笔记路径」照常可用。
      */
     showFilePath: boolean;
+    /**
+     * 点那一块（或按命令）复制走的是哪一种路径：库内路径，还是本机绝对路径。
+     *
+     * 它与上面那个开关是**两件事**：开关回答「屏幕上要不要常驻这一块」，
+     * 这一项回答「拿走的那串字给谁看」。绑成一个三选一的话，
+     * 想收起那一块的人就再也没法决定命令复制什么——而命令在关掉之后照常可用。
+     * 取值见 FILE_PATH_SCOPES；默认 vault，即 v0.20.0 之前唯一的行为。
+     */
+    filePathScope: FilePathScope;
     /** 「最近文件」清单显示几条；取值见 RECENT_FILES_LIMITS。记录本身另有更大的上限 */
     recentFilesLimit: number;
     /** 清单怎么排：按打开时刻还是按文件最后修改时间。取值见 RECENT_FILES_SORTS */
@@ -207,6 +219,7 @@ export const DEFAULT_SETTINGS: ZiminosSettings = {
     folderCountTarget: FOLDER_COUNT_DEFAULTS.target,
     folderCountRecursive: FOLDER_COUNT_DEFAULTS.recursive,
     showFilePath: true,
+    filePathScope: FILE_PATH_DEFAULTS.scope,
     recentFilesLimit: RECENT_FILES_DEFAULTS.limit,
     recentFilesSort: RECENT_FILES_DEFAULTS.sort,
     pasteLinkEnabled: true,
@@ -231,11 +244,14 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
     const bookTagCount = isBookTagCount(stored.bookTagCount)
         ? stored.bookTagCount
         : DEFAULT_SETTINGS.bookTagCount;
-    // 三个枚举/候选型字段各走一次验形，与上面两个同一姿态：
+    // 四个枚举/候选型字段各走一次验形，与上面两个同一姿态：
     // 它们的值会被直接用来查表（PICKERS）或喂给 slice，坏值不是显示错而是运行时错
     const folderCountTarget = isFolderCountTarget(stored.folderCountTarget)
         ? stored.folderCountTarget
         : DEFAULT_SETTINGS.folderCountTarget;
+    const filePathScope = isFilePathScope(stored.filePathScope)
+        ? stored.filePathScope
+        : DEFAULT_SETTINGS.filePathScope;
     const recentFilesSort = isRecentFilesSort(stored.recentFilesSort)
         ? stored.recentFilesSort
         : DEFAULT_SETTINGS.recentFilesSort;
@@ -271,6 +287,7 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
         folderCountTarget,
         folderCountRecursive: booleanValue('folderCountRecursive'),
         showFilePath: booleanValue('showFilePath'),
+        filePathScope,
         recentFilesLimit,
         recentFilesSort,
         pasteLinkEnabled: booleanValue('pasteLinkEnabled'),
@@ -308,6 +325,11 @@ function isBookTagCount(value: unknown): value is number {
 
 function isFolderCountTarget(value: unknown): value is FolderCountTarget {
     return typeof value === 'string' && FOLDER_COUNT_TARGETS.some((target) => target === value);
+}
+
+/** 复制口径同上。坏值会被直接拿去分支，回落默认比「照单全收」安全 */
+function isFilePathScope(value: unknown): value is FilePathScope {
+    return typeof value === 'string' && FILE_PATH_SCOPES.some((scope) => scope === value);
 }
 
 function isRecentFilesSort(value: unknown): value is RecentFilesSort {

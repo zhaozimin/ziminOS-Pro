@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖 obsidian 的 Platform/FileSystemAdapter 与 App 类型；
- *          运行时按需 require('electron') 取 shell（仅桌面端）；
- *          依赖 core/constants 的 SNIPPET_FOLDER_NAME/SNIPPET_EXTENSION
+ * [INPUT]: 依赖 obsidian 的 Platform 与 App 类型；运行时按需 require('electron') 取 shell（仅桌面端）；
+ *          依赖 core/localPath 的 vaultBasePath/localPath、
+ *          core/constants 的 SNIPPET_FOLDER_NAME/SNIPPET_EXTENSION
  * [OUTPUT]: 对外提供 canReveal（这台机器上能不能交给操作系统打开）、
  *           openSnippetFolder（打开片段目录）、openSnippetFile（打开单个片段）
  * [POS]: 外观模块的第三个成员，也是它的**出境口**：前两个成员一个管事实、一个管呈现，
@@ -14,9 +14,10 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { FileSystemAdapter, Platform } from 'obsidian';
+import { Platform } from 'obsidian';
 import type { App } from 'obsidian';
 import { SNIPPET_EXTENSION, SNIPPET_FOLDER_NAME } from '../../core/constants';
+import { localPath, vaultBasePath } from '../../core/localPath';
 
 // ============================================================
 // 与 Electron 的第二处约定（备案第 10 条）
@@ -33,7 +34,8 @@ import { SNIPPET_EXTENSION, SNIPPET_FOLDER_NAME } from '../../core/constants';
  *
  * **路径本身不在借用范围内**：绝对路径走的是公开的 `FileSystemAdapter.getBasePath()`
  * （obsidian.d.ts 里标着 @public 的导出类），因此「文件在哪」这件事永远由 Obsidian 回答，
- * 借来的只有「把它打开」这最后一步。
+ * 借来的只有「把它打开」这最后一步。v0.21.0 起那段计算搬进了 `core/localPath`——
+ * 它与 Electron 无关，留在这里会让本文件「只因 Electron 而变」的说法名不副实。
  *
  * 三条纪律与 sourceWeread 那一处逐条对齐：
  * 其一，只有「打开」这一个动作借用，清单、状态、路径全部走公开 API；
@@ -70,7 +72,7 @@ const NO_LOCAL_PATH = '这个笔记库不在本机文件系统上，没有可以
  * 桌面上按钮照画，万一探不到，用户得到的是一句为什么，而不是一个凭空少掉的按钮。
  */
 export function canReveal(app: App): boolean {
-    return Platform.isDesktopApp && app.vault.adapter instanceof FileSystemAdapter;
+    return Platform.isDesktopApp && vaultBasePath(app) !== null;
 }
 
 // ============================================================
@@ -156,16 +158,16 @@ function resolveShell(): ElectronShell | null {
 }
 
 /**
- * 库内相对路径 → 本机绝对路径。
+ * 库内相对路径 → 本机绝对路径，拿不到就翻成一句中文抛出去。
  *
- * getBasePath 是 obsidian.d.ts 里标着 @public 的方法，所以「文件在哪」全程由 Obsidian 回答；
- * 这里只做一次拼接，不引入 node:path——正斜杠在三个平台的 shell 调用里都认，
- * 而顶层静态引入 Node 内建模块会让插件在手机端直接加载失败。
+ * 算路径这件事住在 core/localPath（状态栏那块路径与这里共用同一份算法，
+ * 它也是唯一不引入 node:path 的理由所在）；这里只负责把「库不在本机」这个**事实**
+ * 翻成本模块的**反应**——两个出门按钮点下去都该说一句人话，而不是静静地什么都不做。
  */
 function absolutePath(app: App, relative: string): string {
-    const adapter = app.vault.adapter;
+    const full = localPath(app, relative);
 
-    if (!(adapter instanceof FileSystemAdapter)) throw new Error(NO_LOCAL_PATH);
+    if (full === null) throw new Error(NO_LOCAL_PATH);
 
-    return `${adapter.getBasePath()}/${relative}`;
+    return full;
 }

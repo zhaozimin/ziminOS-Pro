@@ -3,7 +3,7 @@
  * [OUTPUT]: 提供 npm test 的审计回归集，覆盖版本镜像、ISBN 校验、日期严格性、
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
  *           项目回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
- *           片段出境口的桌面端闸门与
+ *           片段出境口的桌面端闸门、本机绝对路径的唯一算处与状态栏路径的看拿分离，以及
  *           智能体路由完整性，并在专业版源码存在时额外覆盖出库单往返、《赛博永生》路径同构
  *           与第二版安装入口
  * [POS]: tests 的唯一可执行入口；只验证公开行为与关键平台边界，不复制业务实现
@@ -225,6 +225,7 @@ test('持久化设置在进入运行时前逐字段验形', () => {
         ribbonCommands: null,
         formatRules: [],
         projectFolder: '',
+        filePathScope: 'anywhere',
     });
 
     assert.equal(normalized.autoUpdated, DEFAULT_SETTINGS.autoUpdated);
@@ -235,6 +236,19 @@ test('持久化设置在进入运行时前逐字段验形', () => {
     assert.deepEqual(normalized.ribbonCommands, DEFAULT_SETTINGS.ribbonCommands);
     assert.deepEqual(normalized.formatRules, []);
     assert.equal(normalized.projectFolder, '');
+    assert.equal(normalized.filePathScope, DEFAULT_SETTINGS.filePathScope);
+});
+
+/**
+ * 复制口径的默认值必须是「库内路径」，也就是 v0.20.0 之前唯一的行为。
+ *
+ * 这一条钉的不是口味而是升级契约：老库的 data.json 里没有这个字段，
+ * 于是每一位老用户在升级后都会拿到这里写的默认值。默认一旦改成本机完整路径，
+ * 他们某天粘进笔记的双链就会突然带上 /Users/自己的名字——
+ * 没有报错、没有提示，只有一条从此断掉的链接和一段泄漏的本机路径。
+ */
+test('状态栏复制口径默认是库内路径，升级不替用户改他没选过的东西', () => {
+    assert.equal(DEFAULT_SETTINGS.filePathScope, 'vault');
 });
 
 /**
@@ -346,6 +360,41 @@ test('探不到本机文件系统时，两个出门按钮一个都不画', () =>
     // 手机上没有文件管理器可去。画一个点了只会道歉的按钮，比不画更让人以为系统坏了
     assert.match(source, /if \(!canReveal\(this\.ctx\.app\)\) return;/);
     assert.match(source, /if \(revealable\) this\.renderOpenButton\(row, snippet\);/);
+});
+
+/**
+ * 「库内路径 → 本机绝对路径」全仓库只有一处算得出来。
+ *
+ * 两个模块要用它：外观的出境口把路径交给操作系统，状态栏把路径交给剪贴板。
+ * 各抄一份不会报错——两份代码在今天字节相同，分叉在明天某一次修 Windows 分隔符时发生，
+ * 于是同一个库在两个按钮上给出两种路径。这条断言钉的就是那个「明天」。
+ */
+test('本机绝对路径全仓库只有一处算法', () => {
+    const sources = readdirSync(path.join(ROOT, 'src'), { recursive: true })
+        .map((entry) => String(entry))
+        .filter((entry) => entry.endsWith('.ts'));
+    const holders = sources.filter((entry) =>
+        // 注释里提一句 FileSystemAdapter 不算「知道怎么算」——只认真正取出库根的那一次调用
+        readFileSync(path.join(ROOT, 'src', entry), 'utf8').includes('adapter.getBasePath()'),
+    );
+
+    assert.deepEqual(holders, [path.join('core', 'localPath.ts')]);
+});
+
+/**
+ * 状态栏那一块「看的」与「拿的」刻意不是同一串字，因此三件事必须同时成立。
+ *
+ * 屏幕上永远是库内路径（那一块只有 32ch 并带省略号，绝对路径进去被吃掉的
+ * 恰恰是唯一有信息的笔记名一头）；复制走的是按口径解算出来的那一串；
+ * 而拿不到本机路径时降级给库内路径——库不在本机文件系统上是事实不是错误，
+ * 让「复制」什么都不做，用户只会以为按钮坏了。
+ */
+test('状态栏显示库内路径，复制走口径解算的那一串，拿不到本机路径就降级', () => {
+    const source = readFileSync(path.join(ROOT, 'src/modules/explorer/filePath.ts'), 'utf8');
+
+    assert.match(source, /setText\(this\.vaultPath\(\)/);
+    assert.match(source, /clipboard\.writeText\(resolved\.text\)/);
+    assert.match(source, /\{ text: relative, degraded: true \}/);
 });
 
 test('可用书源漏匹配时逐一交代，不伪装成没有划线', () => {

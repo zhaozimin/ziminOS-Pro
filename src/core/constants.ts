@@ -16,6 +16,7 @@
  *           最近文件契约 RECENT_FILES_FILE/RECENT_FILES_KEEP/RECENT_FILES_LIMITS/
  *           RECENT_FILES_SORTS/RECENT_FILES_DEFAULTS 及其类型 RecentFilesSort，
  *           光标记忆契约 CURSOR_STATE_FILE/CURSOR_MEMORY_LIMIT，
+ *           状态栏路径契约 FILE_PATH_SCOPES/FILE_PATH_DEFAULTS 及其类型 FilePathScope，
  *           视图代码块契约 VIEW_BLOCK_LANG/VIEW_REFRESH_DEBOUNCE_MS，
  *           以及第二版三库系统的赛博永生契约 EXPORT_MANIFEST_FILE/EXPORT_MANIFEST_HEADING/
  *           EXPORT_MANIFEST_SEPARATOR 与 ETERNAL_FOLDERS/ETERNAL_INDEX_FILE/ETERNAL_LOG_FILE/
@@ -706,6 +707,33 @@ export const RECENT_FILES_DEFAULTS = {
  * 与「状态文件仍然只有几十 KB」之间的取值。
  */
 export const CURSOR_MEMORY_LIMIT = 200;
+
+// ============================================================
+// 文件浏览器：状态栏那块路径
+// ============================================================
+
+/**
+ * 点一下状态栏那块路径，复制走的是哪一种路径。
+ *
+ * 两个取值对应两种去处，而不是「短的」和「长的」：
+ * `vault` 是**库内路径**（`01-projects/开源之道/开源之道.md`），说给 Obsidian 自己听——
+ * 双链、笔记里的引用、跟同一个库的人说「我那篇在哪儿」，认的都是这一种；
+ * `system` 是**本机绝对路径**（`/你的用户目录/笔记库/01-projects/开源之道/开源之道.md`），
+ * 说给库外面的世界听——终端里 `cd` 过去、拖进别的程序、交给一个智能体去读那个文件。
+ *
+ * 分成设置而不是猜，是因为这两种去处都真实且常用，而猜错的代价不对称：
+ * 猜短了，人拿去粘进终端得到「文件不存在」；猜长了，人粘进笔记里得到一条永远断的链接。
+ * 默认 `vault`——它是 v0.20.0 之前唯一的行为，升级不该替用户改他没选过的东西。
+ */
+export const FILE_PATH_SCOPES = ['vault', 'system'] as const;
+
+/** 复制口径的联合类型，供设置页与状态栏共用；写错一个字母在编译期倒下 */
+export type FilePathScope = (typeof FILE_PATH_SCOPES)[number];
+
+/** 全新库的复制口径，也是读取侧的回落值。见上面那段：默认必须与老行为一致 */
+export const FILE_PATH_DEFAULTS = {
+    scope: 'vault',
+} as const;
 
 // ============================================================
 // 视图代码块
