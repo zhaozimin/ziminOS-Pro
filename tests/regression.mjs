@@ -542,6 +542,50 @@ if (existsSync(proContractPath)) {
     });
 
     /**
+     * 首页那段手机口令，必须指得到安装契约真正铺下的那两个文件。
+     *
+     * 它与升级口令是同一类东西的两半：那一段钉小节标题，这一段钉**路径**。
+     * 手机接进来的窗口读不到系统根的认路文件（工作目录常常不在那儿），
+     * 于是这段口令是唯一入口，而它把 `.ziminos/skills/` 下的契约与脚本位置写死了。
+     * 安装契约哪天换个地方铺，口令就指向一个不存在的文件——智能体不会因此停下，
+     * 它会自己找一份看着差不多的说明接着干，或者干脆手写笔记，
+     * 而「不许手写笔记」正是这段口令存在的全部理由。
+     *
+     * 顺带钉住取路径那几步点名的控件：设置项改个名字，首页第一步就落空，
+     * 而用户在设置页里翻不到「复制哪一种路径」时，只会以为自己的版本不对。
+     */
+    test('首页的手机口令指向契约真实铺下的那两个文件', () => {
+        const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+        const proContract = readFileSync(proContractPath, 'utf8');
+        const notectl = readFileSync(path.join(ROOT, 'skill-pro/scripts/notectl.py'), 'utf8');
+        const settingsModel = readFileSync(path.join(ROOT, 'src/settingsModel.ts'), 'utf8');
+        const commands = readFileSync(path.join(ROOT, 'src/core/commands.ts'), 'utf8');
+
+        // 只认手机那一节：同样两个路径在「换个窗口」那段里也出现，整篇搜等于没搜
+        const start = readme.indexOf('## 从手机记一句话');
+        assert.notEqual(start, -1, 'README 少了手机那一节');
+        const section = readme.slice(start, readme.indexOf('\n## ', start + 1));
+
+        for (const installed of ['.ziminos/skills/capture/SKILL.md', '.ziminos/skills/scripts/notectl.py']) {
+            assert.ok(section.includes(installed), `手机口令没点名「${installed}」`);
+            assert.ok(proContract.includes(installed), `skill-pro/SKILL.md 没铺下「${installed}」`);
+        }
+
+        // 口令要它先跑一次 status 自证真的连上了库，那必须是个真的子命令
+        assert.ok(section.includes('跑一次 status'));
+        assert.match(notectl, /add_parser\("status"/);
+
+        // 取路径那几步点名的设置项、选项与命令，得是界面上真有的那几个
+        for (const label of ['复制哪一种路径', '本机完整路径']) {
+            assert.ok(section.includes(label), `取路径那几步没点名「${label}」`);
+            assert.ok(settingsModel.includes(label), `设置页里没有「${label}」`);
+        }
+
+        assert.ok(section.includes('复制当前笔记路径'));
+        assert.ok(commands.includes("name: '复制当前笔记路径'"));
+    });
+
+    /**
      * 发布通道的三张清单必须覆盖仓库根的每一个条目。
      *
      * publish-v1.sh 把共享部分单向推到第一版的公开仓库，靠 SHARED / PRO_ONLY / PER_REPO
