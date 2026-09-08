@@ -11,6 +11,6 @@
 ## 成员清单
 
 regression.mjs: Node 内建测试入口，用 esbuild 内存编译事实源。31 项基础回归覆盖纯函数、设置验形、平台/隐私/异步边界、后台写入的分栏滚动保护与光标切换事件，以及版本镜像、发布通道、安装路由等跨产物契约；专业版交付物存在时再追加十一条三库回归。
-eagle.mjs: Eagle 专项测试入口，直接编译协议事实源，验证稳定 URI、Markdown/YAML 文本命中、原生唤起深链、CodeMirror 交互、回环鉴权、伴侣包可复现性与附件失败不落本地。
+eagle.mjs: Eagle 专项测试入口，直接编译协议事实源，验证稳定 URI、Markdown/YAML 文本命中、项目名注入、官方 Folder API 两级归档与复用、原生唤起深链、CodeMirror 交互、回环鉴权、伴侣包可复现性与附件失败不落本地。
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

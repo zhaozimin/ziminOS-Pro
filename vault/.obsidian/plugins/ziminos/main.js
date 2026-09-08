@@ -5017,21 +5017,34 @@ var EagleBridgeClient = class {
       method: "GET"
     }));
   }
-  async importFile(filePath, name) {
-    const result = await this.requestJson({
-      url: `${this.baseUrl()}/v1/import`,
-      method: "POST",
-      contentType: "application/json",
-      body: JSON.stringify({
-        libraryKey: this.libraryKey(),
-        filePath,
-        name,
-        folderId: this.ctx.settings.eagleFolderId.trim()
-      })
-    });
+  async importFile(filePath, name, project = null) {
+    let result;
+    try {
+      result = await this.requestJson({
+        url: `${this.baseUrl()}${project ? "/v1/projects/import" : "/v1/import"}`,
+        method: "POST",
+        contentType: "application/json",
+        body: JSON.stringify({
+          libraryKey: this.libraryKey(),
+          filePath,
+          name,
+          folderId: this.ctx.settings.eagleFolderId.trim(),
+          ...project ? { projectName: project.name } : {}
+        })
+      });
+    } catch (error) {
+      if (project && error instanceof EagleBridgeResponseError && error.status === 404) {
+        throw new Error("Eagle \u4F34\u4FA3\u7248\u672C\u8FC7\u65E7\uFF0C\u8BF7\u91CD\u65B0\u5B89\u88C5 ziminOS v0.22.4 \u968F\u9644\u7684\u4F34\u4FA3");
+      }
+      throw error;
+    }
     const itemId = stringField(result, "itemId");
     if (!itemId) throw new Error("Eagle \u6CA1\u6709\u8FD4\u56DE\u9879\u76EE ID");
-    return { itemId, name: stringField(result, "name") || name };
+    return {
+      itemId,
+      name: stringField(result, "name") || name,
+      folderPath: stringField(result, "folderPath")
+    };
   }
   async content(reference) {
     const response = await this.request({
@@ -5127,6 +5140,13 @@ var EagleBridgeUnavailableError = class extends Error {
     this.name = "EagleBridgeUnavailableError";
   }
 };
+var EagleBridgeResponseError = class extends Error {
+  constructor(status, message2) {
+    super(message2);
+    this.name = "EagleBridgeResponseError";
+    this.status = status;
+  }
+};
 function statusFrom(data) {
   return {
     version: stringField(data, "version") || "\u672A\u77E5",
@@ -5137,7 +5157,7 @@ function statusFrom(data) {
 function responseError(response, data) {
   const parsed = data != null ? data : isRecord2(response.json) ? response.json : {};
   const message2 = stringField(parsed, "error") || stringField(parsed, "message");
-  return new Error(message2 || `Eagle \u4F34\u4FA3\u8FD4\u56DE ${response.status}`);
+  return new EagleBridgeResponseError(response.status, message2 || `Eagle \u4F34\u4FA3\u8FD4\u56DE ${response.status}`);
 }
 function header(headers, name) {
   var _a;
@@ -5363,24 +5383,24 @@ function errorMessage3(error) {
 // src/modules/eagle/transfer.ts
 var import_obsidian22 = require("obsidian");
 var cachedNodeTools3;
-function registerEagleTransfers(ctx, client) {
+function registerEagleTransfers(ctx, client, resolveProject) {
   if (!isSupportedEagleDesktop()) return;
   ctx.plugin.registerEvent(
     ctx.app.workspace.on("editor-paste", (event, editor, info) => {
-      void takeTransfer(ctx, client, event, editor, info).catch((error) => {
+      void takeTransfer(ctx, client, resolveProject, event, editor, info).catch((error) => {
         new import_obsidian22.Notice(`Eagle \u9644\u4EF6\u5904\u7406\u5931\u8D25\uFF1A${errorMessage4(error)}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
       });
     })
   );
   ctx.plugin.registerEvent(
     ctx.app.workspace.on("editor-drop", (event, editor, info) => {
-      void takeTransfer(ctx, client, event, editor, info).catch((error) => {
+      void takeTransfer(ctx, client, resolveProject, event, editor, info).catch((error) => {
         new import_obsidian22.Notice(`Eagle \u9644\u4EF6\u5904\u7406\u5931\u8D25\uFF1A${errorMessage4(error)}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
       });
     })
   );
 }
-async function takeTransfer(ctx, client, event, editor, info) {
+async function takeTransfer(ctx, client, resolveProject, event, editor, info) {
   var _a;
   if (!ctx.settings.eagleEnabled || event.defaultPrevented) return;
   const data = "clipboardData" in event ? event.clipboardData : event.dataTransfer;
@@ -5391,12 +5411,15 @@ async function takeTransfer(ctx, client, event, editor, info) {
   editor.replaceSelection(marker);
   const links = [];
   const failures = [];
+  const folderPaths = /* @__PURE__ */ new Set();
+  const project = info.file ? resolveProject(info.file.path) : null;
   for (const file of files) {
     let materialized = null;
     const name = attachmentName(file);
     try {
       materialized = await materialize(file, name);
-      const item = await client.importFile(materialized.path, name);
+      const item = await client.importFile(materialized.path, name, project);
+      if (item.folderPath) folderPaths.add(item.folderPath);
       links.push(buildEagleMarkdown(
         { libraryKey: EAGLE_LIBRARY_KEY, itemId: item.itemId },
         item.name,
@@ -5418,7 +5441,8 @@ async function takeTransfer(ctx, client, event, editor, info) {
     const suffix = links.length > 0 ? `\uFF1B\u5176\u4F59 ${links.length} \u4E2A\u5DF2\u5B58\u5165 Eagle` : "";
     new import_obsidian22.Notice(`Eagle \u5BFC\u5165\u5931\u8D25\uFF1A${failures.join("\uFF1B")}${suffix}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
   } else if (links.length > 0 && replaced) {
-    new import_obsidian22.Notice(`\u5DF2\u5B58\u5165 Eagle\uFF1A${links.length} \u4E2A\u9644\u4EF6`);
+    const destination = folderPaths.size === 1 ? ` \u2192 ${Array.from(folderPaths)[0]}` : "";
+    new import_obsidian22.Notice(`\u5DF2\u5B58\u5165 Eagle\uFF1A${links.length} \u4E2A\u9644\u4EF6${destination}`);
   }
 }
 async function materialize(file, name) {
@@ -5521,10 +5545,10 @@ function errorMessage4(error) {
 }
 
 // src/modules/eagle/index.ts
-function registerEagleBridge(ctx) {
+function registerEagleBridge(ctx, resolveProject) {
   const client = new EagleBridgeClient(ctx);
   const refreshRenderer = registerEagleRenderer(ctx, client);
-  registerEagleTransfers(ctx, client);
+  registerEagleTransfers(ctx, client, resolveProject);
   const desktopOnly = () => {
     if (isSupportedEagleDesktop()) return true;
     new import_obsidian23.Notice("Eagle \u9644\u4EF6\u6865\u63A5\u53EA\u5728 macOS \u4E0E Windows \u684C\u9762\u7AEF\u5DE5\u4F5C\u3002");
@@ -20992,6 +21016,21 @@ function registerCreateProjectCommand(ctx, pickPerson2) {
   });
 }
 
+// src/modules/projects/location.ts
+function projectNameOfNotePath(settings, notePath) {
+  const roots = Array.from(/* @__PURE__ */ new Set([
+    normalizeFolderPath(settings.projectFolder, DEFAULT_SETTINGS.projectFolder),
+    normalizeFolderPath(settings.archiveFolder, DEFAULT_SETTINGS.archiveFolder)
+  ])).sort((left, right) => right.length - left.length);
+  for (const root of roots) {
+    const prefix = `${root}/`;
+    if (!notePath.startsWith(prefix)) continue;
+    const parts = notePath.slice(prefix.length).split("/").filter(Boolean);
+    return parts.length >= 2 ? parts[0] : null;
+  }
+  return null;
+}
+
 // src/modules/projects/seed.ts
 function projectsSeed() {
   return {
@@ -22780,7 +22819,7 @@ var TEXTS6 = {
   pasteLinkName: "\u7C98\u8D34\u5230\u9009\u4E2D\u6587\u5B57\u4E0A\uFF1D\u52A0\u5916\u94FE",
   pasteLinkDesc: "\u9009\u4E2D\u4E00\u6BB5\u6587\u5B57\uFF0C\u76F4\u63A5 Cmd + V \u7C98\u4E00\u6761\u7F51\u5740\uFF0C\u90A3\u6BB5\u6587\u5B57\u5C31\u53D8\u6210\u6307\u5411\u5B83\u7684\u5916\u94FE\u3002\u56DB\u6761\u90FD\u6EE1\u8DB3\u624D\u4F1A\u52A8\u624B\uFF1A\u9009\u4E86\u5B57\u3001\u526A\u8D34\u677F\u91CC\u53EA\u6709\u4E00\u6761**\u5E26\u534F\u8BAE**\u7684\u7F51\u5740\uFF08www \u5F00\u5934\u7684\u88F8\u57DF\u540D\u4E0D\u7B97\uFF09\u3001\u9009\u4E2D\u7684\u6587\u5B57\u91CC\u6CA1\u6709\u6362\u884C\u3001\u8FD9\u6B21\u7C98\u8D34\u8FD8\u6CA1\u88AB\u522B\u7684\u63D2\u4EF6\u5904\u7406\u8FC7\u3002\u4EFB\u4F55\u4E00\u6761\u4E0D\u6EE1\u8DB3\u5C31\u539F\u6837\u7C98\u8D34\u3002",
   eagleHeading: "Eagle \u9644\u4EF6",
-  eagleIntro: "\u6253\u5F00\u540E\uFF0C\u7C98\u8D34\u6216\u62D6\u5165\u7684\u56FE\u7247\u4E0E\u9644\u4EF6\u53EA\u5B58\u5165 Eagle\uFF0C\u7B14\u8BB0\u4FDD\u7559\u7A33\u5B9A itemId \u94FE\u63A5\u3002\u540C\u4E00 Eagle \u8D44\u6E90\u5E93\u5185\u6362\u6587\u4EF6\u5939\u4E0D\u4F1A\u5F71\u54CD\u94FE\u63A5\u3002\u5BFC\u5165\u5931\u8D25\u65F6\u660E\u786E\u62A5\u9519\uFF0C\u4E0D\u4F1A\u5077\u5077\u5728 Obsidian \u7559\u526F\u672C\u3002",
+  eagleIntro: "\u6253\u5F00\u540E\uFF0C\u7C98\u8D34\u6216\u62D6\u5165\u7684\u56FE\u7247\u4E0E\u9644\u4EF6\u53EA\u5B58\u5165 Eagle\uFF0C\u7B14\u8BB0\u4FDD\u7559\u7A33\u5B9A itemId \u94FE\u63A5\u3002\u9879\u76EE\u7B14\u8BB0\u91CC\u7684\u9644\u4EF6\u4F1A\u81EA\u52A8\u8FDB\u5165\u201C\u9879\u76EE/\u9879\u76EE\u540D\u79F0\u201D\uFF1B\u540C\u4E00 Eagle \u8D44\u6E90\u5E93\u5185\u6362\u6587\u4EF6\u5939\u4E0D\u4F1A\u5F71\u54CD\u94FE\u63A5\u3002\u5BFC\u5165\u5931\u8D25\u65F6\u660E\u786E\u62A5\u9519\uFF0C\u4E0D\u4F1A\u5077\u5077\u5728 Obsidian \u7559\u526F\u672C\u3002",
   eagleEnabledName: "\u9644\u4EF6\u4EA4\u7ED9 Eagle",
   eagleEnabledDesc: "\u53EA\u5728 macOS / Windows \u751F\u6548\u3002\u8BF7\u5148\u5B89\u88C5 ziminOS Eagle \u4F34\u4FA3\u5E76\u5B8C\u6210\u914D\u5BF9\uFF1B\u82E5\u8FD8\u5728\u7528\u5176\u4ED6\u56FE\u5E8A\u6216\u9644\u4EF6\u63D2\u4EF6\uFF0C\u8BF7\u5173\u6389\u5B83\u4EEC\u5BF9\u7C98\u8D34\u9644\u4EF6\u7684\u63A5\u7BA1\u3002",
   eagleStatusName: "\u4F34\u4FA3\u8FDE\u63A5",
@@ -22789,8 +22828,8 @@ var TEXTS6 = {
   eaglePackageDesc: "\u4F34\u4FA3\u5DF2\u968F ziminOS \u653E\u5728\u672C\u673A\u63D2\u4EF6\u76EE\u5F55\uFF1B\u5728 Eagle \u4E2D\u5B89\u88C5\u8FD9\u4EFD .eagleplugin \u540E\u518D\u56DE\u6765\u914D\u5BF9\u3002",
   eaglePortName: "\u672C\u673A\u7AEF\u53E3",
   eaglePortDesc: "\u9ED8\u8BA4 23119\uFF0C\u5FC5\u987B\u4E0E Eagle \u4F34\u4FA3\u7A97\u53E3\u4E2D\u7684\u7AEF\u53E3\u4E00\u81F4\u3002\u7AEF\u53E3\u4E0D\u5199\u8FDB\u7B14\u8BB0\u3002",
-  eagleFolderName: "Eagle \u6587\u4EF6\u5939 ID\uFF08\u53EF\u9009\uFF09",
-  eagleFolderDesc: "\u7559\u7A7A\u5373\u5B58\u5165\u5F53\u524D\u8D44\u6E90\u5E93\u7684\u672A\u5F52\u7C7B\u533A\uFF1B\u586B Eagle \u6587\u4EF6\u5939 ID \u5219\u76F4\u63A5\u5F52\u5165\u6307\u5B9A\u6587\u4EF6\u5939\u3002",
+  eagleFolderName: "\u975E\u9879\u76EE\u9644\u4EF6\u7684 Eagle \u6587\u4EF6\u5939 ID\uFF08\u53EF\u9009\uFF09",
+  eagleFolderDesc: "\u9879\u76EE\u76EE\u5F55\u548C\u5F52\u6863\u76EE\u5F55\u4E2D\u7684\u7B14\u8BB0\u4F1A\u81EA\u52A8\u8FDB\u5165\u201C\u9879\u76EE/\u9879\u76EE\u540D\u79F0\u201D\uFF0C\u4E0D\u8BFB\u53D6\u8FD9\u91CC\u3002\u53EA\u6709\u9879\u76EE\u5916\u7684\u9644\u4EF6\u624D\u4F7F\u7528\u6B64 ID\uFF1B\u7559\u7A7A\u5373\u8FDB\u5165\u5F53\u524D\u8D44\u6E90\u5E93\u672A\u5F52\u7C7B\u533A\u3002",
   rememberCursorName: "\u8BB0\u4F4F\u6BCF\u7BC7\u7B14\u8BB0\u7684\u5149\u6807\u4F4D\u7F6E",
   rememberCursorDesc: "\u79BB\u5F00\u4E00\u7BC7\u7B14\u8BB0\u65F6\u8BB0\u4E0B\u5149\u6807\u5728\u7B2C\u51E0\u884C\u3001\u6EDA\u52A8\u6761\u5728\u54EA\u513F\uFF0C\u4E0B\u6B21\u6253\u5F00\u5C31\u56DE\u5230\u90A3\u91CC\uFF0C\u91CD\u542F Obsidian \u4E5F\u8FD8\u5728\u3002\u5B83\u4E0D\u4E0E\u4F60\u7684\u70B9\u51FB\u62A2\uFF1A\u4ECE\u4E00\u6761\u5E26\u951A\u70B9\u7684\u53CC\u94FE\u8DF3\u8FDB\u6765\u65F6\uFF0CObsidian \u5DF2\u7ECF\u628A\u5149\u6807\u653E\u597D\u4E86\uFF0C\u8FD9\u65F6\u5B83\u4E0D\u63D2\u624B\u3002\u4F4D\u7F6E\u8BB0\u5728\u63D2\u4EF6\u76EE\u5F55\u7684 cursor-positions.json \u91CC\uFF0C\u4E0D\u8FDB\u4F60\u7684\u8BBE\u7F6E\u6587\u4EF6\uFF0C\u4E5F\u4E0D\u5199\u8FDB\u4EFB\u4F55\u4E00\u7BC7\u7B14\u8BB0\u3002",
   advancedHeading: "\u9AD8\u7EA7\u8BBE\u7F6E\uFF08\u4E00\u822C\u4E0D\u7528\u6539\uFF09",
@@ -23246,7 +23285,7 @@ var SettingsPanels = class {
     new import_obsidian50.Setting(containerEl).setName(TEXTS6.formatHeading).setDesc(TEXTS6.formatIntro).setHeading();
     this.renderFormatSection(containerEl);
   }
-  /** Eagle 是编辑页的附件支线：行为开关、本机连接与设备参数收在同一段 */
+  /** Eagle 是编辑页的附件支线：行为开关、项目自动归档、本机连接与设备参数收在同一段 */
   renderEaglePanel(containerEl) {
     new import_obsidian50.Setting(containerEl).setName(TEXTS6.eagleHeading).setDesc(TEXTS6.eagleIntro).setHeading();
     this.host.renderToggle(containerEl, "eagleEnabled", TEXTS6.eagleEnabledName, TEXTS6.eagleEnabledDesc);
@@ -23268,7 +23307,7 @@ var SettingsPanels = class {
       this.ctx.settings.eaglePort = candidate;
       await this.ctx.saveSettings();
     }));
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.eagleFolderName).setDesc(TEXTS6.eagleFolderDesc).addText((text3) => text3.setPlaceholder("\u7559\u7A7A\uFF1A\u672A\u5F52\u7C7B").setValue(this.ctx.settings.eagleFolderId).onChange(async (value) => {
+    new import_obsidian50.Setting(containerEl).setName(TEXTS6.eagleFolderName).setDesc(TEXTS6.eagleFolderDesc).addText((text3) => text3.setPlaceholder("\u9879\u76EE\u5916\u7559\u7A7A\uFF1A\u672A\u5F52\u7C7B").setValue(this.ctx.settings.eagleFolderId).onChange(async (value) => {
       this.ctx.settings.eagleFolderId = value.trim();
       await this.ctx.saveSettings();
     }));
@@ -23514,7 +23553,10 @@ var ZiminosPlugin = class extends import_obsidian52.Plugin {
     registerClientCommands(ctx, (seed) => applySeed(ctx, seed));
     registerFormatter(ctx);
     const syncAppearanceSwitch = registerAppearanceSwitch(ctx);
-    const eagleActions = registerEagleBridge(ctx);
+    const eagleActions = registerEagleBridge(ctx, (notePath) => {
+      const name = projectNameOfNotePath(ctx.settings, notePath);
+      return name ? { name } : null;
+    });
     registerPasteLink(ctx);
     registerCursorMemory(ctx);
     const syncFolderCount = registerFolderCount(ctx);

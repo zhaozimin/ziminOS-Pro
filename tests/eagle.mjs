@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、Eagle 原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、项目名注入与 Eagle 两级目录归档、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -143,6 +143,19 @@ test('Obsidian 半边只在 macOS/Windows 桌面端注册', () => {
     assert.ok(editor.includes('event.metaKey && !event.ctrlKey'));
 });
 
+test('项目归属只由 projects 模块判定，再由 main 注入 Eagle', () => {
+    const location = readFileSync(path.join(ROOT, 'src/modules/projects/location.ts'), 'utf8');
+    const main = readFileSync(path.join(ROOT, 'src/main.ts'), 'utf8');
+    const transfer = readFileSync(path.join(ROOT, 'src/modules/eagle/transfer.ts'), 'utf8');
+
+    assert.ok(location.includes('settings.projectFolder'));
+    assert.ok(location.includes('settings.archiveFolder'));
+    assert.ok(location.includes('parts.length >= 2 ? parts[0] : null'));
+    assert.ok(main.includes('projectNameOfNotePath(ctx.settings, notePath)'));
+    assert.ok(transfer.includes('resolveProject(info.file.path)'));
+    assert.equal(transfer.includes('settings.projectFolder'), false);
+});
+
 test('Eagle 安装包可解压，根层交付物齐全', () => {
     const artifact = path.join(ROOT, 'vault/.obsidian/plugins/ziminos/ziminOS-Eagle-Bridge.eagleplugin');
     const listing = execFileSync('unzip', ['-Z1', artifact], { encoding: 'utf8' }).trim().split('\n').sort();
@@ -165,7 +178,7 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
     const guide = readFileSync(path.join(ROOT, 'docs/Eagle附件桥接安装与使用指南.html'), 'utf8');
     const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
-    for (const anchor of ['id="upgrade"', 'id="install"', 'id="pair"', 'id="verify"', 'id="troubleshoot"']) {
+    for (const anchor of ['id="upgrade"', 'id="install"', 'id="pair"', 'id="organize"', 'id="verify"', 'id="troubleshoot"']) {
         assert.ok(guide.includes(anchor));
     }
     assert.ok(guide.includes('三、C 三库系统的日常升级'));
@@ -174,6 +187,9 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
     assert.ok(guide.includes('Ctrl + 单击'));
     assert.ok(guide.includes('Eagle 4.0 Build 18'));
     assert.ok(guide.includes('系统应自动启动 Eagle'));
+    assert.ok(guide.includes('项目/以人为本系列课程'));
+    assert.ok(guide.includes('同一级出现多个同名目录'));
+    assert.ok(guide.includes('伴侣版本过旧'));
     assert.ok(guide.includes('同一 Eagle 库里换文件夹'));
     assert.ok(guide.includes('不要手动编辑或分享配对令牌'));
     assert.equal(/<script\b/i.test(guide), false);
@@ -188,11 +204,17 @@ test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官�
     assert.ok(source.includes('isJsonRequest(request)'));
     assert.ok(source.includes("/^[a-f0-9]{64}$/.test(value.token)"));
     assert.ok(source.includes("url.pathname === '/v1/disconnect'"));
+    assert.ok(source.includes("url.pathname === '/v1/projects/import'"));
     assert.ok(source.includes('eagle.item.addFromPath'));
+    assert.ok(source.includes('eagle.folder.getAll'));
+    assert.ok(source.includes('eagle.folder.create'));
+    assert.ok(source.includes('eagle.folder.createSubfolder'));
     assert.ok(source.includes('eagle.item.getById'));
     assert.ok(source.includes('eagle.item.open'));
     assert.ok(source.includes('eagle.app.show'));
     assert.ok(client.includes("require('electron')"));
+    assert.ok(client.includes("project ? '/v1/projects/import' : '/v1/import'"));
+    assert.ok(client.includes('Eagle 伴侣版本过旧'));
     assert.ok(client.includes('shell.openExternal(buildEagleNativeItemUri(reference))'));
     assert.equal(source.includes('Access-Control-Allow-Origin'), false);
     assert.equal(/writeFile[^\n]*metadata\.json/.test(source), false);
@@ -262,6 +284,8 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
     const imported = [];
     const shown = [];
     const nativeLinks = [];
+    const eagleFolders = [];
+    const createdFolders = [];
 
     writeFileSync(attachment, 'hello-eagle');
     context.document = { getElementById: () => ({ textContent: '' }) };
@@ -273,6 +297,26 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
             },
         },
         library: { path: folder, name: '测试资源库' },
+        folder: {
+            getAll: async () => eagleFolders,
+            create: async (options) => {
+                const created = { id: 'PROJECT_ROOT', parent: '', children: [], ...options };
+
+                eagleFolders.push(created);
+                createdFolders.push({ kind: 'root', options });
+                return created;
+            },
+            createSubfolder: async (parent, options) => {
+                const id = options.name === '以人为本系列课程'
+                    ? 'PROJECT_COURSE'
+                    : `PROJECT_${createdFolders.length}`;
+                const created = { id, parent, children: [], ...options };
+
+                eagleFolders.push(created);
+                createdFolders.push({ kind: 'child', parent, options });
+                return created;
+            },
+        },
         item: {
             addFromPath: async (filePath, options) => {
                 imported.push({ filePath, options });
@@ -342,6 +386,75 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
         assert.equal(JSON.parse(importedResponse.body).itemId, 'ITEM123');
         assert.equal(imported.length, 1);
         assert.deepEqual(Array.from(imported[0].options.folders), ['FOLDER123']);
+
+        const missingProject = await callBridge(port, 'POST', '/v1/projects/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '缺项目名.txt',
+        }, headers);
+
+        assert.equal(missingProject.status, 400);
+        assert.equal(imported.length, 1);
+
+        const projectImport = await callBridge(port, 'POST', '/v1/projects/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '课程附件.txt',
+            folderId: 'IGNORED_FOR_PROJECT',
+            projectName: '以人为本系列课程',
+        }, headers);
+
+        assert.equal(projectImport.status, 200);
+        assert.equal(JSON.parse(projectImport.body).folderPath, '项目/以人为本系列课程');
+        assert.deepEqual(createdFolders.map((entry) => entry.kind), ['root', 'child']);
+        assert.equal(createdFolders[0].options.name, '项目');
+        assert.equal(createdFolders[1].parent, 'PROJECT_ROOT');
+        assert.equal(createdFolders[1].options.name, '以人为本系列课程');
+        assert.deepEqual(Array.from(imported[1].options.folders), ['PROJECT_COURSE']);
+
+        const repeatedProjectImport = await callBridge(port, 'POST', '/v1/projects/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '第二份附件.txt',
+            projectName: '以人为本系列课程',
+        }, headers);
+
+        assert.equal(repeatedProjectImport.status, 200);
+        assert.equal(createdFolders.length, 2);
+        assert.deepEqual(Array.from(imported[2].options.folders), ['PROJECT_COURSE']);
+
+        const invalidProject = await callBridge(port, 'POST', '/v1/projects/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '非法.txt',
+            projectName: '../错误项目',
+        }, headers);
+
+        assert.equal(invalidProject.status, 400);
+        assert.equal(imported.length, 3);
+
+        eagleFolders.push({ id: 'PROJECT_ROOT_DUP', name: '项目', parent: '', children: [] });
+        const ambiguousProject = await callBridge(port, 'POST', '/v1/projects/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '不能误放.txt',
+            projectName: '另一个项目',
+        }, headers);
+
+        assert.equal(ambiguousProject.status, 409);
+        assert.match(JSON.parse(ambiguousProject.body).error, /多个同名“项目”/);
+        assert.equal(imported.length, 3);
+
+        eagleFolders.pop();
+        const recoveredProject = await callBridge(port, 'POST', '/v1/projects/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '恢复后.txt',
+            projectName: '另一个项目',
+        }, headers);
+
+        assert.equal(recoveredProject.status, 200);
+        assert.equal(imported.length, 4);
 
         const content = await callBridge(port, 'GET', '/v1/items/ITEM123/content?library=primary', null, headers);
 

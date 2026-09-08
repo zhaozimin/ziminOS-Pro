@@ -12,10 +12,10 @@ Eagle 附件桥接的 Obsidian 半边。这里不是第二个 Obsidian 插件：
 
 protocol.ts: 两端共同的身份语法，构建/严格解析 v1 URI、计算 Markdown/YAML 里的点击命中区间、生成附件链接并区分图片嵌入与普通链接；只在伴侣不在线时由稳定 itemId 构建 Eagle 原生唤起深链，深链不写回笔记。
 platform.ts: 唯一平台闸门，只有 macOS/Windows 的 Obsidian 桌面端能注册桥接；移动端与 Linux 不出现半套运行时。
-client.ts: 唯一 HTTP 出境口，以 Obsidian `requestUrl` 访问回环伴侣，在官方 `SecretStorage` 中持有配对令牌，不向上游泄漏端口、请求头或响应形状；唯一离线分支是回环连接根本不存在时，按需调 Electron shell 打开 `eagle://item/{itemId}`，HTTP 401/409/500 不允许绕过。
-transfer.ts: 附件写入边界，在第一个异步操作前拦下粘贴/拖放，将内存 File 短暂物化到系统临时目录，导入成功后用身份链接替换占位符。
+client.ts: 唯一 HTTP 出境口，以 Obsidian `requestUrl` 访问回环伴侣，在官方 `SecretStorage` 中持有配对令牌，不向上游泄漏端口、请求头或响应形状；项目导入走独立端点，只转交 main 注入的项目名，旧伴侣会在写入前被识别而不是忽略字段后误放附件；Eagle 文件夹 ID 不回流；唯一离线分支是回环连接根本不存在时，按需调 Electron shell 打开 `eagle://item/{itemId}`，HTTP 401/409/500 不允许绕过。
+transfer.ts: 附件写入边界，在第一个异步操作前拦下粘贴/拖放，将内存 File 短暂物化到系统临时目录；同一次事件先取得宿主笔记的项目名，所有附件共用这个路由，导入成功后用身份链接替换占位符并报告 Eagle 目标目录。
 editor.ts: CodeMirror 交互适配层，把实时预览/源码模式/YAML 属性区的 ⌘/Ctrl+单击还原成当前行的稳定身份；同一个近邻 DOM 提取函数交给 render 在捕获阶段处理会自行截断事件的 YAML 控件，不抢占用于编辑的普通单击。
 render.ts: 附件呈现与窗口生命周期边界，阅读视图与实时预览通过伴侣读取内容并生成临时 blob URL，并装配 editor 扩展；离开 DOM 即释放 blob。
-index.ts: 局部装配点，把 client/transfer/render 连起来，对 main 交回配对、检测、断开、状态说明与显示伴侣安装包五个设置动作。
+index.ts: 局部装配点，把 main 注入的项目名解析能力与 client/transfer/render 连起来，对 main 交回配对、检测、断开、状态说明与显示伴侣安装包五个设置动作。
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

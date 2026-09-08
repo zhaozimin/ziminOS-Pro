@@ -10,7 +10,8 @@
  *          复盘的打开命令还要 theme 的 promptThemeIfMissing 来填「日记已打开」那个洞；
  *          再加 modules/format 的 registerFormatter、modules/appearance 的 registerAppearanceSwitch、
  *          modules/ribbon 的 registerRibbon、
- *          modules/eagle 的 registerEagleBridge（附件粘贴/呈现与 Eagle 配对）、
+ *          modules/eagle 的 registerEagleBridge（附件粘贴/呈现与 Eagle 配对），并由
+ *          modules/projects/location 向它注入“当前笔记属于哪个项目”的唯一判定、
  *          modules/editing 的 registerPasteLink/registerCursorMemory、
  *          modules/explorer 的 registerFolderCount/registerRecentFiles/registerFilePath、
  *          modules/legacy 的 registerLegacyDock
@@ -78,6 +79,7 @@ import { BOOK_KIND, createContainer } from './modules/projects/createContainer';
 import { createExportHook } from './modules/eternal/export';
 import { eternalRawViews, humanEternalViews } from './modules/eternal/views';
 import { registerCreateProjectCommand } from './modules/projects/createProject';
+import { projectNameOfNotePath } from './modules/projects/location';
 import { projectsSeed } from './modules/projects/seed';
 import { registerTransitionCommands } from './modules/projects/transitions';
 import { registerUpdatedMaintainer } from './modules/projects/updatedMaintainer';
@@ -215,7 +217,11 @@ export default class ZiminosPlugin extends Plugin {
 
         // Eagle 必须先注册：它先拦下 File，后面的“选中文字加外链”仍只看纯文本 URL。
         // 两者都遵守 defaultPrevented，不会重复接管同一次粘贴。
-        const eagleActions = registerEagleBridge(ctx);
+        const eagleActions = registerEagleBridge(ctx, (notePath) => {
+            const name = projectNameOfNotePath(ctx.settings, notePath);
+
+            return name ? { name } : null;
+        });
         // 下面两个不交回同步函数：监听与记忆每次触发都现读设置对象，天然看得见新值。
         // 需要有人去推一把的，永远只是「已经画在屏幕上」的东西
         registerPasteLink(ctx);

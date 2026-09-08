@@ -343,7 +343,8 @@ export const TEXTS = {
     eagleHeading: 'Eagle 附件',
     eagleIntro:
         '打开后，粘贴或拖入的图片与附件只存入 Eagle，笔记保留稳定 itemId 链接。' +
-        '同一 Eagle 资源库内换文件夹不会影响链接。导入失败时明确报错，不会偷偷在 Obsidian 留副本。',
+        '项目笔记里的附件会自动进入“项目/项目名称”；同一 Eagle 资源库内换文件夹不会影响链接。' +
+        '导入失败时明确报错，不会偷偷在 Obsidian 留副本。',
     eagleEnabledName: '附件交给 Eagle',
     eagleEnabledDesc:
         '只在 macOS / Windows 生效。请先安装 ziminOS Eagle 伴侣并完成配对；' +
@@ -354,8 +355,10 @@ export const TEXTS = {
     eaglePackageDesc: '伴侣已随 ziminOS 放在本机插件目录；在 Eagle 中安装这份 .eagleplugin 后再回来配对。',
     eaglePortName: '本机端口',
     eaglePortDesc: '默认 23119，必须与 Eagle 伴侣窗口中的端口一致。端口不写进笔记。',
-    eagleFolderName: 'Eagle 文件夹 ID（可选）',
-    eagleFolderDesc: '留空即存入当前资源库的未归类区；填 Eagle 文件夹 ID 则直接归入指定文件夹。',
+    eagleFolderName: '非项目附件的 Eagle 文件夹 ID（可选）',
+    eagleFolderDesc:
+        '项目目录和归档目录中的笔记会自动进入“项目/项目名称”，不读取这里。' +
+        '只有项目外的附件才使用此 ID；留空即进入当前资源库未归类区。',
 
     rememberCursorName: '记住每篇笔记的光标位置',
     rememberCursorDesc:

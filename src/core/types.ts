@@ -187,7 +187,7 @@ export interface ZiminosSettings {
     eagleEnabled: boolean;
     /** Eagle 伴侣的本机回环端口；只是设备配置，不进笔记链接 */
     eaglePort: number;
-    /** 可选的 Eagle 目标文件夹 ID；空串表示放进当前资源库未归类区 */
+    /** 项目外附件的可选 Eagle 目标文件夹 ID；项目内附件始终自动进入“项目/项目名” */
     eagleFolderId: string;
     /**
      * 是否记住每篇笔记关掉时的光标与滚动位置，下次打开时回到那里。

@@ -688,7 +688,7 @@ export class SettingsPanels {
         this.renderFormatSection(containerEl);
     }
 
-    /** Eagle 是编辑页的附件支线：行为开关、本机连接与设备参数收在同一段 */
+    /** Eagle 是编辑页的附件支线：行为开关、项目自动归档、本机连接与设备参数收在同一段 */
     private renderEaglePanel(containerEl: HTMLElement): void {
         new Setting(containerEl).setName(TEXTS.eagleHeading).setDesc(TEXTS.eagleIntro).setHeading();
         this.host.renderToggle(containerEl, 'eagleEnabled', TEXTS.eagleEnabledName, TEXTS.eagleEnabledDesc);
@@ -732,7 +732,7 @@ export class SettingsPanels {
         new Setting(containerEl)
             .setName(TEXTS.eagleFolderName)
             .setDesc(TEXTS.eagleFolderDesc)
-            .addText((text) => text.setPlaceholder('留空：未归类')
+            .addText((text) => text.setPlaceholder('项目外留空：未归类')
                 .setValue(this.ctx.settings.eagleFolderId)
                 .onChange(async (value) => {
                     this.ctx.settings.eagleFolderId = value.trim();

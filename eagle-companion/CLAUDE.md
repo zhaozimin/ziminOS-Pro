@@ -12,7 +12,7 @@ manifest.json: Eagle 插件入口，`platform/arch: all`，`serviceMode: true`�
 logo.png: 256×256 透明底安装图标，以纸页、z 形桥与翼形表达 Obsidian ↔ Eagle，只服务插件面板识别。
 index.html: 最小界面骨架，放置配对、端口、客户清单与反向查找四块显式操作。
 styles.css: 纯呈现层，跟随运行时深浅色，错误和失配状态都保留文字而不只靠颜色。
-js/service.js: 唯一执行层，托管回环 HTTP 生命周期、配对令牌、Eagle 官方 item/app API 与 Obsidian URI 反向搜索；打开项目后以 `app.show()` 把最小化的主窗口唤回前台，旧版 Eagle 回落原生项目深链。
+js/service.js: 唯一执行层，托管回环 HTTP 生命周期、配对令牌、Eagle 官方 item/folder/app API 与 Obsidian URI 反向搜索；项目导入占用独立端点，先串行创建或复用严格的 `项目/项目名` 两级目录，再把其 ID 交给 item API，重名歧义直接中止；打开项目后以 `app.show()` 把最小化的主窗口唤回前台，旧版 Eagle 回落原生项目深链。
 README.md: 独立安装、配对、移动语义与安全边界，可随 Eagle 插件包交给审核人员与用户。
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
