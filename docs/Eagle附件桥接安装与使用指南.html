@@ -1,5 +1,5 @@
 <!--
-  [INPUT]: 依赖 README 的三库升级口令、skill-pro/SKILL.md 的程序升级边界，以及 v0.22.0 Eagle 桥接的设置与配对语义
+  [INPUT]: 依赖 README 的三库升级口令、skill-pro/SKILL.md 的程序升级边界，以及 v0.22.1 Eagle 桥接的配对与编辑器跳转语义
   [OUTPUT]: 提供可单文件打开、打印或转发给学员的 macOS/Windows 升级、安装、配对、验收与排障指南
   [POS]: docs 的用户交付说明；只翻译既有施工契约与产品行为，不另造安装流程，不要求学员接触源码或 data.json
   [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -101,7 +101,7 @@
 <body>
   <main class="page">
     <header class="hero">
-      <p class="eyebrow">ziminOS PRO · v0.22.0</p>
+      <p class="eyebrow">ziminOS PRO · v0.22.1</p>
       <h1>Obsidian × Eagle<br>附件桥接安装指南</h1>
       <p class="lead">给 ziminOS 学员的完整操作手册：先安全升级三库系统，再安装 Eagle 伴侣、完成配对并验证附件只进 Eagle、不再留在 Obsidian 本地。</p>
       <div class="tags"><span class="tag">macOS</span><span class="tag">Windows</span><span class="tag">稳定 itemId</span><span class="tag">本机回环</span><span class="tag">不迁移旧附件</span></div>
@@ -127,10 +127,10 @@
 
     <section id="upgrade">
       <div class="kicker">Step 01</div>
-      <h2>先把 ziminOS 升级到 v0.22.0</h2>
+      <h2>先把 ziminOS 升级到 v0.22.1</h2>
       <p>用桌面智能体打开三本笔记库外面的<strong>系统根</strong>，不是打开“以人为本”或另外两本库。把下面整段原样发给智能体：</p>
       <pre>请读取并严格执行 https://gitee.com/ziminzhao/ziminos-pro/blob/main/skill-pro/SKILL.md 中的「三、C 三库系统的日常升级」。当前工作区是已经装好的 ziminOS 三库系统的系统根，这是升级不是安装：不要重新铺库，不要询问名称或位置，不要动我的笔记、配色、我自己放进 snippets/ 的片段与其他插件的配置。必须先完整执行「二、在工作区外取得施工源」（仓库 https://gitee.com/ziminzhao/ziminos-pro.git，克隆到系统临时目录，不要克隆进工作区），再逐条执行 C 模式，然后按「四、验证」核对、按「五、清理」删掉临时源码。最后把升级前后的插件版本号一起报给我。任何一步失败就停下来告诉我是哪一步，不要跳过，也不要换别的做法绕过去。</pre>
-      <div class="callout ok"><strong>合格回执必须出现两个版本号。</strong>升级后的版本应为 <code>0.22.0</code> 或更高；如果只说“完成了”却没有升级前后版本，让智能体重新执行验证。</div>
+      <div class="callout ok"><strong>合格回执必须出现两个版本号。</strong>升级后的版本应为 <code>0.22.1</code> 或更高；如果只说“完成了”却没有升级前后版本，让智能体重新执行验证。</div>
       <p class="muted">升级程序会把 Eagle 伴侣安装包同时放进“以人为本”和“赛博永生”的 ziminOS 插件目录，但不会替你安装进 Eagle，也不会读取或覆盖任何 <code>data.json</code>。</p>
     </section>
 
@@ -167,11 +167,12 @@
         <li>切到 Eagle，确认刚才的图片已经出现。</li>
         <li>回到 Obsidian 源码模式，链接应类似 <code>![图片名](ziminos-eagle://v1/primary/项目ID)</code>，里面不应出现本机文件路径。</li>
         <li>检查 Obsidian 原来的附件目录：这次操作不应多出一份图片。</li>
-        <li>进入阅读视图或实时预览，图片应正常显示；点击图片，应在 Eagle 中定位并打开对应项目。</li>
-        <li>再拖入一个 PDF。笔记中应出现普通附件链接，点击后交给 Eagle 打开。</li>
+        <li>进入阅读视图或实时预览，图片应正常显示。阅读视图普通单击；实时预览与源码模式在 macOS 用 <code>⌘ + 单击</code>、Windows 用 <code>Ctrl + 单击</code>，应在 Eagle 中定位并打开对应项目。</li>
+        <li>再拖入一个 PDF，或把身份链接写进 YAML 列表。阅读视图里点击普通附件链接；YAML 属性区按住 <code>⌘</code>/<code>Ctrl</code> 再单击，都应交给 Eagle 打开。</li>
         <li>在 Eagle 内把测试图片移动到另一个文件夹，再回 Obsidian 点击：链接和预览仍应正常，Markdown 无需更新。</li>
         <li>完全退出并重新打开 Eagle 与 Obsidian，再测试一次，确认配对仍在。</li>
       </ol>
+      <div class="callout"><strong>为什么编辑时要多按一个键？</strong>实时预览和 YAML 属性区首先是编辑器，普通单击用来放光标、选中和改值。ziminOS 遵循 Obsidian 的修饰键跳转规则，不抢走编辑能力。</div>
       <div class="callout ok"><strong>全部通过才算安装完成。</strong>Eagle 里有文件、Obsidian 里只有身份链接、本地附件目录没有新增副本，这三件事必须同时成立。</div>
     </section>
 
@@ -206,6 +207,7 @@
             <tr><td>提示当前资源库不同</td><td>Eagle 是否切到了另一套库，或是否搬动了整个库目录</td><td>确认目标资源库后重新配对；笔记链接不用改</td></tr>
             <tr><td>图片仍进图床或落进 Obsidian</td><td>其他图床/附件插件是否先接管了粘贴</td><td>关闭它们的自动粘贴处理，重新加载 Obsidian 后再测</td></tr>
             <tr><td>链接存在但图片不显示</td><td>伴侣“检测”是否正常、Eagle 项目是否被删除</td><td>恢复连接或从 Eagle 恢复项目；不要手改链接里的 itemId</td></tr>
+            <tr><td>YAML 或实时预览单击不跳转</td><td>是否使用了编辑器的修饰键手势</td><td>macOS 按 <code>⌘ + 单击</code>，Windows 按 <code>Ctrl + 单击</code>；升级到 v0.22.1 或更高</td></tr>
             <tr><td>换到另一台电脑后未配对</td><td>配对令牌属于当前设备与当前 Obsidian 库</td><td>在新电脑安装伴侣并重新配对；Markdown 不需要迁移或改写</td></tr>
             <tr><td>离线时点了“断开”</td><td>Obsidian 会先清本机凭据，但 Eagle 端可能没收到撤销请求</td><td>以后打开 Eagle 伴侣，在“已配对的 Obsidian 库”里手动移除旧授权</td></tr>
           </tbody>
@@ -235,7 +237,7 @@
       </ul>
     </section>
 
-    <footer class="footer">ziminOS × Eagle 附件桥接安装与使用指南 · v0.22.0 · 2026-09-07</footer>
+    <footer class="footer">ziminOS × Eagle 附件桥接安装与使用指南 · v0.22.1 · 2026-09-07</footer>
   </main>
 </body>
 </html>

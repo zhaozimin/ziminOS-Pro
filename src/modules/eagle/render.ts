@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 obsidian 公开 Markdown 后处理器、弹出窗口事件与 Menu/Notice，依赖本模块 platform 的桌面闸门与 EagleBridgeClient 取内容/打开项目
+ * [INPUT]: 依赖 obsidian 公开 Markdown 后处理器、CodeMirror 扩展注册、弹出窗口事件与 Menu/Notice，依赖本模块 platform 的桌面闸门、editor 的编辑器适配与 EagleBridgeClient 取内容/打开项目
  * [OUTPUT]: 对外提供 registerEagleRenderer，返回可在重新配对后重试渲染的 refresh 函数
  * [POS]: Eagle 模块的呈现边界。Markdown 始终保留稳定语义链接，阅读视图/实时预览只在 DOM 层换成临时 blob URL；
  *        blob 随插件卸载统一撤销，绝不把 Eagle 真实路径或认证令牌泄漏进笔记与 DOM 属性
@@ -9,11 +9,17 @@
 import { Menu, Notice } from 'obsidian';
 import type { ZiminosContext } from '../../core/types';
 import type { EagleBridgeClient } from './client';
+import { createEagleEditorExtension, eagleReferenceFromTarget } from './editor';
 import { isSupportedEagleDesktop } from './platform';
 import { buildEagleUri, parseEagleUri } from './protocol';
 import type { EagleReference } from './protocol';
 
-const SELECTOR = 'img[src^="ziminos-eagle://"],img[data-ziminos-eagle-uri],a[href^="ziminos-eagle://"]';
+const SELECTOR = [
+    'img[src^="ziminos-eagle://"]',
+    'img[data-ziminos-eagle-uri]',
+    'a[href^="ziminos-eagle://"]',
+    '[data-href^="ziminos-eagle://"]',
+].join(',');
 
 export function registerEagleRenderer(
     ctx: ZiminosContext,
@@ -67,7 +73,7 @@ export function registerEagleRenderer(
             image.src = url;
             image.dataset.ziminosEagleState = 'ready';
             delete image.dataset.ziminosEagleLoad;
-            image.title = '点击在 Eagle 中打开';
+            image.title = '点击在 Eagle 中打开；编辑模式请按 ⌘/Ctrl';
         } catch (error) {
             if (image.dataset.ziminosEagleLoad !== generation) return;
             image.dataset.ziminosEagleState = 'error';
@@ -123,17 +129,11 @@ export function registerEagleRenderer(
         scan(doc);
     };
 
-    const referenceAt = (target: EventTarget | null): EagleReference | null => {
-        const element = (target as Element | null)?.closest?.('img,a');
-        const value = element?.tagName === 'IMG'
-            ? (element as HTMLImageElement).dataset.ziminosEagleUri || element.getAttribute('src')
-            : element?.getAttribute('href');
-
-        return parseEagleUri(value);
-    };
-
     const openAt = (event: MouseEvent): void => {
-        const reference = referenceAt(event.target);
+        // 编辑器里的单击必须留给放置光标；已渲染出身份属性时，在捕获阶段先于通用外链处理精确打开。
+        if ((event.target as Element | null)?.closest?.('.cm-editor') && !event.metaKey && !event.ctrlKey) return;
+
+        const reference = eagleReferenceFromTarget(event.target);
 
         if (!reference) return;
 
@@ -145,7 +145,7 @@ export function registerEagleRenderer(
     };
 
     const menuAt = (event: MouseEvent): void => {
-        const reference = referenceAt(event.target);
+        const reference = eagleReferenceFromTarget(event.target);
 
         if (!reference) return;
 
@@ -185,6 +185,7 @@ export function registerEagleRenderer(
     };
 
     bindDocument(ctx.app.workspace.containerEl.ownerDocument);
+    ctx.plugin.registerEditorExtension(createEagleEditorExtension(client));
     ctx.plugin.registerMarkdownPostProcessor((element) => scan(element));
     ctx.plugin.registerEvent(ctx.app.workspace.on('window-open', (workspaceWindow) => bindDocument(workspaceWindow.doc)));
     ctx.plugin.registerEvent(ctx.app.workspace.on('window-close', (workspaceWindow) => unbindDocument(workspaceWindow.doc)));

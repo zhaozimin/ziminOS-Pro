@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown 形态、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -36,8 +36,10 @@ async function loadTypeScript(relativePath) {
 const {
     buildEagleMarkdown,
     buildEagleUri,
+    eagleReferenceAtText,
     normalizeEaglePort,
     parseEagleUri,
+    singleEagleReferenceInText,
 } = await loadTypeScript('src/modules/eagle/protocol.ts');
 
 test('Eagle 身份链接只由逻辑库与 itemId 构成，可无损往返', () => {
@@ -54,6 +56,28 @@ test('Eagle 链接拒绝未知版本、路径与查询串', () => {
     assert.equal(parseEagleUri('ziminos-eagle://v2/primary/ABC'), null);
     assert.equal(parseEagleUri('ziminos-eagle://v1/primary/folder/ABC'), null);
     assert.equal(parseEagleUri('ziminos-eagle://v1/primary/ABC?port=1'), null);
+});
+
+test('实时预览在 Markdown 标签与 YAML 裸链接上都能命中稳定身份', () => {
+    const reference = { libraryKey: 'primary', itemId: 'MTS3IYYC6MW13' };
+    const uri = buildEagleUri(reference);
+    const markdown = `[邀请函](${uri})`;
+    const yaml = `  - ${uri}`;
+
+    assert.deepEqual(eagleReferenceAtText(markdown, markdown.indexOf('请')), reference);
+    assert.deepEqual(eagleReferenceAtText(markdown, markdown.indexOf(uri) + 5), reference);
+    assert.deepEqual(eagleReferenceAtText(yaml, yaml.indexOf(uri) + 10), reference);
+    assert.equal(eagleReferenceAtText(markdown, markdown.length), null);
+    assert.deepEqual(singleEagleReferenceInText(yaml), reference);
+});
+
+test('文本命中不从损坏 URI 截前缀，也不在多附件控件里猜测', () => {
+    const uri = 'ziminos-eagle://v1/primary/ABC123';
+
+    assert.equal(singleEagleReferenceInText(`${uri}?port=1`), null);
+    assert.equal(singleEagleReferenceInText(`${uri}/child`), null);
+    assert.equal(singleEagleReferenceInText(`https://example.com/${uri}`), null);
+    assert.equal(singleEagleReferenceInText(`${uri} ${uri.replace('ABC123', 'OTHER')}`), null);
 });
 
 test('图片生成嵌入，其他附件生成普通链接', () => {
@@ -101,11 +125,14 @@ test('Obsidian 半边只在 macOS/Windows 桌面端注册', () => {
     const platform = readFileSync(path.join(ROOT, 'src/modules/eagle/platform.ts'), 'utf8');
     const transfer = readFileSync(path.join(ROOT, 'src/modules/eagle/transfer.ts'), 'utf8');
     const render = readFileSync(path.join(ROOT, 'src/modules/eagle/render.ts'), 'utf8');
+    const editor = readFileSync(path.join(ROOT, 'src/modules/eagle/editor.ts'), 'utf8');
 
     assert.ok(platform.includes('Platform.isDesktopApp'));
     assert.ok(platform.includes('Platform.isMacOS || Platform.isWin'));
     assert.ok(transfer.includes('isSupportedEagleDesktop()'));
     assert.ok(render.includes('isSupportedEagleDesktop()'));
+    assert.ok(render.includes('registerEditorExtension'));
+    assert.ok(editor.includes('event.metaKey && !event.ctrlKey'));
 });
 
 test('Eagle 安装包可解压，根层交付物齐全', () => {
@@ -128,12 +155,15 @@ test('Eagle 安装包可解压，根层交付物齐全', () => {
 
 test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不诱导读取凭据', () => {
     const guide = readFileSync(path.join(ROOT, 'docs/Eagle附件桥接安装与使用指南.html'), 'utf8');
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
     for (const anchor of ['id="upgrade"', 'id="install"', 'id="pair"', 'id="verify"', 'id="troubleshoot"']) {
         assert.ok(guide.includes(anchor));
     }
     assert.ok(guide.includes('三、C 三库系统的日常升级'));
-    assert.ok(guide.includes('0.22.0'));
+    assert.ok(guide.includes(pkg.version));
+    assert.ok(guide.includes('⌘ + 单击'));
+    assert.ok(guide.includes('Ctrl + 单击'));
     assert.ok(guide.includes('同一 Eagle 库里换文件夹'));
     assert.ok(guide.includes('不要手动编辑或分享配对令牌'));
     assert.equal(/<script\b/i.test(guide), false);
