@@ -688,10 +688,16 @@ export class SettingsPanels {
         this.renderFormatSection(containerEl);
     }
 
-    /** Eagle 是编辑页的附件支线：行为开关、项目自动归档、本机连接与设备参数收在同一段 */
+    /** Eagle 是编辑页的附件支线：行为/图片分流、项目归档、本机连接与设备参数收在同一段 */
     private renderEaglePanel(containerEl: HTMLElement): void {
         new Setting(containerEl).setName(TEXTS.eagleHeading).setDesc(TEXTS.eagleIntro).setHeading();
         this.host.renderToggle(containerEl, 'eagleEnabled', TEXTS.eagleEnabledName, TEXTS.eagleEnabledDesc);
+        this.host.renderToggle(
+            containerEl,
+            'eagleExcludeImages',
+            TEXTS.eagleExcludeImagesName,
+            TEXTS.eagleExcludeImagesDesc,
+        );
 
         new Setting(containerEl)
             .setName(TEXTS.eaglePackageName)

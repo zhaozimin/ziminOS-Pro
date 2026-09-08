@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、项目名注入与 Eagle 两级目录归档、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、项目名注入与 Eagle 两级目录归档、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -38,6 +38,7 @@ const {
     buildEagleNativeItemUri,
     buildEagleUri,
     eagleReferenceAtText,
+    isImageAttachment,
     normalizeEaglePort,
     parseEagleUri,
     singleEagleReferenceInText,
@@ -99,6 +100,14 @@ test('图片生成嵌入，其他附件生成普通链接', () => {
         buildEagleMarkdown(reference, '合同.pdf', 'application/pdf'),
         '[合同.pdf](ziminos-eagle://v1/primary/ABC123)',
     );
+});
+
+test('图片排除同时识别 MIME 与扩展名，不误伤普通附件', () => {
+    assert.equal(isImageAttachment('clipboard', 'image/png'), true);
+    assert.equal(isImageAttachment('海报.JPEG', ''), true);
+    assert.equal(isImageAttachment('原图.svg', 'application/octet-stream'), true);
+    assert.equal(isImageAttachment('附件.pdf', 'application/pdf'), false);
+    assert.equal(isImageAttachment('图片说明.txt', 'text/plain'), false);
 });
 
 test('Eagle 端口只接受无需提权的整数范围', () => {
@@ -188,6 +197,9 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
     assert.ok(guide.includes('Eagle 4.0 Build 18'));
     assert.ok(guide.includes('系统应自动启动 Eagle'));
     assert.ok(guide.includes('项目/以人为本系列课程'));
+    assert.ok(guide.includes('图片不交给 Eagle（交给图床）'));
+    assert.ok(guide.includes('图片与其他附件请分两次操作'));
+    assert.ok(guide.includes('ziminOS 不保存图床密钥'));
     assert.ok(guide.includes('同一级出现多个同名目录'));
     assert.ok(guide.includes('伴侣版本过旧'));
     assert.ok(guide.includes('同一 Eagle 库里换文件夹'));
@@ -224,10 +236,24 @@ test('附件事件在第一个 await 之前接管，失败路径不回退本地�
     const source = readFileSync(path.join(ROOT, 'src/modules/eagle/transfer.ts'), 'utf8');
     const handler = source.slice(source.indexOf('async function takeTransfer'), source.indexOf('/** 尽量直接交原路径'));
 
+    assert.ok(handler.includes('ctx.settings.eagleExcludeImages'));
+    assert.ok(handler.includes('isImageAttachment(file.name, file.type)'));
+    assert.ok(handler.indexOf('if (files.length === 0) return;') < handler.indexOf('event.preventDefault()'));
     assert.ok(handler.indexOf('event.preventDefault()') < handler.indexOf('await materialize'));
+    assert.ok(handler.includes('请将图片单独粘贴或拖入'));
     assert.ok(handler.includes('未在 Obsidian 本地保留副本'));
     assert.equal(handler.includes('createBinary'), false);
     assert.equal(handler.includes('adapter.write'), false);
+});
+
+test('编辑设置页对用户暴露图片分流开关与边界说明', () => {
+    const model = readFileSync(path.join(ROOT, 'src/settingsModel.ts'), 'utf8');
+    const panels = readFileSync(path.join(ROOT, 'src/settingsPanels.ts'), 'utf8');
+
+    assert.ok(model.includes("eagleExcludeImagesName: '图片不交给 Eagle（交给图床）'"));
+    assert.ok(model.includes('ziminOS 不保存图床密钥'));
+    assert.ok(model.includes('图片与其他附件请分两次'));
+    assert.ok(panels.includes("'eagleExcludeImages'"));
 });
 
 test('Eagle 图片离开 DOM 即释放 blob，浏览多篇笔记不累积内存', () => {

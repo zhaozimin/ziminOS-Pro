@@ -316,6 +316,7 @@ test('持久化设置在进入运行时前逐字段验形', () => {
         formatRules: [],
         projectFolder: '',
         filePathScope: 'anywhere',
+        eagleExcludeImages: 'yes',
     });
 
     assert.equal(normalized.autoUpdated, DEFAULT_SETTINGS.autoUpdated);
@@ -327,6 +328,14 @@ test('持久化设置在进入运行时前逐字段验形', () => {
     assert.deepEqual(normalized.formatRules, []);
     assert.equal(normalized.projectFolder, '');
     assert.equal(normalized.filePathScope, DEFAULT_SETTINGS.filePathScope);
+    assert.equal(normalized.eagleExcludeImages, DEFAULT_SETTINGS.eagleExcludeImages);
+});
+
+/** 新开关默认不能改变老用户已有的“图片也进 Eagle”语义。 */
+test('老库升级后仍由 Eagle 接管图片，只有用户明确打开才分流到图床', () => {
+    assert.equal(DEFAULT_SETTINGS.eagleExcludeImages, false);
+    assert.equal(normalizeSettings({}).eagleExcludeImages, false);
+    assert.equal(normalizeSettings({ eagleExcludeImages: true }).eagleExcludeImages, true);
 });
 
 /**

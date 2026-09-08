@@ -185,6 +185,12 @@ export interface ZiminosSettings {
      * 不会退回 Obsidian 本地附件。配对动作会自动打开它，断开则自动关掉。
      */
     eagleEnabled: boolean;
+    /**
+     * 是否将图片从 Eagle 接管中排除。
+     * 打开后，纯图片粘贴/拖入事件原样交还 Obsidian 与其他图床插件；
+     * 其他附件仍由 Eagle fail closed 接管。默认关闭，保留升级前行为。
+     */
+    eagleExcludeImages: boolean;
     /** Eagle 伴侣的本机回环端口；只是设备配置，不进笔记链接 */
     eaglePort: number;
     /** 项目外附件的可选 Eagle 目标文件夹 ID；项目内附件始终自动进入“项目/项目名” */
@@ -234,6 +240,7 @@ export const DEFAULT_SETTINGS: ZiminosSettings = {
     recentFilesSort: RECENT_FILES_DEFAULTS.sort,
     pasteLinkEnabled: true,
     eagleEnabled: false,
+    eagleExcludeImages: false,
     eaglePort: EAGLE_DEFAULTS.port,
     eagleFolderId: EAGLE_DEFAULTS.folderId,
     rememberCursor: true,
@@ -308,6 +315,7 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
         recentFilesSort,
         pasteLinkEnabled: booleanValue('pasteLinkEnabled'),
         eagleEnabled: booleanValue('eagleEnabled'),
+        eagleExcludeImages: booleanValue('eagleExcludeImages'),
         eaglePort,
         eagleFolderId: stringValue('eagleFolderId'),
         rememberCursor: booleanValue('rememberCursor'),

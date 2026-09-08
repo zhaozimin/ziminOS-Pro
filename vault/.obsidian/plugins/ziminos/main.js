@@ -1528,6 +1528,7 @@ var DEFAULT_SETTINGS = {
   recentFilesSort: RECENT_FILES_DEFAULTS.sort,
   pasteLinkEnabled: true,
   eagleEnabled: false,
+  eagleExcludeImages: false,
   eaglePort: EAGLE_DEFAULTS.port,
   eagleFolderId: EAGLE_DEFAULTS.folderId,
   rememberCursor: true,
@@ -1577,6 +1578,7 @@ function normalizeSettings(input) {
     recentFilesSort,
     pasteLinkEnabled: booleanValue("pasteLinkEnabled"),
     eagleEnabled: booleanValue("eagleEnabled"),
+    eagleExcludeImages: booleanValue("eagleExcludeImages"),
     eaglePort,
     eagleFolderId: stringValue("eagleFolderId"),
     rememberCursor: booleanValue("rememberCursor"),
@@ -5404,7 +5406,10 @@ async function takeTransfer(ctx, client, resolveProject, event, editor, info) {
   var _a;
   if (!ctx.settings.eagleEnabled || event.defaultPrevented) return;
   const data = "clipboardData" in event ? event.clipboardData : event.dataTransfer;
-  const files = Array.from((_a = data == null ? void 0 : data.files) != null ? _a : []);
+  const incomingFiles = Array.from((_a = data == null ? void 0 : data.files) != null ? _a : []);
+  if (incomingFiles.length === 0) return;
+  const files = ctx.settings.eagleExcludeImages ? incomingFiles.filter((file) => !isImageAttachment(file.name, file.type)) : incomingFiles;
+  const excludedImageCount = incomingFiles.length - files.length;
   if (files.length === 0) return;
   event.preventDefault();
   const marker = `<!-- ziminos:eagle-upload:${uniqueId()} -->`;
@@ -5443,6 +5448,12 @@ async function takeTransfer(ctx, client, resolveProject, event, editor, info) {
   } else if (links.length > 0 && replaced) {
     const destination = folderPaths.size === 1 ? ` \u2192 ${Array.from(folderPaths)[0]}` : "";
     new import_obsidian22.Notice(`\u5DF2\u5B58\u5165 Eagle\uFF1A${links.length} \u4E2A\u9644\u4EF6${destination}`);
+  }
+  if (excludedImageCount > 0) {
+    new import_obsidian22.Notice(
+      `\u5DF2\u8DF3\u8FC7 ${excludedImageCount} \u5F20\u56FE\u7247\u3002\u56FE\u7247\u4E0E\u5176\u4ED6\u9644\u4EF6\u6DF7\u5728\u540C\u4E00\u6B21\u64CD\u4F5C\u65F6\uFF0C\u8BF7\u5C06\u56FE\u7247\u5355\u72EC\u7C98\u8D34\u6216\u62D6\u5165\uFF0C\u518D\u4EA4\u7ED9\u56FE\u5E8A\u63D2\u4EF6\u5904\u7406\u3002`,
+      1e4
+    );
   }
 }
 async function materialize(file, name) {
@@ -22819,9 +22830,11 @@ var TEXTS6 = {
   pasteLinkName: "\u7C98\u8D34\u5230\u9009\u4E2D\u6587\u5B57\u4E0A\uFF1D\u52A0\u5916\u94FE",
   pasteLinkDesc: "\u9009\u4E2D\u4E00\u6BB5\u6587\u5B57\uFF0C\u76F4\u63A5 Cmd + V \u7C98\u4E00\u6761\u7F51\u5740\uFF0C\u90A3\u6BB5\u6587\u5B57\u5C31\u53D8\u6210\u6307\u5411\u5B83\u7684\u5916\u94FE\u3002\u56DB\u6761\u90FD\u6EE1\u8DB3\u624D\u4F1A\u52A8\u624B\uFF1A\u9009\u4E86\u5B57\u3001\u526A\u8D34\u677F\u91CC\u53EA\u6709\u4E00\u6761**\u5E26\u534F\u8BAE**\u7684\u7F51\u5740\uFF08www \u5F00\u5934\u7684\u88F8\u57DF\u540D\u4E0D\u7B97\uFF09\u3001\u9009\u4E2D\u7684\u6587\u5B57\u91CC\u6CA1\u6709\u6362\u884C\u3001\u8FD9\u6B21\u7C98\u8D34\u8FD8\u6CA1\u88AB\u522B\u7684\u63D2\u4EF6\u5904\u7406\u8FC7\u3002\u4EFB\u4F55\u4E00\u6761\u4E0D\u6EE1\u8DB3\u5C31\u539F\u6837\u7C98\u8D34\u3002",
   eagleHeading: "Eagle \u9644\u4EF6",
-  eagleIntro: "\u6253\u5F00\u540E\uFF0C\u7C98\u8D34\u6216\u62D6\u5165\u7684\u56FE\u7247\u4E0E\u9644\u4EF6\u53EA\u5B58\u5165 Eagle\uFF0C\u7B14\u8BB0\u4FDD\u7559\u7A33\u5B9A itemId \u94FE\u63A5\u3002\u9879\u76EE\u7B14\u8BB0\u91CC\u7684\u9644\u4EF6\u4F1A\u81EA\u52A8\u8FDB\u5165\u201C\u9879\u76EE/\u9879\u76EE\u540D\u79F0\u201D\uFF1B\u540C\u4E00 Eagle \u8D44\u6E90\u5E93\u5185\u6362\u6587\u4EF6\u5939\u4E0D\u4F1A\u5F71\u54CD\u94FE\u63A5\u3002\u5BFC\u5165\u5931\u8D25\u65F6\u660E\u786E\u62A5\u9519\uFF0C\u4E0D\u4F1A\u5077\u5077\u5728 Obsidian \u7559\u526F\u672C\u3002",
+  eagleIntro: "\u9ED8\u8BA4\u5C06\u7C98\u8D34\u6216\u62D6\u5165\u7684\u56FE\u7247\u4E0E\u9644\u4EF6\u5B58\u5165 Eagle\uFF0C\u7B14\u8BB0\u53EA\u4FDD\u7559\u7A33\u5B9A itemId \u94FE\u63A5\u3002\u9879\u76EE\u7B14\u8BB0\u91CC\u7684\u9644\u4EF6\u4F1A\u81EA\u52A8\u8FDB\u5165\u201C\u9879\u76EE/\u9879\u76EE\u540D\u79F0\u201D\uFF1B\u540C\u4E00 Eagle \u8D44\u6E90\u5E93\u5185\u6362\u6587\u4EF6\u5939\u4E0D\u4F1A\u5F71\u54CD\u94FE\u63A5\u3002\u5BFC\u5165\u5931\u8D25\u65F6\u660E\u786E\u62A5\u9519\uFF0C\u4E0D\u4F1A\u5077\u5077\u5728 Obsidian \u7559\u526F\u672C\u3002",
   eagleEnabledName: "\u9644\u4EF6\u4EA4\u7ED9 Eagle",
-  eagleEnabledDesc: "\u53EA\u5728 macOS / Windows \u751F\u6548\u3002\u8BF7\u5148\u5B89\u88C5 ziminOS Eagle \u4F34\u4FA3\u5E76\u5B8C\u6210\u914D\u5BF9\uFF1B\u82E5\u8FD8\u5728\u7528\u5176\u4ED6\u56FE\u5E8A\u6216\u9644\u4EF6\u63D2\u4EF6\uFF0C\u8BF7\u5173\u6389\u5B83\u4EEC\u5BF9\u7C98\u8D34\u9644\u4EF6\u7684\u63A5\u7BA1\u3002",
+  eagleEnabledDesc: "\u53EA\u5728 macOS / Windows \u751F\u6548\u3002\u8BF7\u5148\u5B89\u88C5 ziminOS Eagle \u4F34\u4FA3\u5E76\u5B8C\u6210\u914D\u5BF9\uFF1B\u82E5\u56FE\u7247\u8981\u7EE7\u7EED\u8D70\u73B0\u6709\u56FE\u5E8A\uFF0C\u6253\u5F00\u4E0B\u4E00\u9879\u3002",
+  eagleExcludeImagesName: "\u56FE\u7247\u4E0D\u4EA4\u7ED9 Eagle\uFF08\u4EA4\u7ED9\u56FE\u5E8A\uFF09",
+  eagleExcludeImagesDesc: "\u6253\u5F00\u540E\uFF0C\u5355\u72EC\u7C98\u8D34\u6216\u62D6\u5165\u7684\u56FE\u7247\u4F1A\u539F\u6837\u653E\u884C\uFF0C\u7531\u4F60\u5DF2\u5B89\u88C5\u7684\u56FE\u5E8A\u63D2\u4EF6\u5904\u7406\uFF1BPDF\u3001\u538B\u7F29\u5305\u3001\u97F3\u89C6\u9891\u7B49\u5176\u4ED6\u9644\u4EF6\u4ECD\u8FDB Eagle\u3002ziminOS \u4E0D\u4FDD\u5B58\u56FE\u5E8A\u5BC6\u94A5\u3002\u56FE\u7247\u4E0E\u5176\u4ED6\u9644\u4EF6\u8BF7\u5206\u4E24\u6B21\u7C98\u8D34\u6216\u62D6\u5165\u3002",
   eagleStatusName: "\u4F34\u4FA3\u8FDE\u63A5",
   eagleStatusChecking: "\u6B63\u5728\u68C0\u67E5\u672C\u673A Eagle\u2026",
   eaglePackageName: "Eagle \u4F34\u4FA3\u5B89\u88C5\u5305",
@@ -23285,10 +23298,16 @@ var SettingsPanels = class {
     new import_obsidian50.Setting(containerEl).setName(TEXTS6.formatHeading).setDesc(TEXTS6.formatIntro).setHeading();
     this.renderFormatSection(containerEl);
   }
-  /** Eagle 是编辑页的附件支线：行为开关、项目自动归档、本机连接与设备参数收在同一段 */
+  /** Eagle 是编辑页的附件支线：行为/图片分流、项目归档、本机连接与设备参数收在同一段 */
   renderEaglePanel(containerEl) {
     new import_obsidian50.Setting(containerEl).setName(TEXTS6.eagleHeading).setDesc(TEXTS6.eagleIntro).setHeading();
     this.host.renderToggle(containerEl, "eagleEnabled", TEXTS6.eagleEnabledName, TEXTS6.eagleEnabledDesc);
+    this.host.renderToggle(
+      containerEl,
+      "eagleExcludeImages",
+      TEXTS6.eagleExcludeImagesName,
+      TEXTS6.eagleExcludeImagesDesc
+    );
     new import_obsidian50.Setting(containerEl).setName(TEXTS6.eaglePackageName).setDesc(TEXTS6.eaglePackageDesc).addButton((button) => button.setButtonText("\u663E\u793A\u5B89\u88C5\u5305").onClick(() => void this.actions.revealEaglePackage()));
     const connection = new import_obsidian50.Setting(containerEl).setName(TEXTS6.eagleStatusName).setDesc(TEXTS6.eagleStatusChecking).addButton((button) => button.setButtonText("\u914D\u5BF9").setCta().onClick(async () => {
       button.setDisabled(true);

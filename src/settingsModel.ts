@@ -342,13 +342,18 @@ export const TEXTS = {
 
     eagleHeading: 'Eagle 附件',
     eagleIntro:
-        '打开后，粘贴或拖入的图片与附件只存入 Eagle，笔记保留稳定 itemId 链接。' +
+        '默认将粘贴或拖入的图片与附件存入 Eagle，笔记只保留稳定 itemId 链接。' +
         '项目笔记里的附件会自动进入“项目/项目名称”；同一 Eagle 资源库内换文件夹不会影响链接。' +
         '导入失败时明确报错，不会偷偷在 Obsidian 留副本。',
     eagleEnabledName: '附件交给 Eagle',
     eagleEnabledDesc:
         '只在 macOS / Windows 生效。请先安装 ziminOS Eagle 伴侣并完成配对；' +
-        '若还在用其他图床或附件插件，请关掉它们对粘贴附件的接管。',
+        '若图片要继续走现有图床，打开下一项。',
+    eagleExcludeImagesName: '图片不交给 Eagle（交给图床）',
+    eagleExcludeImagesDesc:
+        '打开后，单独粘贴或拖入的图片会原样放行，由你已安装的图床插件处理；' +
+        'PDF、压缩包、音视频等其他附件仍进 Eagle。ziminOS 不保存图床密钥。' +
+        '图片与其他附件请分两次粘贴或拖入。',
     eagleStatusName: '伴侣连接',
     eagleStatusChecking: '正在检查本机 Eagle…',
     eaglePackageName: 'Eagle 伴侣安装包',
@@ -421,6 +426,7 @@ export type BooleanSettingKey =
     | 'showFilePath'
     | 'pasteLinkEnabled'
     | 'eagleEnabled'
+    | 'eagleExcludeImages'
     | 'rememberCursor';
 
 /** 可由文本框直接编辑的设置项，全部是字符串字段 */

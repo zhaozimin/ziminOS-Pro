@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖 obsidian 公开 editor-paste/editor-drop 事件与 Notice，依赖 main 注入的项目名解析器，依赖本模块 platform 的桌面闸门、EagleBridgeClient 导入与 protocol 链接生成
- * [OUTPUT]: 对外提供 EagleProjectResolver/registerEagleTransfers，接管桌面端附件粘贴/拖入、按笔记所属项目路由 Eagle 文件夹并以稳定链接替换占位符
- * [POS]: Eagle 模块的写入边界。事件一经接管就先 preventDefault；导入失败只撤掉占位并报错，
+ * [INPUT]: 依赖 obsidian 公开 editor-paste/editor-drop 事件与 Notice，依赖 main 注入的项目名解析器，依赖本模块 platform 的桌面闸门、EagleBridgeClient 导入与 protocol 图片识别/链接生成
+ * [OUTPUT]: 对外提供 EagleProjectResolver/registerEagleTransfers，可将纯图片事件放行给图床，其他附件按笔记所属项目路由 Eagle 并以稳定链接替换占位符
+ * [POS]: Eagle 模块的写入边界。图片排除判定先于 preventDefault；事件一经接管就 fail closed，导入失败只撤掉占位并报错，
  *        绝不回退到 Obsidian 本地附件。Electron/Node 仅在桌面守卫通过后按需取得，移动端加载不解析它们
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -12,7 +12,7 @@ import type { ZiminosContext } from '../../core/types';
 import type { EagleBridgeClient } from './client';
 import type { EagleImportProject } from './client';
 import { isSupportedEagleDesktop } from './platform';
-import { buildEagleMarkdown, EAGLE_LIBRARY_KEY } from './protocol';
+import { buildEagleMarkdown, EAGLE_LIBRARY_KEY, isImageAttachment } from './protocol';
 
 interface MaterializedFile {
     readonly path: string;
@@ -64,11 +64,19 @@ async function takeTransfer(
     if (!ctx.settings.eagleEnabled || event.defaultPrevented) return;
 
     const data = 'clipboardData' in event ? event.clipboardData : event.dataTransfer;
-    const files = Array.from(data?.files ?? []);
+    const incomingFiles = Array.from(data?.files ?? []);
 
+    if (incomingFiles.length === 0) return;
+
+    const files = ctx.settings.eagleExcludeImages
+        ? incomingFiles.filter((file) => !isImageAttachment(file.name, file.type))
+        : incomingFiles;
+    const excludedImageCount = incomingFiles.length - files.length;
+
+    // 纯图片事件不得 preventDefault：后续图床插件与 Obsidian 必须还能看见它
     if (files.length === 0) return;
 
-    // 必须在第一个 await 之前拦下默认行为，否则 Obsidian 已经先往库里落了一份附件
+    // 已选中的非图片附件必须在第一个 await 前接管，否则 Obsidian 会先落一份本地副本
     event.preventDefault();
 
     const marker = `<!-- ziminos:eagle-upload:${uniqueId()} -->`;
@@ -122,6 +130,14 @@ async function takeTransfer(
         const destination = folderPaths.size === 1 ? ` → ${Array.from(folderPaths)[0]}` : '';
 
         new Notice(`已存入 Eagle：${links.length} 个附件${destination}`);
+    }
+
+    if (excludedImageCount > 0) {
+        new Notice(
+            `已跳过 ${excludedImageCount} 张图片。图片与其他附件混在同一次操作时，` +
+            '请将图片单独粘贴或拖入，再交给图床插件处理。',
+            10000,
+        );
     }
 }
 
