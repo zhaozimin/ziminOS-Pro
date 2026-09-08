@@ -36,6 +36,9 @@ id_ed25519
 # 发布通道的暂存目录。它必须住在仓库内部（见 publish-v1.sh），因此必须被忽略
 /.publish-staging/
 
+# Eagle 打包使用仓库内同卷暂存，保证最终 mv 原子；异常中止时残留也不进版本库
+/.eagle-package.*/
+
 # 开发垃圾，打包时也会被剔除
 .impeccable/
 __pycache__/

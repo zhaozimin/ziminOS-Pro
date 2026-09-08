@@ -1147,6 +1147,23 @@ div.ziminos-table-wrap > table.ziminos-table tbody tr:hover {
     color: var(--text-normal);
 }
 
+/* ── Eagle 身份附件 ── */
+
+/*
+ * Markdown 里留的始终是 ziminos-eagle:// 身份链接，渲染层只把图片 src
+ * 暂时换成 blob URL。光标因此是这层唯一需要的视觉信号：点它会去 Eagle，
+ * 不是在 Obsidian 里打开一份本地副本。尺寸、居中和边框仍交给主题与用户片段。
+ */
+.ziminos-eagle-attachment,
+a[href^="ziminos-eagle://"] {
+    cursor: pointer;
+}
+
+.ziminos-eagle-attachment[data-ziminos-eagle-state="error"] {
+    outline: 1px dashed var(--text-error);
+    outline-offset: 3px;
+}
+
 /* ── 开荒页尾：作者名片当落款 ── */
 
 /* 落款与上方内容划一条细线：它不是设置，是这套交付物的署名 */

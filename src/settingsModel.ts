@@ -2,7 +2,8 @@
  * [INPUT]: 依赖 ./core/commands 的 COMMAND_ICONS（标签页图标与左侧边栏同源），
  *          依赖 ./core/constants 的 FolderCountTarget、RecentFilesSort 与 FilePathScope 类型
  *          （计数口径、最近文件排法与复制口径的显示名各按它们建一张表）
- * [OUTPUT]: 对外提供设置页的注入契约 SettingActions，与它的三张数据表——
+ * [OUTPUT]: 对外提供设置页的注入契约 SettingActions（含 Eagle 配对/检测/断开/状态），
+ *           与它的三张数据表——
  *           TABS（八张标签页的身份）、TEXTS（全部界面文案）、
  *           TEXT_FIELDS 与 BOOK_TAG_PREFIX_FIELD（文本框）、FOLDER_COUNT_LABELS、
  *           RECENT_SORT_LABELS 与 FILE_PATH_SCOPE_LABELS（三个下拉框的显示名），
@@ -28,7 +29,9 @@ import type { FilePathScope, FolderCountTarget, RecentFilesSort } from './core/c
  * 设置页的分页若与代码的模块边界对不上，学员问「客户的设置在哪」时，
  * 答案就会取决于当初谁把它排在了哪一段。
  *
- * 三个模块刻意没有自己的页，判据是同一条——**一个控件撑一整页是把分页做成摆设**：
+ * Eagle、appearance、about 等模块刻意没有自己的页，判据是同一条——页面按用户找设置的语境分：
+ * Eagle 附件就是粘贴/拖入时发生的编辑行为，住 editing；
+ * **一个控件撑一整页是把分页做成摆设**：
  * appearance 只有一个开关、about 只有一张名片（v0.9.2 拍板），
  * 而它们本就天然属于「开荒」（外观是开荒交付物的一部分，名片是这套交付物的落款）；
  * explorer 反过来说明了同一条判据的另一半（v0.16.0）：它的三项——开不开、数什么、
@@ -171,12 +174,13 @@ export const TABS: readonly SettingsTab[] = [
 // ============================================================
 
 /**
- * 设置页干不了、必须由 main 递进来的七件事。
+ * 设置页干不了、必须由 main 递进来的十二件事。
  *
- * 编辑那一页刻意**没有**自己的洞：粘贴监听与光标记忆每次触发都现读设置对象，
- * 天然看得见新值；需要有人去推一把的永远只是「已经画在屏幕上」的东西。
+ * 纯行为开关仍无需同步：粘贴监听与光标记忆每次触发都现读设置对象。
+ * Eagle 的五个洞不是同步 DOM，而是把配对、鉴权、HTTP 与本机包路径留在领域模块里，
+ * 设置页只发起用户动作、显示业务结果。
  *
- * 用一个对象而不是七个位置参数：中间三个函数的类型都是 `() => void`，
+ * 用一个对象而不是一串位置参数：多组函数拥有相同签名，
  * 摆成位置参数的话调换顺序照样能通过编译，出的错却是「改了外观开关，边栏跟着动」——
  * 这种错没有任何编译期信号，只能靠人肉眼盯着几行长长的实参对齐。
  * 三处显隐同步并列摆在这里，也正好说明它们是同一类东西：
@@ -210,6 +214,12 @@ export interface SettingActions {
      * 设置页不必知道那个模块内部由几个文件把这三样画出来。
      */
     readonly syncExplorer: () => void;
+    /** Eagle 伴侣的配对、检测、断开与状态；凭据与 HTTP 细节不进设置页 */
+    readonly pairEagle: () => Promise<boolean>;
+    readonly testEagle: () => Promise<boolean>;
+    readonly disconnectEagle: () => Promise<void>;
+    readonly describeEagleStatus: () => Promise<string>;
+    readonly revealEaglePackage: () => Promise<void>;
     /** 把作者名片画进开荒页尾。名片住在 about 模块，设置页因此不认识它 */
     readonly renderAbout: (el: HTMLElement) => void;
 }
@@ -329,6 +339,23 @@ export const TEXTS = {
         '四条都满足才会动手：选了字、剪贴板里只有一条**带协议**的网址（www 开头的裸域名不算）、' +
         '选中的文字里没有换行、这次粘贴还没被别的插件处理过。任何一条不满足就原样粘贴。',
 
+    eagleHeading: 'Eagle 附件',
+    eagleIntro:
+        '打开后，粘贴或拖入的图片与附件只存入 Eagle，笔记保留稳定 itemId 链接。' +
+        '同一 Eagle 资源库内换文件夹不会影响链接。导入失败时明确报错，不会偷偷在 Obsidian 留副本。',
+    eagleEnabledName: '附件交给 Eagle',
+    eagleEnabledDesc:
+        '只在 macOS / Windows 生效。请先安装 ziminOS Eagle 伴侣并完成配对；' +
+        '若还在用其他图床或附件插件，请关掉它们对粘贴附件的接管。',
+    eagleStatusName: '伴侣连接',
+    eagleStatusChecking: '正在检查本机 Eagle…',
+    eaglePackageName: 'Eagle 伴侣安装包',
+    eaglePackageDesc: '伴侣已随 ziminOS 放在本机插件目录；在 Eagle 中安装这份 .eagleplugin 后再回来配对。',
+    eaglePortName: '本机端口',
+    eaglePortDesc: '默认 23119，必须与 Eagle 伴侣窗口中的端口一致。端口不写进笔记。',
+    eagleFolderName: 'Eagle 文件夹 ID（可选）',
+    eagleFolderDesc: '留空即存入当前资源库的未归类区；填 Eagle 文件夹 ID 则直接归入指定文件夹。',
+
     rememberCursorName: '记住每篇笔记的光标位置',
     rememberCursorDesc:
         '离开一篇笔记时记下光标在第几行、滚动条在哪儿，下次打开就回到那里，重启 Obsidian 也还在。' +
@@ -389,6 +416,7 @@ export type BooleanSettingKey =
     | 'folderCountRecursive'
     | 'showFilePath'
     | 'pasteLinkEnabled'
+    | 'eagleEnabled'
     | 'rememberCursor';
 
 /** 可由文本框直接编辑的设置项，全部是字符串字段 */

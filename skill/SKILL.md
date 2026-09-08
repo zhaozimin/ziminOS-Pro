@@ -59,6 +59,7 @@ git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_stag
 施工源/vault/.obsidian/plugins/ziminos/manifest.json
 施工源/vault/.obsidian/plugins/ziminos/main.js
 施工源/vault/.obsidian/plugins/ziminos/styles.css
+施工源/vault/.obsidian/plugins/ziminos/ziminOS-Eagle-Bridge.eagleplugin
 施工源/vault/.obsidian/plugins/dataview/manifest.json
 施工源/vault/.obsidian/plugins/dataview/main.js
 施工源/vault/.obsidian/plugins/dataview/styles.css
@@ -117,7 +118,7 @@ git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_stag
 
 `.obsidian/.gitignore` 是随库落地的隐私护栏：即使学员以后在笔记库里初始化 Git，也不会把微信读书 Cookie、工作区状态和本机运行缓存提交出去。最后四份则是笔记库的开箱设置，别当成可有可无的杂项：`app.json` 定下附件落在 `./附件`、粘链接用 wiki 语法并自动跟着改名；`templates.json` 把模板目录指向 `90-system/Template`，缺了它学员打开核心「模板」插件后得自己去翻路径；`community-plugins.json` 决定三个系统插件是否启用；`appearance.json` 决定主题与十个默认启用的片段。
 
-任一缺失就停止并说明仓库不完整。ziminOS（含左侧边栏命令坞、三十五枚命令图标与三枚设置页专用图标，图标 SVG 已编进 `main.js`）、Dataview、Outliner、Quiet Outline、Minimal 与 Style Settings 的运行产物已全部在 `vault/` 中，四款正文字体已全部锁定在 `fonts/` 中；不要运行 `npm install` / `npm run build`，不要安装 Node.js，也不要去 Obsidian 商店或网络另行下载主题/插件、图标包或字体。禁止额外安装 QuickAdd、Linter 等非系统组件。
+任一缺失就停止并说明仓库不完整。ziminOS（含左侧边栏命令坞、三十五枚命令图标与三枚设置页专用图标，图标 SVG 已编进 `main.js`）、Dataview、Outliner、Quiet Outline、Minimal 与 Style Settings 的运行产物已全部在 `vault/` 中，四款正文字体已全部锁定在 `fonts/` 中；可选的第一方 Eagle 伴侣包也已经随 ziminOS 插件交付，安装器只复制它，**不得替用户静默安装或启动 Eagle 插件**。不要运行 `npm install` / `npm run build`，不要安装 Node.js，也不要去 Obsidian 商店或网络另行下载主题/插件、图标包或字体。禁止额外安装 QuickAdd、Linter 等非系统组件。
 
 ## 三、原地搭建当前工作区
 
@@ -149,6 +150,7 @@ mkdir -p "$vault_root/.obsidian/snippets"
 cp "$install_staging_dir/repo/vault/.obsidian/plugins/ziminos/manifest.json" "$vault_root/.obsidian/plugins/ziminos/manifest.json"
 cp "$install_staging_dir/repo/vault/.obsidian/plugins/ziminos/main.js" "$vault_root/.obsidian/plugins/ziminos/main.js"
 cp "$install_staging_dir/repo/vault/.obsidian/plugins/ziminos/styles.css" "$vault_root/.obsidian/plugins/ziminos/styles.css"
+cp "$install_staging_dir/repo/vault/.obsidian/plugins/ziminos/ziminOS-Eagle-Bridge.eagleplugin" "$vault_root/.obsidian/plugins/ziminos/ziminOS-Eagle-Bridge.eagleplugin"
 
 cp "$install_staging_dir/repo/vault/.obsidian/plugins/dataview/manifest.json" "$vault_root/.obsidian/plugins/dataview/manifest.json"
 cp "$install_staging_dir/repo/vault/.obsidian/plugins/dataview/main.js" "$vault_root/.obsidian/plugins/dataview/main.js"
@@ -209,7 +211,7 @@ done
 
 使用 Agent 自身的 JSON 读写能力做结构化合并；禁止用字符串替换破坏 JSON，禁止整份覆盖用户已有配置。不得改动 Markdown 笔记、其他 CSS、其他主题或其他插件。
 
-一句话记住升级的边界：**受管的是「程序」，不受管的是「选择」与「状态」。** 程序（`main.js` / `manifest.json` / `styles.css` / 四个第三方插件的运行文件 / 十二个实名片段 / 主题）整份更新；选择（五份 `data.json`、`types.json` 已调过的键、非空自选主题、已启用片段清单、`app.json`、`templates.json`、用户自带的片段与笔记）与状态（ziminOS 那三份运行时 JSON）一律不动。
+一句话记住升级的边界：**受管的是「程序」，不受管的是「选择」与「状态」。** 程序（`main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin` / 四个第三方插件的运行文件 / 十二个实名片段 / 主题）整份更新；选择（五份 `data.json`、`types.json` 已调过的键、非空自选主题、已启用片段清单、`app.json`、`templates.json`、用户自带的片段与笔记）与状态（ziminOS 那三份运行时 JSON）一律不动。
 
 ### 安装字体到用户系统（全新安装与升级都执行）
 
@@ -267,6 +269,7 @@ README.md
 
 - `$vault_root/.obsidian/plugins/ziminos/main.js` 存在，且 `grep -c 'ziminos-vault' main.js` 大于 0 —— 三十五枚命令图标与三枚设置页专用图标都编进产物，grep 不到就说明拿到的是旧版 `main.js`，装上去左边那列会是空的。
 - `$vault_root/.obsidian/plugins/ziminos/manifest.json` 存在，`version` 与施工源一致；`styles.css` 存在。
+- `$vault_root/.obsidian/plugins/ziminos/ziminOS-Eagle-Bridge.eagleplugin` 存在，且 `unzip -t` 校验通过；它只是待用户从 ziminOS 设置页主动安装到 Eagle 的第一方伴侣包。
 - `$vault_root/.obsidian/plugins/dataview/main.js` 存在，版本为 0.5.68。
 - `$vault_root/.obsidian/plugins/obsidian-outliner/main.js` 存在，版本为 4.10.2；`LICENSE` 与 `SOURCE.md` 都在。
 - `$vault_root/.obsidian/plugins/obsidian-quiet-outline/main.js` 存在，版本为 0.5.18；`LICENSE` 与 `SOURCE.md` 都在。

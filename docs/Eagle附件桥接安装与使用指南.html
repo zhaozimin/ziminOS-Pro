@@ -1,0 +1,241 @@
+<!--
+  [INPUT]: 依赖 README 的三库升级口令、skill-pro/SKILL.md 的程序升级边界，以及 v0.22.0 Eagle 桥接的设置与配对语义
+  [OUTPUT]: 提供可单文件打开、打印或转发给学员的 macOS/Windows 升级、安装、配对、验收与排障指南
+  [POS]: docs 的用户交付说明；只翻译既有施工契约与产品行为，不另造安装流程，不要求学员接触源码或 data.json
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>ziminOS × Eagle 附件桥接｜安装与使用指南</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18202b;
+      --muted: #657083;
+      --paper: #f6f8fc;
+      --panel: #ffffff;
+      --line: #dce3ee;
+      --blue: #275fce;
+      --blue-soft: #edf3ff;
+      --amber: #b66a08;
+      --amber-soft: #fff4dd;
+      --green: #16734a;
+      --green-soft: #eaf8f1;
+      --red: #b13939;
+      --red-soft: #fff0f0;
+      --shadow: 0 18px 52px rgba(27, 45, 78, .09);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--paper); color: var(--ink); line-height: 1.72; }
+    a { color: var(--blue); text-underline-offset: 3px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { padding: .12em .36em; border-radius: 5px; background: #edf1f7; font-size: .9em; }
+    .page { width: min(1060px, calc(100% - 32px)); margin: 0 auto; padding: 30px 0 70px; }
+    .hero { position: relative; overflow: hidden; padding: clamp(30px, 6vw, 66px); border-radius: 28px; background: #14264a; color: #f7f9ff; box-shadow: var(--shadow); }
+    .hero::after { content: "z"; position: absolute; right: 3%; bottom: -20%; color: rgba(255,255,255,.06); font: 900 260px/1 Georgia, serif; }
+    .eyebrow { margin: 0 0 12px; color: #f2b24b; font-size: 13px; font-weight: 800; letter-spacing: .16em; }
+    h1 { max-width: 800px; margin: 0; font-size: clamp(34px, 6vw, 68px); line-height: 1.08; letter-spacing: -.045em; }
+    .lead { max-width: 790px; margin: 22px 0 0; color: #d7e1f5; font-size: clamp(16px, 2vw, 20px); }
+    .tags { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 28px; }
+    .tag { padding: 6px 11px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; color: #e5ecfb; font-size: 13px; }
+    .quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 34px; }
+    .quick a { min-height: 98px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: inherit; text-decoration: none; box-shadow: 0 8px 24px rgba(27,45,78,.045); }
+    .quick b { display: block; margin-bottom: 5px; color: var(--blue); font-size: 18px; }
+    .quick span { color: var(--muted); font-size: 13px; }
+    section { margin-top: 26px; padding: clamp(23px, 4vw, 40px); border: 1px solid var(--line); border-radius: 22px; background: var(--panel); box-shadow: 0 10px 34px rgba(27,45,78,.045); }
+    .kicker { margin-bottom: 5px; color: var(--blue); font-size: 12px; font-weight: 900; letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0 0 10px; font-size: clamp(25px, 3vw, 34px); line-height: 1.25; letter-spacing: -.025em; }
+    h3 { margin: 25px 0 8px; font-size: 19px; }
+    p { margin: 9px 0; }
+    .muted { color: var(--muted); }
+    .callout { margin: 18px 0; padding: 17px 19px; border-left: 5px solid var(--blue); border-radius: 11px; background: var(--blue-soft); }
+    .callout.warn { border-color: var(--amber); background: var(--amber-soft); }
+    .callout.danger { border-color: var(--red); background: var(--red-soft); }
+    .callout.ok { border-color: var(--green); background: var(--green-soft); }
+    .callout strong { display: block; margin-bottom: 3px; }
+    .steps { counter-reset: step; display: grid; gap: 14px; margin-top: 19px; }
+    .step { position: relative; padding: 18px 19px 18px 64px; border: 1px solid var(--line); border-radius: 15px; background: #fbfcff; }
+    .step::before { counter-increment: step; content: counter(step); position: absolute; left: 18px; top: 18px; display: grid; width: 31px; height: 31px; place-items: center; border-radius: 50%; background: var(--blue); color: white; font-weight: 800; }
+    .step h3 { margin: 0 0 4px; font-size: 17px; }
+    .step p { margin: 4px 0; }
+    pre { overflow-x: auto; margin: 16px 0; padding: 18px; border-radius: 13px; background: #172033; color: #edf3ff; font-size: 13px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+    .checklist { padding: 0; list-style: none; }
+    .checklist li { position: relative; margin: 9px 0; padding-left: 30px; }
+    .checklist li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--green); font-weight: 900; }
+    .table-wrap { overflow-x: auto; margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; }
+    table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 13px 14px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+    th { background: #182743; color: white; }
+    tr:last-child td { border-bottom: 0; }
+    .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 12px; align-items: center; margin: 21px 0; text-align: center; }
+    .flow div { padding: 18px 12px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcff; }
+    .arrow { color: var(--blue); font-size: 24px; font-weight: 900; }
+    .footer { padding: 30px 10px 0; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 760px) {
+      .quick { grid-template-columns: repeat(2, 1fr); }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); }
+    }
+    @media (max-width: 460px) {
+      .page { width: min(100% - 20px, 1060px); padding-top: 10px; }
+      .hero, section { border-radius: 17px; }
+      .quick { grid-template-columns: 1fr; }
+      .step { padding-left: 54px; }
+      .step::before { left: 13px; }
+    }
+    @media print {
+      body { background: white; }
+      .page { width: 100%; padding: 0; }
+      .hero, section, .quick a { box-shadow: none; break-inside: avoid; }
+      .quick { display: none; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <p class="eyebrow">ziminOS PRO · v0.22.0</p>
+      <h1>Obsidian × Eagle<br>附件桥接安装指南</h1>
+      <p class="lead">给 ziminOS 学员的完整操作手册：先安全升级三库系统，再安装 Eagle 伴侣、完成配对并验证附件只进 Eagle、不再留在 Obsidian 本地。</p>
+      <div class="tags"><span class="tag">macOS</span><span class="tag">Windows</span><span class="tag">稳定 itemId</span><span class="tag">本机回环</span><span class="tag">不迁移旧附件</span></div>
+    </header>
+
+    <nav class="quick" aria-label="章节导航">
+      <a href="#upgrade"><b>01 · 升级</b><span>让桌面智能体更新 ziminOS</span></a>
+      <a href="#install"><b>02 · 安装</b><span>在 Eagle 安装后台伴侣</span></a>
+      <a href="#pair"><b>03 · 配对</b><span>连接指定 Eagle 资源库</span></a>
+      <a href="#verify"><b>04 · 验收</b><span>确认不再产生本地附件</span></a>
+    </nav>
+
+    <section id="before">
+      <div class="kicker">Before You Start</div>
+      <h2>开始前先确认三件事</h2>
+      <ul class="checklist">
+        <li>电脑是 macOS 或 Windows，并已安装、登录 Eagle；建议升级到 Eagle 4.0 Build 12 或更高。</li>
+        <li>你已经有 ziminOS 第二版三库系统，并知道最外层的“系统根”文件夹在哪里。</li>
+        <li>先保存正在编辑的笔记。升级不会修改笔记、配色、插件设置或现有附件，但建议升级时先退出 Obsidian。</li>
+      </ul>
+      <div class="callout warn"><strong>不要先卸载旧版 ziminOS。</strong>升级是直接替换受管程序文件；卸载可能顺手带走本机设置，没有任何必要。</div>
+    </section>
+
+    <section id="upgrade">
+      <div class="kicker">Step 01</div>
+      <h2>先把 ziminOS 升级到 v0.22.0</h2>
+      <p>用桌面智能体打开三本笔记库外面的<strong>系统根</strong>，不是打开“以人为本”或另外两本库。把下面整段原样发给智能体：</p>
+      <pre>请读取并严格执行 https://gitee.com/ziminzhao/ziminos-pro/blob/main/skill-pro/SKILL.md 中的「三、C 三库系统的日常升级」。当前工作区是已经装好的 ziminOS 三库系统的系统根，这是升级不是安装：不要重新铺库，不要询问名称或位置，不要动我的笔记、配色、我自己放进 snippets/ 的片段与其他插件的配置。必须先完整执行「二、在工作区外取得施工源」（仓库 https://gitee.com/ziminzhao/ziminos-pro.git，克隆到系统临时目录，不要克隆进工作区），再逐条执行 C 模式，然后按「四、验证」核对、按「五、清理」删掉临时源码。最后把升级前后的插件版本号一起报给我。任何一步失败就停下来告诉我是哪一步，不要跳过，也不要换别的做法绕过去。</pre>
+      <div class="callout ok"><strong>合格回执必须出现两个版本号。</strong>升级后的版本应为 <code>0.22.0</code> 或更高；如果只说“完成了”却没有升级前后版本，让智能体重新执行验证。</div>
+      <p class="muted">升级程序会把 Eagle 伴侣安装包同时放进“以人为本”和“赛博永生”的 ziminOS 插件目录，但不会替你安装进 Eagle，也不会读取或覆盖任何 <code>data.json</code>。</p>
+    </section>
+
+    <section id="install">
+      <div class="kicker">Step 02</div>
+      <h2>在 Eagle 安装 ziminOS 伴侣</h2>
+      <div class="steps">
+        <article class="step"><h3>打开正确的 Eagle 资源库</h3><p>先在 Eagle 切到以后要保存 Obsidian 附件的资源库。配对会记住这套资源库，别在临时测试库里完成。</p></article>
+        <article class="step"><h3>在 Obsidian 找到安装包</h3><p>打开“以人为本” → 设置 → ziminOS → 编辑 → Eagle 附件，点击<strong>“显示安装包”</strong>。系统文件管理器会定位到 <code>ziminOS-Eagle-Bridge.eagleplugin</code>。</p></article>
+        <article class="step"><h3>把安装包交给 Eagle</h3><p>双击这个 <code>.eagleplugin</code> 文件并确认安装。如果双击没有唤起 Eagle，就保持 Eagle 已打开，再把文件拖进 Eagle 窗口完成安装。</p></article>
+        <article class="step"><h3>打开伴侣窗口</h3><p>安装后窗口通常会自动出现。若没有出现，打开 Eagle 的插件面板（可按 <code>P</code>），找到 <strong>ziminOS Obsidian Bridge</strong> 并打开。</p></article>
+      </div>
+      <div class="callout"><strong>只需安装一次 Eagle 伴侣。</strong>以后更新 ziminOS 时，新版 <code>.eagleplugin</code> 会随包送到 Obsidian 插件目录；需要升级伴侣时，用同样方式重新安装即可。</div>
+    </section>
+
+    <section id="pair">
+      <div class="kicker">Step 03</div>
+      <h2>让 Obsidian 与当前 Eagle 资源库配对</h2>
+      <div class="flow" aria-label="配对流程"><div><strong>Eagle 伴侣</strong><br>显示 6 位码</div><span class="arrow">→</span><div><strong>Obsidian 设置</strong><br>输入配对码</div><span class="arrow">→</span><div><strong>本机连接</strong><br>自动启用桥接</div></div>
+      <div class="steps">
+        <article class="step"><h3>核对端口</h3><p>Eagle 伴侣和 Obsidian 设置里的端口默认都是 <code>23119</code>，两边必须一致。没有冲突就不要改。</p></article>
+        <article class="step"><h3>取得一次性配对码</h3><p>在 Eagle 伴侣窗口查看 6 位数字。配对码 5 分钟后失效；过期就点“换一个码”。</p></article>
+        <article class="step"><h3>在 Obsidian 输入</h3><p>回到“设置 → ziminOS → 编辑 → Eagle 附件”，点“配对”，输入这 6 位数字。成功后会显示资源库名称，并自动打开“附件交给 Eagle”。</p></article>
+        <article class="step"><h3>关闭冲突插件的自动接管</h3><p>如果你原来使用图床上传、附件重命名或其他会自动接管粘贴的插件，请关闭它们的<strong>自动粘贴/附件上传</strong>功能，再重新加载 Obsidian。无需删除插件本身。</p></article>
+      </div>
+      <div class="callout warn"><strong>每一本 Obsidian 库单独配对。</strong>大多数人只需在“以人为本”配对；如果也要在“赛博永生”直接粘贴附件，请打开那本库，再完成一次配对。</div>
+    </section>
+
+    <section id="verify">
+      <div class="kicker">Step 04</div>
+      <h2>用 5 分钟完成验收</h2>
+      <ol>
+        <li>在一篇测试笔记里复制粘贴一张截图。成功提示应为“已存入 Eagle”。</li>
+        <li>切到 Eagle，确认刚才的图片已经出现。</li>
+        <li>回到 Obsidian 源码模式，链接应类似 <code>![图片名](ziminos-eagle://v1/primary/项目ID)</code>，里面不应出现本机文件路径。</li>
+        <li>检查 Obsidian 原来的附件目录：这次操作不应多出一份图片。</li>
+        <li>进入阅读视图或实时预览，图片应正常显示；点击图片，应在 Eagle 中定位并打开对应项目。</li>
+        <li>再拖入一个 PDF。笔记中应出现普通附件链接，点击后交给 Eagle 打开。</li>
+        <li>在 Eagle 内把测试图片移动到另一个文件夹，再回 Obsidian 点击：链接和预览仍应正常，Markdown 无需更新。</li>
+        <li>完全退出并重新打开 Eagle 与 Obsidian，再测试一次，确认配对仍在。</li>
+      </ol>
+      <div class="callout ok"><strong>全部通过才算安装完成。</strong>Eagle 里有文件、Obsidian 里只有身份链接、本地附件目录没有新增副本，这三件事必须同时成立。</div>
+    </section>
+
+    <section id="daily">
+      <div class="kicker">Daily Use</div>
+      <h2>以后怎么使用</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>操作</th><th>结果</th><th>是否要改 Obsidian 链接</th></tr></thead>
+          <tbody>
+            <tr><td>粘贴截图、拖入图片或附件</td><td>文件进当前配对的 Eagle 资源库，笔记只写 itemId 链接</td><td>不需要</td></tr>
+            <tr><td>在同一 Eagle 库里换文件夹、分类或整理</td><td>项目 ID 不变</td><td><strong>不需要</strong></td></tr>
+            <tr><td>移动整个 Eagle 资源库目录</td><td>安全校验会识别实体路径已变</td><td>Markdown 不改，只需重新配对</td></tr>
+            <tr><td>切换到另一套 Eagle 资源库</td><td>旧配对拒绝向新库误写</td><td>Markdown 不改；要使用新库需重新配对</td></tr>
+            <tr><td>在 Eagle 删除附件</td><td>对应 Obsidian 链接如实失效</td><td>需要你决定删除或换成新附件</td></tr>
+            <tr><td>关闭“附件交给 Eagle”</td><td>ziminOS 不再接管新的粘贴/拖入</td><td>已有链接不受影响</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">v0.22.0 只接管升级以后新粘贴或拖入的附件。已有本地附件不会自动迁移，也不会被自动删除。</p>
+    </section>
+
+    <section id="troubleshoot">
+      <div class="kicker">Troubleshooting</div>
+      <h2>常见问题排查</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>现象</th><th>先检查什么</th><th>处理方法</th></tr></thead>
+          <tbody>
+            <tr><td>显示“连不上 Eagle 伴侣”</td><td>Eagle 是否已启动、伴侣是否安装、两边端口是否相同</td><td>打开伴侣窗口，点 Obsidian 的“检测”；仍失败就重新配对</td></tr>
+            <tr><td>端口 23119 被占用</td><td>Eagle 状态行是否显示启动失败</td><td>先在 Eagle 伴侣改成 23120–65535 的空闲端口，再把 Obsidian 端口改成同一个数字</td></tr>
+            <tr><td>提示当前资源库不同</td><td>Eagle 是否切到了另一套库，或是否搬动了整个库目录</td><td>确认目标资源库后重新配对；笔记链接不用改</td></tr>
+            <tr><td>图片仍进图床或落进 Obsidian</td><td>其他图床/附件插件是否先接管了粘贴</td><td>关闭它们的自动粘贴处理，重新加载 Obsidian 后再测</td></tr>
+            <tr><td>链接存在但图片不显示</td><td>伴侣“检测”是否正常、Eagle 项目是否被删除</td><td>恢复连接或从 Eagle 恢复项目；不要手改链接里的 itemId</td></tr>
+            <tr><td>换到另一台电脑后未配对</td><td>配对令牌属于当前设备与当前 Obsidian 库</td><td>在新电脑安装伴侣并重新配对；Markdown 不需要迁移或改写</td></tr>
+            <tr><td>离线时点了“断开”</td><td>Obsidian 会先清本机凭据，但 Eagle 端可能没收到撤销请求</td><td>以后打开 Eagle 伴侣，在“已配对的 Obsidian 库”里手动移除旧授权</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="security">
+      <div class="kicker">Security</div>
+      <h2>这套桥接不会把什么带走</h2>
+      <ul class="checklist">
+        <li>桥接服务只监听本机 <code>127.0.0.1</code>，不向局域网或互联网开放。</li>
+        <li>Obsidian 令牌存入官方 SecretStorage；令牌不进入笔记、链接、<code>data.json</code> 或日志。</li>
+        <li>Markdown 不保存 Eagle 真实路径、文件夹位置或服务端口，只保存稳定 itemId。</li>
+        <li>导入失败时不会悄悄退回 Obsidian 本地附件；它会明确报错，让存储位置没有第二种解释。</li>
+      </ul>
+      <div class="callout danger"><strong>不要手动编辑或分享配对令牌。</strong>正常安装、升级和排障都不需要看见令牌；任何教程若要求你打开 <code>data.json</code> 抄令牌，说明走错了。</div>
+    </section>
+
+    <section id="links">
+      <div class="kicker">Official Links</div>
+      <h2>下载与施工源</h2>
+      <ul>
+        <li>ziminOS Pro：<a href="https://gitee.com/ziminzhao/ziminos-pro">https://gitee.com/ziminzhao/ziminos-pro</a></li>
+        <li>Eagle 官网：<a href="https://eagle.cool/">https://eagle.cool/</a></li>
+        <li>Eagle 插件说明：<a href="https://developer.eagle.cool/plugin-api/zh-cn/get-started/plugin-types/service">官方背景服务插件文档</a></li>
+      </ul>
+    </section>
+
+    <footer class="footer">ziminOS × Eagle 附件桥接安装与使用指南 · v0.22.0 · 2026-09-07</footer>
+  </main>
+</body>
+</html>

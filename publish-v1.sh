@@ -2,7 +2,7 @@
 #
 # [INPUT]: 依赖本仓库为第二版事实源（含 vault-pro/ 与 skill-pro/），依赖 npm run check 通过，
 #          依赖 git 与 rsync；目标仓库 gitee.com/ziminzhao/zimin-os-v1 需可写
-# [OUTPUT]: 把两版共享的那部分（src / vault / fonts / skill / tests / 构建与依赖配置）
+# [OUTPUT]: 把两版共享的那部分（src / vault / eagle-companion / fonts / skill / tests / 构建与依赖配置）
 #           单向发布到第一版公开仓库，并在 --push 时推上去
 # [POS]: 两个 Gitee 仓库之间**唯一**的同步通道，方向只有 pro → v1 一条。
 #        它存在的理由是一次事故：两个仓库曾各自能改同一份 src/，于是分叉出
@@ -30,9 +30,11 @@ V1_REMOTE="git@gitee.com:ziminzhao/zimin-os-v1.git"
 SHARED=(
     src
     vault
+    eagle-companion
     fonts
     skill
     tests
+    package-eagle.sh
     package.json
     package-lock.json
     tsconfig.json
@@ -155,9 +157,9 @@ done
 # 依赖直接借本仓库的：package.json 刚同步过去，两边版本按定义相同。
 
 echo "==> 在第一版仓库里跑回归"
-( cd "$target" && node --test tests/regression.mjs >/dev/null 2>&1 ) || {
+( cd "$target" && node --test tests/*.mjs >/dev/null 2>&1 ) || {
     echo "同步后的第一版仓库跑不过自己的回归，中止发布。" >&2
-    ( cd "$target" && node --test tests/regression.mjs 2>&1 | grep -E '^(not ok|✖|  [A-Za-z])' | head -20 ) >&2
+    ( cd "$target" && node --test tests/*.mjs 2>&1 | grep -E '^(not ok|✖|  [A-Za-z])' | head -20 ) >&2
     exit 1
 }
 

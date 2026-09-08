@@ -10,6 +10,7 @@
  *          复盘的打开命令还要 theme 的 promptThemeIfMissing 来填「日记已打开」那个洞；
  *          再加 modules/format 的 registerFormatter、modules/appearance 的 registerAppearanceSwitch、
  *          modules/ribbon 的 registerRibbon、
+ *          modules/eagle 的 registerEagleBridge（附件粘贴/呈现与 Eagle 配对）、
  *          modules/editing 的 registerPasteLink/registerCursorMemory、
  *          modules/explorer 的 registerFolderCount/registerRecentFiles/registerFilePath、
  *          modules/legacy 的 registerLegacyDock
@@ -55,6 +56,7 @@ import {
 import { disconnectWeread, disposeWereadSession, loginWeread } from './modules/books/sourceWeread';
 import { registerCursorMemory } from './modules/editing/cursorMemory';
 import { registerPasteLink } from './modules/editing/pasteLink';
+import { registerEagleBridge } from './modules/eagle';
 import { registerFolderCount } from './modules/explorer/badge';
 import { registerFilePath } from './modules/explorer/filePath';
 import { registerRecentFiles } from './modules/explorer/recentFiles';
@@ -208,10 +210,13 @@ export default class ZiminosPlugin extends Plugin {
         const syncAppearanceSwitch = registerAppearanceSwitch(ctx);
 
         // ============================================================
-        // 编辑：粘贴与光标，两个监听、一条命令都不注册
+        // 编辑：Eagle 附件、粘贴外链与光标，全是监听而非笔记生产流程
         // ============================================================
 
-        // 它们不交回任何同步函数：监听与记忆每次触发都现读设置对象，天然看得见新值。
+        // Eagle 必须先注册：它先拦下 File，后面的“选中文字加外链”仍只看纯文本 URL。
+        // 两者都遵守 defaultPrevented，不会重复接管同一次粘贴。
+        const eagleActions = registerEagleBridge(ctx);
+        // 下面两个不交回同步函数：监听与记忆每次触发都现读设置对象，天然看得见新值。
         // 需要有人去推一把的，永远只是「已经画在屏幕上」的东西
         registerPasteLink(ctx);
         registerCursorMemory(ctx);
@@ -285,6 +290,7 @@ export default class ZiminosPlugin extends Plugin {
                 syncAppearanceSwitch,
                 syncRibbon,
                 syncExplorer,
+                ...eagleActions,
                 // 设置页的「关于作者」区与导航页尾的视图块画同一张名片，实现只有 about 一份
                 renderAbout: renderAboutPanel,
             }),

@@ -1,12 +1,13 @@
 {
   "name": "ziminos",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc --noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "test": "node --test tests/regression.mjs",
+    "build": "tsc --noEmit -skipLibCheck && node esbuild.config.mjs production && ./package-eagle.sh",
+    "package:eagle": "./package-eagle.sh",
+    "test": "node --test tests/*.mjs",
     "check": "npm run build && npm run test"
   },
   "devDependencies": {

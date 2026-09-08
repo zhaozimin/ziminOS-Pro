@@ -1,6 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian 的 App/Plugin 类型，依赖 ./constants 的 PARA、时间、灵感、读书、
  *          文件夹计数、最近文件与状态栏路径口径的默认值与合法集合，
+ *          以及 Eagle 回环伴侣的默认端口/端口范围，
  *          依赖 ./commands 的 DEFAULT_RIBBON_COMMANDS/normalizeRibbonCommands 与 CommandRegistry 类型，
  *          依赖 ./markdownStyle 的 DEFAULT_FORMAT_RULES/normalizeFormatRules，依赖 ./guard 的 SelfWriteGuard 类型，
  *          依赖 ./edition 的 EditionInfo 类型
@@ -23,6 +24,8 @@ import {
     CLIENT_FOLDER,
     CONTACT_FOLDER,
     DEFAULT_DATETIME_FORMAT,
+    EAGLE_DEFAULTS,
+    EAGLE_PORT_RANGE,
     FILE_PATH_DEFAULTS,
     FILE_PATH_SCOPES,
     FOLDER_COUNT_DEFAULTS,
@@ -180,6 +183,16 @@ export interface ZiminosSettings {
      */
     pasteLinkEnabled: boolean;
     /**
+     * 是否将粘贴/拖入的附件交给 Eagle。
+     * 这是 fail-closed 授权：打开后伴侣不可用，本次操作会明确报错，
+     * 不会退回 Obsidian 本地附件。配对动作会自动打开它，断开则自动关掉。
+     */
+    eagleEnabled: boolean;
+    /** Eagle 伴侣的本机回环端口；只是设备配置，不进笔记链接 */
+    eaglePort: number;
+    /** 可选的 Eagle 目标文件夹 ID；空串表示放进当前资源库未归类区 */
+    eagleFolderId: string;
+    /**
      * 是否记住每篇笔记关掉时的光标与滚动位置，下次打开时回到那里。
      *
      * 位置本身不在这里——它们是状态，住在插件目录下的 cursor-positions.json，
@@ -223,6 +236,9 @@ export const DEFAULT_SETTINGS: ZiminosSettings = {
     recentFilesLimit: RECENT_FILES_DEFAULTS.limit,
     recentFilesSort: RECENT_FILES_DEFAULTS.sort,
     pasteLinkEnabled: true,
+    eagleEnabled: false,
+    eaglePort: EAGLE_DEFAULTS.port,
+    eagleFolderId: EAGLE_DEFAULTS.folderId,
     rememberCursor: true,
     initializedAt: '',
 };
@@ -258,6 +274,9 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
     const recentFilesLimit = isRecentFilesLimit(stored.recentFilesLimit)
         ? stored.recentFilesLimit
         : DEFAULT_SETTINGS.recentFilesLimit;
+    const eaglePort = isEaglePort(stored.eaglePort)
+        ? stored.eaglePort
+        : DEFAULT_SETTINGS.eaglePort;
 
     return {
         autoCardInit: booleanValue('autoCardInit'),
@@ -291,6 +310,9 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
         recentFilesLimit,
         recentFilesSort,
         pasteLinkEnabled: booleanValue('pasteLinkEnabled'),
+        eagleEnabled: booleanValue('eagleEnabled'),
+        eaglePort,
+        eagleFolderId: stringValue('eagleFolderId'),
         rememberCursor: booleanValue('rememberCursor'),
         initializedAt: stringValue('initializedAt'),
     };
@@ -338,6 +360,12 @@ function isRecentFilesSort(value: unknown): value is RecentFilesSort {
 
 function isRecentFilesLimit(value: unknown): value is number {
     return typeof value === 'number' && RECENT_FILES_LIMITS.includes(value);
+}
+
+/** 本地服务端口只接受无需提权的整数范围 */
+function isEaglePort(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value) &&
+        value >= EAGLE_PORT_RANGE.min && value <= EAGLE_PORT_RANGE.max;
 }
 
 /**

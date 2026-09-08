@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 esbuild 的打包能力、builtin-modules 的 Node 内建模块清单、
  *          node:fs/promises 的版本镜像同步、process 的命令行参数
- * [OUTPUT]: 以 package.json 版本为唯一事实源，同步 manifest.json 后把 src/main.ts
+ * [OUTPUT]: 以 package.json 版本为唯一事实源，同步 Obsidian/Eagle 两份 manifest 后把 src/main.ts
  *           打包为 CommonJS 单文件，直接落位到 vault 内的插件目录
  * [POS]: 构建链的唯一出口。产物路径即 vault 模板区的插件目录，构建完成即就位，
  *        因此不需要任何同步脚本；dev 模式常驻 watch，production 模式一次性构建并退出
@@ -39,27 +39,38 @@ const isProduction = process.argv[2] === 'production';
 // 构建产物直接写入 vault 模板区的插件目录，学员拿到仓库即可用
 const OUT_FILE = 'vault/.obsidian/plugins/ziminos/main.js';
 const MANIFEST_FILE = 'vault/.obsidian/plugins/ziminos/manifest.json';
+const EAGLE_MANIFEST_FILE = 'eagle-companion/manifest.json';
 
 /**
- * package.json 是版本唯一事实源；manifest 只是 Obsidian 需要的发布镜像。
+ * package.json 是版本唯一事实源；两份 manifest 只是 Obsidian 与 Eagle 需要的发布镜像。
  * 构建时自动同步，避免「源码已升级、插件仍报旧版本」这种无声分叉。
  */
 async function syncManifestVersion() {
-    const [packageSource, manifestSource] = await Promise.all([
+    const [packageSource, manifestSource, eagleManifestSource] = await Promise.all([
         readFile('package.json', 'utf8'),
         readFile(MANIFEST_FILE, 'utf8'),
+        readFile(EAGLE_MANIFEST_FILE, 'utf8'),
     ]);
     const packageJson = JSON.parse(packageSource);
     const manifest = JSON.parse(manifestSource);
+    const eagleManifest = JSON.parse(eagleManifestSource);
 
     if (typeof packageJson.version !== 'string' || !packageJson.version.trim()) {
         throw new Error('package.json 缺少有效 version，构建已中止');
     }
 
-    if (manifest.version === packageJson.version) return;
+    const writes = [];
 
-    manifest.version = packageJson.version;
-    await writeFile(MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    if (manifest.version !== packageJson.version) {
+        manifest.version = packageJson.version;
+        writes.push(writeFile(MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8'));
+    }
+    if (eagleManifest.version !== packageJson.version) {
+        eagleManifest.version = packageJson.version;
+        writes.push(writeFile(EAGLE_MANIFEST_FILE, `${JSON.stringify(eagleManifest, null, 2)}\n`, 'utf8'));
+    }
+
+    await Promise.all(writes);
 }
 
 await syncManifestVersion();

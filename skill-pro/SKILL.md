@@ -91,6 +91,7 @@ clone 需要认证或直接失败时，**不要让用户去创建账号、也不
 
 ```text
 $src/vault/                                    第一版笔记库成品（= 以人为本的主体）
+$src/vault/.obsidian/plugins/ziminos/ziminOS-Eagle-Bridge.eagleplugin    可选的第一方 Eagle 伴侣包
 $src/vault-pro/兼收并蓄/                        进料口成品
 $src/vault-pro/以人为本/.obsidian/plugins/ziminos/edition.json    版次标记（叠加件）
 $src/vault-pro/赛博永生/                        成品库成品
@@ -102,7 +103,7 @@ $src/fonts/                                    四款正文字体
 
 `vault/` 与 `vault-pro/` 的分工是硬的，别搞混：**`vault/` 是三本库共享的那一份程序与外观资产的唯一出处**（ziminOS 插件、Dataview、Style Settings、Minimal 主题、十二个 CSS 片段），仓库里只存在这一份；`vault-pro/` 只装第二版特有的内容与配置。这样第一版与第二版永远不会在主题或插件版本上分叉。
 
-不要运行 `npm install` / `npm run build`，不要安装 Node.js，不要去 Obsidian 商店另行下载任何东西。
+不要运行 `npm install` / `npm run build`，不要安装 Node.js，不要去 Obsidian 商店另行下载任何东西。Eagle 伴侣包只随 ziminOS 程序分发，**不得替用户静默安装或启动**；用户启用附件桥接时，再从 ziminOS 设置页主动打开它。
 
 ---
 
@@ -166,6 +167,7 @@ mkdir -p "$eternal/.obsidian/plugins/ziminos"
 cp "$src/vault/.obsidian/plugins/ziminos/main.js"      "$eternal/.obsidian/plugins/ziminos/"
 cp "$src/vault/.obsidian/plugins/ziminos/manifest.json" "$eternal/.obsidian/plugins/ziminos/"
 cp "$src/vault/.obsidian/plugins/ziminos/styles.css"    "$eternal/.obsidian/plugins/ziminos/"
+cp "$src/vault/.obsidian/plugins/ziminos/ziminOS-Eagle-Bridge.eagleplugin" "$eternal/.obsidian/plugins/ziminos/"
 ```
 
 注意 `赛博永生` 的 `edition.json` 已经随它的模板一起铺进去了（`role: eternal`），不要再覆盖。
@@ -283,7 +285,7 @@ mkdir -p "$human/.obsidian/plugins/ziminos"
 
 同样要改 `$eternal/.obsidian/plugins/ziminos/edition.json` 里的 `vaults.human`。**三份标记里的 `vaults` 必须完全一致**，它是系统布局的唯一事实源，不一致会让出库单指向一个不存在的地方。
 
-5. 现有库的 `main.js` / `manifest.json` / `styles.css` 更新到施工源的版本（第二版的功能就在这份产物里）。
+5. 现有库的 `main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin` 更新到施工源的版本（第二版的功能就在这些产物里）。
 6. 按 A 的第 4、5、6 步装字体、留说明书、铺系统根的认路文件。
 7. **现有库的一切「选择」一律不动**：`data.json`、`holiday-cache.json`、`types.json` 已调过的键、`appearance.json` 里用户选过的主题/字体/片段、`app.json`、`templates.json`、用户自己的片段与全部笔记。规则与第一版 `skill/SKILL.md` 第三节的所有权表逐条相同。
 
@@ -320,9 +322,9 @@ echo "升级前：$before ；施工源：$(grep -o '"version"[^,]*' "$src/vault/
 ### 2. 更新程序
 
 ```bash
-# 插件三件套：只有装了插件的两本库有
+# 插件运行文件与 Eagle 伴侣包：只有装了插件的两本库有
 for v in "$human" "$eternal"; do
-    for f in main.js manifest.json styles.css; do
+    for f in main.js manifest.json styles.css ziminOS-Eagle-Bridge.eagleplugin; do
         cp "$src/vault/.obsidian/plugins/ziminos/$f" "$v/.obsidian/plugins/ziminos/$f"
     done
 done
@@ -368,7 +370,7 @@ echo "升级后：$after"
 ### 4. 这些一律不动
 
 
-- `main.js` / `manifest.json` / `styles.css`：整份更新（只有装了插件的「以人为本」与「赛博永生」有）。
+- `main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin`：整份更新（只有装了插件的「以人为本」与「赛博永生」有）。
 - Dataview / Style Settings 的运行文件、Minimal 主题、十二个实名片段：整份更新。
 - `.ziminos/skills/`：整份更新。
 - **系统根的 `CLAUDE.md` / `AGENTS.md`：缺就补，在就按第三节第 6 步整份更新。** 这两份是 v0.19.0 新增的，此前装好的系统里没有——不补上，用户每开一个新会话仍要从头解释一遍这是什么地方。它们是程序说明不是用户内容；他如果改过，先把差异摆给他看再决定。
@@ -419,7 +421,7 @@ AGENTS.md
 逐条确认：
 
 - 三本库各自有 `.obsidian/`，各自有 `.obsidian/themes/Minimal/theme.css` 与 12 个 `.css` 片段（`ls .obsidian/snippets/*.css | wc -l` ≥ 12）。
-- `以人为本/.obsidian/plugins/ziminos/{main.js,manifest.json,styles.css,edition.json}` 齐全；`edition.json` 是合法 JSON 且 `role` 为 `human`。
+- `以人为本/.obsidian/plugins/ziminos/{main.js,manifest.json,styles.css,ziminOS-Eagle-Bridge.eagleplugin,edition.json}` 齐全，伴侣包 `unzip -t` 校验通过；`edition.json` 是合法 JSON 且 `role` 为 `human`。
 - `赛博永生/.obsidian/plugins/ziminos/edition.json` 的 `role` 为 `eternal`；`10-原料/`、`20-知识/索引.md`、`90-系统/账本.md`、`CLAUDE.md`、`README.md` 齐全（这本库的三层目录名是中文的，不是 `10-raw` / `20-wiki` / `90-system`）。
 - `兼收并蓄/灵感集.md` 与 `兼收并蓄/剪藏/` 存在；`.obsidian/plugins/dataview/main.js` 存在。
 - **三份 `edition.json` 里的 `vaults` 三个值两两一致**，且每个值都是 `$system_root` 下真实存在的目录名。
@@ -429,7 +431,7 @@ AGENTS.md
 - **三本库里都不存在 `data.json`。** 全新安装不该生成它——它由插件在用户第一次改设置时自己写出来。
 - `$system_root` 内不存在 `.git/`、`src/`、`docs/`、`skill/`、`skill-pro/`、`vault/`、`vault-pro/`、`fonts/`、`node_modules/`、`package.json`。
 
-升级模式（B / C）**先确认程序真的前进了**：`以人为本` 与 `赛博永生` 的 `manifest.json` 版本号等于施工源的版本号；两本库的 `main.js` 与施工源的 `main.js` SHA-256 相同；`.ziminos/skills/` 下三个目录齐全；系统根的 `CLAUDE.md` 与 `AGENTS.md` 存在。**这四条缺一条，这次升级就是没做成**——而它不会自己报错，用户只会在重启 Obsidian 后发现插件还是旧的。
+升级模式（B / C）**先确认程序真的前进了**：`以人为本` 与 `赛博永生` 的 `manifest.json` 版本号等于施工源的版本号；两本库的 `main.js` 与施工源的 `main.js` SHA-256 相同；两本库的 `ziminOS-Eagle-Bridge.eagleplugin` 与施工源 SHA-256 相同且 `unzip -t` 校验通过；`.ziminos/skills/` 下三个目录齐全；系统根的 `CLAUDE.md` 与 `AGENTS.md` 存在。**这些条目缺一条，这次升级就是没做成**——而它不会自己报错，用户只会在重启 Obsidian 后发现插件还是旧的。
 
 然后额外确认：升级前已存在的 `data.json` 的 SHA-256 全部不变；`types.json` 里用户原有的属性类型一个都没被改写；用户原有插件、非空自选主题、自选正文字体、自己放进 `snippets/` 的片段与全部 Markdown 笔记一个不少；`enabledCssSnippets` 里升级前已有的名字一个没少，被用户关掉的片段一个都没被重新打开。
 

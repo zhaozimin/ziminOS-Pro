@@ -1,0 +1,62 @@
+<!--
+  [INPUT]: 依赖 Eagle 插件窗口的 Chromium/Node 运行时，加载 styles.css 与 js/service.js
+  [OUTPUT]: 提供配对码、回环端口、已配对 Obsidian 库与反向查找的最小界面骨架
+  [POS]: Eagle 伴侣的唯一视图；不持有业务状态，所有真实状态都由 service.js 现读后填入
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'">
+    <title>ziminOS Obsidian Bridge</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main>
+        <header>
+            <div class="mark">z</div>
+            <div>
+                <h1>ziminOS · Eagle 附件伴侣</h1>
+                <p id="runtime-status">正在启动本机回环服务…</p>
+            </div>
+        </header>
+
+        <section>
+            <div class="section-title">
+                <h2>1. 与 Obsidian 配对</h2>
+                <button id="refresh-code" class="ghost">换一个码</button>
+            </div>
+            <p>在 Obsidian 的「ziminOS → 编辑 → Eagle 附件」点「配对」，输入下面 6 位码。配对码 5 分钟后失效，但已配对的设备不受影响。</p>
+            <div id="pair-code" class="pair-code">------</div>
+        </section>
+
+        <section>
+            <h2>2. 本机服务</h2>
+            <label for="port">端口</label>
+            <div class="row">
+                <input id="port" type="number" min="1024" max="65535" inputmode="numeric">
+                <button id="save-port">应用端口</button>
+            </div>
+            <p class="hint">只监听 <code>127.0.0.1</code>，不向局域网或互联网开放。这个数字必须与 Obsidian 设置一致。</p>
+        </section>
+
+        <section>
+            <h2>3. 已配对的 Obsidian 库</h2>
+            <div id="clients" class="list"><p class="empty">还没有已配对的笔记库。</p></div>
+        </section>
+
+        <section>
+            <h2>4. 从 Eagle 反向查找</h2>
+            <p id="selection" class="hint">在 Eagle 里选中一个附件，再打开本伴侣。</p>
+            <div id="open-vaults" class="button-list"></div>
+        </section>
+
+        <footer>
+            笔记保存的是 Eagle itemId，不是文件路径；在同一资源库里移动附件无需改链接。
+        </footer>
+    </main>
+    <script src="js/service.js"></script>
+</body>
+</html>

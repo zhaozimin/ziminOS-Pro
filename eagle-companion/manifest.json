@@ -1,0 +1,22 @@
+{
+  "id": "ZMEAGLEBRIDGE",
+  "version": "0.22.0",
+  "platform": "all",
+  "arch": "all",
+  "name": "ziminOS Obsidian Bridge",
+  "logo": "/logo.png",
+  "description": "让 ziminOS 以稳定 itemId 存取 Eagle 附件。",
+  "keywords": ["ziminOS", "Obsidian", "attachment", "bridge"],
+  "devTools": false,
+  "main": {
+    "serviceMode": true,
+    "url": "index.html",
+    "width": 520,
+    "height": 620,
+    "minWidth": 480,
+    "minHeight": 520,
+    "resizable": true,
+    "multiple": false,
+    "runAfterInstall": true
+  }
+}

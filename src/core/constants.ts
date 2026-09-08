@@ -17,6 +17,7 @@
  *           RECENT_FILES_SORTS/RECENT_FILES_DEFAULTS 及其类型 RecentFilesSort，
  *           光标记忆契约 CURSOR_STATE_FILE/CURSOR_MEMORY_LIMIT，
  *           状态栏路径契约 FILE_PATH_SCOPES/FILE_PATH_DEFAULTS 及其类型 FilePathScope，
+ *           Eagle 回环伴侣契约 EAGLE_DEFAULTS/EAGLE_PORT_RANGE，
  *           视图代码块契约 VIEW_BLOCK_LANG/VIEW_REFRESH_DEBOUNCE_MS，
  *           以及第二版三库系统的赛博永生契约 EXPORT_MANIFEST_FILE/EXPORT_MANIFEST_HEADING/
  *           EXPORT_MANIFEST_SEPARATOR 与 ETERNAL_FOLDERS/ETERNAL_INDEX_FILE/ETERNAL_LOG_FILE/
@@ -733,6 +734,22 @@ export type FilePathScope = (typeof FILE_PATH_SCOPES)[number];
 /** 全新库的复制口径，也是读取侧的回落值。见上面那段：默认必须与老行为一致 */
 export const FILE_PATH_DEFAULTS = {
     scope: 'vault',
+} as const;
+
+// ============================================================
+// Eagle 回环伴侣
+// ============================================================
+
+/** 端口只是设备上的寻址手段，绝不写进 Markdown 身份链接 */
+export const EAGLE_DEFAULTS = {
+    port: 23119,
+    folderId: '',
+} as const;
+
+/** 避开需要管理员权限的系统端口，上限遵守 TCP 端口契约 */
+export const EAGLE_PORT_RANGE = {
+    min: 1024,
+    max: 65535,
 } as const;
 
 // ============================================================
