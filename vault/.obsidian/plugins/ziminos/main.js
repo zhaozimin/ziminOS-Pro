@@ -314,18 +314,6 @@ var RECENT_FILES_DEFAULTS = {
   sort: "opened"
 };
 var CURSOR_MEMORY_LIMIT = 200;
-var FILE_PATH_SCOPES = ["vault", "system"];
-var FILE_PATH_DEFAULTS = {
-  scope: "vault"
-};
-var EAGLE_DEFAULTS = {
-  port: 23119,
-  folderId: ""
-};
-var EAGLE_PORT_RANGE = {
-  min: 1024,
-  max: 65535
-};
 var VIEW_BLOCK_LANG = "ziminos";
 var VIEW_REFRESH_DEBOUNCE_MS = 200;
 var EXPORT_MANIFEST_FILE = `${FOLDERS.system}/\u8D5B\u535A\u6C38\u751F\u51FA\u5E93\u5355.md`;
@@ -1491,6 +1479,20 @@ ${text3}`;
 `;
   return text3;
 }
+
+// src/core/device.ts
+var FILE_PATH_SCOPES = ["vault", "system"];
+var FILE_PATH_DEFAULTS = {
+  scope: "vault"
+};
+var EAGLE_DEFAULTS = {
+  port: 23119,
+  folderId: ""
+};
+var EAGLE_PORT_RANGE = {
+  min: 1024,
+  max: 65535
+};
 
 // src/core/types.ts
 var DEFAULT_SETTINGS = {

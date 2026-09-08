@@ -1,12 +1,12 @@
 /**
- * [INPUT]: 依赖 core/constants 的 Eagle 端口默认值/范围与标准 Markdown 语义，不依赖 Obsidian 或 Eagle 运行时
+ * [INPUT]: 依赖 core/device 的 Eagle 端口默认值/范围，不依赖 Obsidian 或 Eagle 运行时
  * [OUTPUT]: 对外提供 EagleReference 契约、稳定 URI 的构建/解析、Markdown 附件链接生成与图片判定
  * [POS]: Eagle 模块的协议事实层。笔记只记 libraryKey + itemId，端口、路径与文件夹一概不进 Markdown；
  *        因此在 Eagle 库内移动附件时链接天然不变，这个文件就是两个运行时共同遵守的身份语法
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { EAGLE_DEFAULTS, EAGLE_PORT_RANGE } from '../../core/constants';
+import { EAGLE_DEFAULTS, EAGLE_PORT_RANGE } from '../../core/device';
 
 export const EAGLE_LIBRARY_KEY = 'primary';
 export const EAGLE_DEFAULT_PORT = EAGLE_DEFAULTS.port;

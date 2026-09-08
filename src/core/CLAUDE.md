@@ -6,7 +6,8 @@
 
 ## 成员清单
 
-constants.ts: 全仓库唯一常量源，零 import，是依赖图最底层的叶子。目录/字段/日期/项目状态/复盘/人脉/读书/外观/文件浏览器/光标/视图等跨模块约定都在此；v0.22.0 再收下 Eagle 默认端口、可用端口范围与默认文件夹 ID，因为设置验形、设置界面和协议客户端必须对同一个设备参数说同一套话。命令身份与宿主 DOM 约定仍留在各自边界，不混进数据字典。
+constants.ts: 全仓库业务字典，零 import，是依赖图最底层的叶子。目录/字段/日期/项目状态/复盘/人脉/读书/外观/文件浏览器/光标/视图等跨模块约定在此；只随本机设备交互变化的参数分给 device.ts，命令身份与宿主 DOM 约定仍留在各自边界。
+device.ts: 本机设备契约叶子，零 import。收口状态栏复制口径及 Eagle 端口/默认文件夹 ID，让设置验形、设置界面与协议客户端依赖同一份参数，不让全局业务字典继续承担设备配置的变更理由。
 commands.ts: 命令这件事的全部——三十五条命令的身份（id / 中文名 / 图标名 / 分组）、十一个分组的功能色 GROUP_COLORS、左侧边栏的默认摆件清单，以及注册台 CommandRegistry。COMMAND_ICONS 有三十八个名字而命令只有三十五条：多出的 dock / explorer / editing 服务设置页那三张没有命令与之对应的标签页——它们管的都是屏幕上的一块地方而不是一件可执行的事，但图标仍归这张表，因为设置页的标签与边栏图标必须同源。两个新分组的颜色各有判据：文件着靛蓝（找路＝罗盘针），旧版着中性灰——那三条做的是 Obsidian 自己的事，在一列彩色图标里一眼看得出是外来的。「打开中国日历」归复盘组，但不加入默认十枚边栏按钮，因为日历 ItemView 会自动常驻右侧。注册台同时把命令交给 Obsidian 并留在花名册；花名册存回调本体，边栏不必依赖未公开的 executeCommandById。注册顺序即花名册顺序，也就是边栏的初始顺序。
 edition.ts: 版次闸门，「同一份 main.js 交付两版用户」这条纪律的唯一执行处。第一版（免费·单库）与第二版（付费·三库）共用同一个插件产物，所以「这个库能用哪些功能」不能写死在代码里，只能问磁盘上一份由第二版安装器写下、第一版永远没有的标记文件。它给出的不是运行时开关而是**装配期开关**：main 拿到 free 就根本不接第二版那条线，没有命令、没有视图、没有监听，也就没有任何东西可能在免费用户的库里出错。失败方向是刻意的——文件缺席、读不动、JSON 坏了、字段不认识，一律回落 free；坏标记把付费功能塞进免费库，比坏标记让付费库退化成免费库严重得多，因为后者用户看得见（功能不见了会来问），前者他看不见（凭空多出的文件不会有人报错）。它同时是三库布局的唯一事实源，插件与桌面智能体读同一份 vaults 表，因此「赛博永生那本库叫什么」不存在两个答案；从第一版升级上来的用户那本库叫什么是他自己取的，这也是布局必须是数据而不能是常量的原因。
 types.ts: 契约层。ZiminosSettings 与 DEFAULT_SETTINGS 定义可持久化选择，normalizeSettings 是未知 JSON 的唯一验形边界；v0.22.0 加入 `eagleEnabled/eaglePort/eagleFolderId`，新字段按默认值补给老库，端口严格收口到合法整数。**认证令牌不属于设置**，刻意没有字段：它是设备秘密，交给 Obsidian 官方 `SecretStorage`，绝不能随 data.json 同步或被安装器读取。
@@ -28,6 +29,6 @@ guard.ts: 自激循环断路器。插件的自动化监听 vault 事件，而插
 
 ## 内部依赖
 
-constants 零依赖，是依赖图最底层的叶子；commands 只向下够到它（借 PeriodKey 与 TransitionAction 两个类型），因此自己也几乎是叶子。edition 只依赖 obsidian 的 App 类型，同样是叶子。localPath 只依赖 obsidian（一个类、一个平台标志与一个类型），因此也几乎是叶子。绝大多数文件只依赖 constants 与 obsidian；横向依赖仍只有三条，都指向更底层：types 引用 guard、commands、markdownStyle 与 edition（各取一份默认值或类型），codeblock 引用 vaultIndex、table 与 types。markdownStyle 与 constants 一样零 import，因此它被 types 依赖同样不会成环。方向始终由「懂得多的」指向「懂得少的」，故 core 内部无环——commands 之所以能被 types 依赖而不成环，正是因为它自己只够到 constants。
+constants 与 device 都零依赖，是依赖图最底层的叶子；commands 只向下够到 constants（借 PeriodKey 与 TransitionAction 两个类型），因此自己也几乎是叶子。edition 只依赖 obsidian 的 App 类型，同样是叶子。localPath 只依赖 obsidian（一个类、一个平台标志与一个类型），因此也几乎是叶子。绝大多数文件只依赖 constants/device 与 obsidian；横向依赖仍只有三条，都指向更底层：types 引用 guard、commands、markdownStyle 与 edition（各取一份默认值或类型），codeblock 引用 vaultIndex、table 与 types。markdownStyle 与 constants 一样零 import，因此它被 types 依赖同样不会成环。方向始终由「懂得多的」指向「懂得少的」，故 core 内部无环——commands 之所以能被 types 依赖而不成环，正是因为它自己只够到 constants。
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

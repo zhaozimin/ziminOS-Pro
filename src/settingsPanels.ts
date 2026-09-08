@@ -3,8 +3,8 @@
  *          BOOK_TAG_PREFIX_FIELD/FOLDER_COUNT_LABELS/RECENT_SORT_LABELS/FILE_PATH_SCOPE_LABELS 与
  *          TabId/BooleanSettingKey/TextField/SettingActions 类型；
  *          依赖 core/commands 的 GROUP_COLORS 与 CommandSpec 类型、
- *          core/constants 的 BOOK_TAG_COUNTS/灵感与文件夹计数/最近文件/状态栏路径的候选与默认值、
- *          Eagle 伴侣的默认端口与合法范围，
+ *          core/constants 的 BOOK_TAG_COUNTS/灵感与文件夹计数/最近文件候选，
+ *          core/device 的状态栏路径口径与 Eagle 本机参数，
  *          core/markdownStyle 的 FORMAT_RULES、core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 PanelRenderer/PanelHost 两个契约与 SettingsPanels 一个类，
  *           后者交出 render 一张 Record<TabId, PanelRenderer> 表
@@ -26,10 +26,6 @@ import { GROUP_COLORS } from './core/commands';
 import type { CommandSpec } from './core/commands';
 import {
     BOOK_TAG_COUNTS,
-    EAGLE_DEFAULTS,
-    EAGLE_PORT_RANGE,
-    FILE_PATH_DEFAULTS,
-    FILE_PATH_SCOPES,
     FOLDER_COUNT_DEFAULTS,
     FOLDER_COUNT_TARGETS,
     INSPIRATION_DEFAULTS,
@@ -39,11 +35,12 @@ import {
     RECENT_FILES_SORTS,
 } from './core/constants';
 import type {
-    FilePathScope,
     FolderCountTarget,
     InspirationInsertPosition,
     RecentFilesSort,
 } from './core/constants';
+import { EAGLE_DEFAULTS, EAGLE_PORT_RANGE, FILE_PATH_DEFAULTS, FILE_PATH_SCOPES } from './core/device';
+import type { FilePathScope } from './core/device';
 import { FORMAT_RULES } from './core/markdownStyle';
 import { DEFAULT_SETTINGS } from './core/types';
 import type { ZiminosContext } from './core/types';

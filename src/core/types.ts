@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian 的 App/Plugin 类型，依赖 ./constants 的 PARA、时间、灵感、读书、
- *          文件夹计数、最近文件与状态栏路径口径的默认值与合法集合，
- *          以及 Eagle 回环伴侣的默认端口/端口范围，
+ *          文件夹计数与最近文件的默认值/合法集合，
+ *          依赖 ./device 的状态栏路径口径与 Eagle 本机参数，
  *          依赖 ./commands 的 DEFAULT_RIBBON_COMMANDS/normalizeRibbonCommands 与 CommandRegistry 类型，
  *          依赖 ./markdownStyle 的 DEFAULT_FORMAT_RULES/normalizeFormatRules，依赖 ./guard 的 SelfWriteGuard 类型，
  *          依赖 ./edition 的 EditionInfo 类型
@@ -24,10 +24,6 @@ import {
     CLIENT_FOLDER,
     CONTACT_FOLDER,
     DEFAULT_DATETIME_FORMAT,
-    EAGLE_DEFAULTS,
-    EAGLE_PORT_RANGE,
-    FILE_PATH_DEFAULTS,
-    FILE_PATH_SCOPES,
     FOLDER_COUNT_DEFAULTS,
     FOLDERS,
     INSPIRATION_DEFAULTS,
@@ -39,11 +35,12 @@ import {
     FOLDER_COUNT_TARGETS,
 } from './constants';
 import type {
-    FilePathScope,
     FolderCountTarget,
     InspirationInsertPosition,
     RecentFilesSort,
 } from './constants';
+import { EAGLE_DEFAULTS, EAGLE_PORT_RANGE, FILE_PATH_DEFAULTS, FILE_PATH_SCOPES } from './device';
+import type { FilePathScope } from './device';
 import type { EditionInfo } from './edition';
 import type { SelfWriteGuard } from './guard';
 

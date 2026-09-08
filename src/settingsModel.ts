@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 ./core/commands 的 COMMAND_ICONS（标签页图标与左侧边栏同源），
- *          依赖 ./core/constants 的 FolderCountTarget、RecentFilesSort 与 FilePathScope 类型
+ *          依赖 ./core/constants 的 FolderCountTarget/RecentFilesSort 与 ./core/device 的 FilePathScope
  *          （计数口径、最近文件排法与复制口径的显示名各按它们建一张表）
  * [OUTPUT]: 对外提供设置页的注入契约 SettingActions（含 Eagle 配对/检测/断开/状态），
  *           与它的三张数据表——
@@ -18,7 +18,8 @@
  */
 
 import { COMMAND_ICONS } from './core/commands';
-import type { FilePathScope, FolderCountTarget, RecentFilesSort } from './core/constants';
+import type { FolderCountTarget, RecentFilesSort } from './core/constants';
+import type { FilePathScope } from './core/device';
 
 // ============================================================
 // 八张标签页：一页一个系统模块

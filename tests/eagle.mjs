@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown 形态、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown 形态、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -119,6 +119,11 @@ test('Eagle 安装包可解压，根层交付物齐全', () => {
     const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
     assert.equal(manifest.version, pkg.version);
+
+    const packager = readFileSync(path.join(ROOT, 'package-eagle.sh'), 'utf8');
+
+    assert.ok(packager.includes('touch -t 198001010000.00'));
+    assert.ok(packager.includes('chmod 0644'));
 });
 
 test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不诱导读取凭据', () => {
