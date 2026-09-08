@@ -11,6 +11,8 @@
 
 配对成功后，图片和附件只存入当前 Eagle 资源库；Markdown 写入 `ziminos-eagle://v1/primary/{itemId}`。同一资源库内移动附件或文件夹不会改变 `itemId`，因此不需要更新笔记。若切换了 Eagle 资源库或移动了整个资源库目录，请重新配对。
 
+点击链接时，伴侣会在定位附件后把最小化的 Eagle 主窗口恢复到前台。若 Eagle 已完全退出，Obsidian 端会用系统原生 `eagle://item/{itemId}` 深链启动 Eagle 并直达对应项目；这个启动链接不会写进笔记。
+
 ## 安全边界
 
 - HTTP 服务只绑定 `127.0.0.1`，默认端口 `23119`。
@@ -20,4 +22,4 @@
 
 若断开时 Eagle 伴侣不在线，Obsidian 会先清掉本机令牌，并提醒你稍后在伴侣窗口手动移除旧授权。
 
-运行要求：Eagle 4.0 Build 12 或更高；macOS 与 Windows。
+运行要求：Eagle 4.0 Build 18 或更高；macOS 与 Windows。

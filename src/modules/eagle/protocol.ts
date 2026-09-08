@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 core/device 的 Eagle 端口默认值/范围，不依赖 Obsidian 或 Eagle 运行时
- * [OUTPUT]: 对外提供 EagleReference 契约、稳定 URI 的构建/严格解析/文本命中、Markdown 附件链接生成与图片判定
+ * [OUTPUT]: 对外提供 EagleReference 契约、稳定 URI 的构建/严格解析/文本命中、Eagle 原生项目深链、Markdown 附件链接生成与图片判定
  * [POS]: Eagle 模块的协议事实层。笔记只记 libraryKey + itemId，端口、路径与文件夹一概不进 Markdown；
  *        因此在 Eagle 库内移动附件时链接天然不变，这个文件就是两个运行时共同遵守的身份语法
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -11,6 +11,7 @@ import { EAGLE_DEFAULTS, EAGLE_PORT_RANGE } from '../../core/device';
 export const EAGLE_LIBRARY_KEY = 'primary';
 export const EAGLE_DEFAULT_PORT = EAGLE_DEFAULTS.port;
 export const EAGLE_SCHEME_PREFIX = 'ziminos-eagle://v1/';
+export const EAGLE_NATIVE_ITEM_PREFIX = 'eagle://item/';
 
 export interface EagleReference {
     readonly libraryKey: string;
@@ -39,6 +40,16 @@ export function buildEagleUri(reference: EagleReference): string {
     assertIdentity(reference.itemId, 'Eagle 项目 ID');
 
     return `${EAGLE_SCHEME_PREFIX}${reference.libraryKey}/${reference.itemId}`;
+}
+
+/**
+ * 仅作为伴侣不在线时的启动出口：交给操作系统唤起 Eagle 并定位这个 itemId。
+ * 笔记仍只保存 ziminOS 身份 URI，不把这个设备级启动链接写回 Markdown。
+ */
+export function buildEagleNativeItemUri(reference: EagleReference): string {
+    assertIdentity(reference.itemId, 'Eagle 项目 ID');
+
+    return `${EAGLE_NATIVE_ITEM_PREFIX}${reference.itemId}`;
 }
 
 /** 只认当前 v1 语法；未来升协议时不会静默把新格式当旧格式读 */

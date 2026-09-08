@@ -1,6 +1,6 @@
 /**
- * [INPUT]: 依赖 obsidian/requestUrl 访问仅回环监听的 Eagle 伴侣，依赖 core/types 的 ZiminosContext 与本模块 protocol
- * [OUTPUT]: 对外提供 EagleBridgeClient，封装配对、状态、导入、内容读取、Eagle 打开与本机令牌生命周期
+ * [INPUT]: 依赖 obsidian/requestUrl 访问仅回环监听的 Eagle 伴侣，桌面端伴侣不在线时按需使用 Electron shell 打开 Eagle 原生深链，依赖 core/types 与本模块 platform/protocol
+ * [OUTPUT]: 对外提供 EagleBridgeClient，封装配对、状态、导入、内容读取、Eagle 精确打开/离线唤起与本机令牌生命周期
  * [POS]: Obsidian 半边唯一的 HTTP 出境口。认证令牌只进 Obsidian SecretStorage，不进 data.json、笔记或日志；
  *        上层只看业务结果，不自行拼端口、请求头或错误语义
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -9,7 +9,8 @@
 import { requestUrl } from 'obsidian';
 import type { RequestUrlParam, RequestUrlResponse } from 'obsidian';
 import type { ZiminosContext } from '../../core/types';
-import { EAGLE_LIBRARY_KEY, normalizeEaglePort } from './protocol';
+import { isSupportedEagleDesktop } from './platform';
+import { buildEagleNativeItemUri, EAGLE_LIBRARY_KEY, normalizeEaglePort } from './protocol';
 import type { EagleReference } from './protocol';
 
 export interface EagleBridgeStatus {
@@ -105,12 +106,19 @@ export class EagleBridgeClient {
     }
 
     async open(reference: EagleReference): Promise<void> {
-        await this.requestJson({
-            url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/open`,
-            method: 'POST',
-            contentType: 'application/json',
-            body: JSON.stringify({ libraryKey: reference.libraryKey }),
-        });
+        try {
+            await this.requestJson({
+                url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/open`,
+                method: 'POST',
+                contentType: 'application/json',
+                body: JSON.stringify({ libraryKey: reference.libraryKey }),
+            });
+        } catch (error) {
+            // 401/409/500 是伴侣给出的真实业务结果，不能用深链绕过配对与资源库校验。
+            if (!(error instanceof EagleBridgeUnavailableError)) throw error;
+
+            await this.openNative(reference, error);
+        }
     }
 
     /** 返回 Eagle 端是否也已撤销；离线时仍清本机凭据，但不能伪称远端授权已删除。 */
@@ -161,7 +169,23 @@ export class EagleBridgeClient {
         try {
             return await requestUrl({ ...param, headers, throw: false });
         } catch {
-            throw new Error(`连不上 Eagle 伴侣（本机端口 ${normalizeEaglePort(this.ctx.settings.eaglePort)}）`);
+            throw new EagleBridgeUnavailableError(`连不上 Eagle 伴侣（本机端口 ${normalizeEaglePort(this.ctx.settings.eaglePort)}）`);
+        }
+    }
+
+    private async openNative(reference: EagleReference, unavailable: EagleBridgeUnavailableError): Promise<void> {
+        if (!isSupportedEagleDesktop()) throw unavailable;
+
+        try {
+            const shell = (require('electron') as {
+                shell?: { openExternal?: (url: string) => Promise<void> };
+            }).shell;
+
+            if (typeof shell?.openExternal !== 'function') throw new Error('当前运行时无法唤起外部应用');
+
+            await shell.openExternal(buildEagleNativeItemUri(reference));
+        } catch (error) {
+            throw new Error(`${unavailable.message}；自动唤起 Eagle 失败：${errorMessage(error)}`);
         }
     }
 
@@ -179,6 +203,13 @@ export class EagleBridgeClient {
 
     private writeToken(token: string): void {
         this.ctx.app.secretStorage.setSecret(EAGLE_TOKEN_SECRET_ID, token);
+    }
+}
+
+class EagleBridgeUnavailableError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'EagleBridgeUnavailableError';
     }
 }
 
@@ -209,4 +240,8 @@ function stringField(record: JsonRecord, key: string): string {
 
 function isRecord(value: unknown): value is JsonRecord {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }

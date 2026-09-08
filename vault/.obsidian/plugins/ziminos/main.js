@@ -4864,12 +4864,19 @@ function escapeLabel(selection) {
 var import_obsidian23 = require("obsidian");
 
 // src/modules/eagle/client.ts
+var import_obsidian19 = require("obsidian");
+
+// src/modules/eagle/platform.ts
 var import_obsidian18 = require("obsidian");
+function isSupportedEagleDesktop() {
+  return import_obsidian18.Platform.isDesktopApp && (import_obsidian18.Platform.isMacOS || import_obsidian18.Platform.isWin);
+}
 
 // src/modules/eagle/protocol.ts
 var EAGLE_LIBRARY_KEY = "primary";
 var EAGLE_DEFAULT_PORT = EAGLE_DEFAULTS.port;
 var EAGLE_SCHEME_PREFIX = "ziminos-eagle://v1/";
+var EAGLE_NATIVE_ITEM_PREFIX = "eagle://item/";
 var IDENTITY_PART = /^[A-Za-z0-9_-]{1,128}$/;
 var URI_HEAD_CHAR = /[A-Za-z0-9_+./:-]/;
 var URI_TAIL_CHAR = /[A-Za-z0-9_\-/?#]/;
@@ -4896,6 +4903,10 @@ function buildEagleUri(reference) {
   assertIdentity(reference.libraryKey, "\u8D44\u6E90\u5E93\u6807\u8BC6");
   assertIdentity(reference.itemId, "Eagle \u9879\u76EE ID");
   return `${EAGLE_SCHEME_PREFIX}${reference.libraryKey}/${reference.itemId}`;
+}
+function buildEagleNativeItemUri(reference) {
+  assertIdentity(reference.itemId, "Eagle \u9879\u76EE ID");
+  return `${EAGLE_NATIVE_ITEM_PREFIX}${reference.itemId}`;
 }
 function parseEagleUri(value) {
   if (!(value == null ? void 0 : value.startsWith(EAGLE_SCHEME_PREFIX))) return null;
@@ -5034,12 +5045,17 @@ var EagleBridgeClient = class {
     };
   }
   async open(reference) {
-    await this.requestJson({
-      url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/open`,
-      method: "POST",
-      contentType: "application/json",
-      body: JSON.stringify({ libraryKey: reference.libraryKey })
-    });
+    try {
+      await this.requestJson({
+        url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/open`,
+        method: "POST",
+        contentType: "application/json",
+        body: JSON.stringify({ libraryKey: reference.libraryKey })
+      });
+    } catch (error) {
+      if (!(error instanceof EagleBridgeUnavailableError)) throw error;
+      await this.openNative(reference, error);
+    }
   }
   /** 返回 Eagle 端是否也已撤销；离线时仍清本机凭据，但不能伪称远端授权已删除。 */
   async disconnect() {
@@ -5076,9 +5092,19 @@ var EagleBridgeClient = class {
       headers["X-Ziminos-Token"] = token;
     }
     try {
-      return await (0, import_obsidian18.requestUrl)({ ...param, headers, throw: false });
+      return await (0, import_obsidian19.requestUrl)({ ...param, headers, throw: false });
     } catch (e) {
-      throw new Error(`\u8FDE\u4E0D\u4E0A Eagle \u4F34\u4FA3\uFF08\u672C\u673A\u7AEF\u53E3 ${normalizeEaglePort(this.ctx.settings.eaglePort)}\uFF09`);
+      throw new EagleBridgeUnavailableError(`\u8FDE\u4E0D\u4E0A Eagle \u4F34\u4FA3\uFF08\u672C\u673A\u7AEF\u53E3 ${normalizeEaglePort(this.ctx.settings.eaglePort)}\uFF09`);
+    }
+  }
+  async openNative(reference, unavailable) {
+    if (!isSupportedEagleDesktop()) throw unavailable;
+    try {
+      const shell = require("electron").shell;
+      if (typeof (shell == null ? void 0 : shell.openExternal) !== "function") throw new Error("\u5F53\u524D\u8FD0\u884C\u65F6\u65E0\u6CD5\u5524\u8D77\u5916\u90E8\u5E94\u7528");
+      await shell.openExternal(buildEagleNativeItemUri(reference));
+    } catch (error) {
+      throw new Error(`${unavailable.message}\uFF1B\u81EA\u52A8\u5524\u8D77 Eagle \u5931\u8D25\uFF1A${errorMessage(error)}`);
     }
   }
   baseUrl() {
@@ -5093,6 +5119,12 @@ var EagleBridgeClient = class {
   }
   writeToken(token) {
     this.ctx.app.secretStorage.setSecret(EAGLE_TOKEN_SECRET_ID, token);
+  }
+};
+var EagleBridgeUnavailableError = class extends Error {
+  constructor(message2) {
+    super(message2);
+    this.name = "EagleBridgeUnavailableError";
   }
 };
 function statusFrom(data) {
@@ -5118,11 +5150,8 @@ function stringField(record, key) {
 function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
-// src/modules/eagle/platform.ts
-var import_obsidian19 = require("obsidian");
-function isSupportedEagleDesktop() {
-  return import_obsidian19.Platform.isDesktopApp && (import_obsidian19.Platform.isMacOS || import_obsidian19.Platform.isWin);
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 // src/modules/eagle/render.ts
@@ -5142,7 +5171,7 @@ function createEagleEditorExtension(client) {
       event.preventDefault();
       event.stopPropagation();
       void client.open(reference).catch((error) => {
-        new import_obsidian20.Notice(`\u65E0\u6CD5\u5728 Eagle \u4E2D\u6253\u5F00\uFF1A${errorMessage(error)}`, 8e3);
+        new import_obsidian20.Notice(`\u65E0\u6CD5\u5728 Eagle \u4E2D\u6253\u5F00\uFF1A${errorMessage2(error)}`, 8e3);
       });
       return true;
     }
@@ -5173,7 +5202,7 @@ function controlText(element) {
   }
   return (_e = (_d = (_c = (_b = (_a = element.getAttribute("data-ziminos-eagle-uri")) != null ? _a : element.getAttribute("data-href")) != null ? _b : element.getAttribute("href")) != null ? _c : element.tagName === "IMG" ? element.getAttribute("src") : null) != null ? _d : element.textContent) != null ? _e : "";
 }
-function errorMessage(error) {
+function errorMessage2(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -5225,7 +5254,7 @@ function registerEagleRenderer(ctx, client) {
       if (image.dataset.ziminosEagleLoad !== generation) return;
       image.dataset.ziminosEagleState = "error";
       delete image.dataset.ziminosEagleLoad;
-      image.title = `Eagle \u9644\u4EF6\u6682\u65F6\u4E0D\u53EF\u7528\uFF1A${errorMessage2(error)}`;
+      image.title = `Eagle \u9644\u4EF6\u6682\u65F6\u4E0D\u53EF\u7528\uFF1A${errorMessage3(error)}`;
     }
   };
   const scan = (root) => {
@@ -5275,7 +5304,7 @@ function registerEagleRenderer(ctx, client) {
     event.preventDefault();
     event.stopPropagation();
     void client.open(reference).catch((error) => {
-      new import_obsidian21.Notice(`\u65E0\u6CD5\u5728 Eagle \u4E2D\u6253\u5F00\uFF1A${errorMessage2(error)}`, 8e3);
+      new import_obsidian21.Notice(`\u65E0\u6CD5\u5728 Eagle \u4E2D\u6253\u5F00\uFF1A${errorMessage3(error)}`, 8e3);
     });
   };
   const menuAt = (event) => {
@@ -5285,7 +5314,7 @@ function registerEagleRenderer(ctx, client) {
     event.stopPropagation();
     const menu = new import_obsidian21.Menu();
     menu.addItem((item) => item.setTitle("\u5728 Eagle \u4E2D\u6253\u5F00").setIcon("external-link").onClick(() => void client.open(reference).catch((error) => {
-      new import_obsidian21.Notice(`\u65E0\u6CD5\u5728 Eagle \u4E2D\u6253\u5F00\uFF1A${errorMessage2(error)}`, 8e3);
+      new import_obsidian21.Notice(`\u65E0\u6CD5\u5728 Eagle \u4E2D\u6253\u5F00\uFF1A${errorMessage3(error)}`, 8e3);
     })));
     menu.addItem((item) => item.setTitle("\u590D\u5236 Eagle \u8EAB\u4EFD\u94FE\u63A5").setIcon("copy").onClick(() => void navigator.clipboard.writeText(buildEagleUri(reference)).catch(() => {
       new import_obsidian21.Notice("\u590D\u5236 Eagle \u8EAB\u4EFD\u94FE\u63A5\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u7CFB\u7EDF\u526A\u8D34\u677F\u6743\u9650\u3002");
@@ -5327,7 +5356,7 @@ function registerEagleRenderer(ctx, client) {
     }
   };
 }
-function errorMessage2(error) {
+function errorMessage3(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -5339,14 +5368,14 @@ function registerEagleTransfers(ctx, client) {
   ctx.plugin.registerEvent(
     ctx.app.workspace.on("editor-paste", (event, editor, info) => {
       void takeTransfer(ctx, client, event, editor, info).catch((error) => {
-        new import_obsidian22.Notice(`Eagle \u9644\u4EF6\u5904\u7406\u5931\u8D25\uFF1A${errorMessage3(error)}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
+        new import_obsidian22.Notice(`Eagle \u9644\u4EF6\u5904\u7406\u5931\u8D25\uFF1A${errorMessage4(error)}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
       });
     })
   );
   ctx.plugin.registerEvent(
     ctx.app.workspace.on("editor-drop", (event, editor, info) => {
       void takeTransfer(ctx, client, event, editor, info).catch((error) => {
-        new import_obsidian22.Notice(`Eagle \u9644\u4EF6\u5904\u7406\u5931\u8D25\uFF1A${errorMessage3(error)}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
+        new import_obsidian22.Notice(`Eagle \u9644\u4EF6\u5904\u7406\u5931\u8D25\uFF1A${errorMessage4(error)}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
       });
     })
   );
@@ -5374,7 +5403,7 @@ async function takeTransfer(ctx, client, event, editor, info) {
         file.type
       ));
     } catch (error) {
-      failures.push(`${name}\uFF1A${errorMessage3(error)}`);
+      failures.push(`${name}\uFF1A${errorMessage4(error)}`);
     } finally {
       await (materialized == null ? void 0 : materialized.cleanup().catch(() => void 0));
     }
@@ -5487,7 +5516,7 @@ async function copyToClipboard(value) {
     return false;
   }
 }
-function errorMessage3(error) {
+function errorMessage4(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -5523,7 +5552,7 @@ function registerEagleBridge(ctx) {
         new import_obsidian23.Notice(`\u5DF2\u8FDE\u63A5 Eagle \u8D44\u6E90\u5E93\u300C${status.libraryName}\u300D`);
         return true;
       } catch (error) {
-        new import_obsidian23.Notice(`Eagle \u914D\u5BF9\u5931\u8D25\uFF1A${errorMessage4(error)}`, 8e3);
+        new import_obsidian23.Notice(`Eagle \u914D\u5BF9\u5931\u8D25\uFF1A${errorMessage5(error)}`, 8e3);
         return false;
       }
     },
@@ -5535,7 +5564,7 @@ function registerEagleBridge(ctx) {
         new import_obsidian23.Notice(`Eagle \u8FDE\u63A5\u6B63\u5E38 \xB7 ${status.libraryName} \xB7 \u4F34\u4FA3 v${status.version}`);
         return true;
       } catch (error) {
-        new import_obsidian23.Notice(`Eagle \u8FDE\u63A5\u4E0D\u53EF\u7528\uFF1A${errorMessage4(error)}`, 8e3);
+        new import_obsidian23.Notice(`Eagle \u8FDE\u63A5\u4E0D\u53EF\u7528\uFF1A${errorMessage5(error)}`, 8e3);
         return false;
       }
     },
@@ -5552,7 +5581,7 @@ function registerEagleBridge(ctx) {
         const status = await client.status();
         return status.libraryMatched ? `\u5DF2\u8FDE\u63A5 \xB7 ${status.libraryName} \xB7 \u4F34\u4FA3 v${status.version}` : "\u9700\u91CD\u65B0\u914D\u5BF9 \xB7 Eagle \u5F53\u524D\u6253\u5F00\u7684\u8D44\u6E90\u5E93\u5DF2\u53D8\u66F4";
       } catch (error) {
-        return `\u4E0D\u53EF\u7528 \xB7 ${errorMessage4(error)}`;
+        return `\u4E0D\u53EF\u7528 \xB7 ${errorMessage5(error)}`;
       }
     },
     revealEaglePackage: async () => {
@@ -5568,12 +5597,12 @@ function registerEagleBridge(ctx) {
         if (!full || typeof (shell == null ? void 0 : shell.showItemInFolder) !== "function") throw new Error("\u5F53\u524D\u8FD0\u884C\u65F6\u65E0\u6CD5\u6253\u5F00\u6587\u4EF6\u7BA1\u7406\u5668");
         shell.showItemInFolder(full);
       } catch (error) {
-        new import_obsidian23.Notice(`\u65E0\u6CD5\u663E\u793A Eagle \u4F34\u4FA3\u5B89\u88C5\u5305\uFF1A${errorMessage4(error)}`, 8e3);
+        new import_obsidian23.Notice(`\u65E0\u6CD5\u663E\u793A Eagle \u4F34\u4FA3\u5B89\u88C5\u5305\uFF1A${errorMessage5(error)}`, 8e3);
       }
     }
   };
 }
-function errorMessage4(error) {
+function errorMessage5(error) {
   return error instanceof Error ? error.message : String(error);
 }
 

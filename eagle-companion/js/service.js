@@ -1,6 +1,6 @@
 /**
- * [INPUT]: 依赖 Eagle 官方 plugin API 的 library/item/shell 与生命周期事件，依赖 Node 16 内建 http/fs/path/crypto
- * [OUTPUT]: 在 127.0.0.1 提供配对、状态、导入、内容读取与项目打开 API，并提供 Eagle → Obsidian 反向搜索界面
+ * [INPUT]: 依赖 Eagle 官方 plugin API 的 app/library/item/shell 与生命周期事件，依赖 Node 16 内建 http/fs/path/crypto
+ * [OUTPUT]: 在 127.0.0.1 提供配对、状态、导入、内容读取与项目打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
  * [POS]: 两端架构的 Eagle 执行边界。它只调官方 item API，不修改 metadata.json；服务只绑定回环，
  *        变更/读取端点全部验令牌与已配对资源库，令牌不写入响应以外的 DOM、URL 或日志
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -272,6 +272,8 @@ class BridgeService {
         const result = await eagle.item.open(itemId);
         if (result === false) throw new Error('Eagle 无法打开这个项目');
 
+        await showMainWindow(itemId);
+
         this.json(response, 200, { ok: true });
     }
 
@@ -521,6 +523,23 @@ function libraryName() { return String(eagle.library.name || '未命名资源库
 function stringField(value, key) { return typeof value[key] === 'string' ? value[key].trim() : ''; }
 function isRecord(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function safeMessage(error) { return error instanceof Error ? error.message : String(error); }
+
+async function showMainWindow(itemId) {
+    if (typeof eagle.app?.show === 'function') {
+        try {
+            const shown = await eagle.app.show();
+
+            if (shown !== false) return;
+        } catch {
+            // 新 API 存在但宿主拒绝唤起时，仍可用操作系统已注册的原生深链激活主窗口。
+        }
+    }
+
+    // Eagle 4.0 Build 12–17 还没有 app.show；原生项目深链同样会激活已运行的主窗口。
+    if (typeof eagle.shell?.openExternal !== 'function') throw new Error('当前 Eagle 版本无法恢复主窗口，请升级到 4.0 Build 18 或更高');
+
+    await eagle.shell.openExternal(`eagle://item/${encodeURIComponent(itemId)}`);
+}
 function empty(text) {
     const element = document.createElement('p');
     element.className = 'empty';

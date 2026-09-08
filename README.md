@@ -274,9 +274,11 @@ ziminOS 不是一个插件，是三样东西咬合在一起。
 
 学员可直接打开这份完整步骤说明：[《ziminOS × Eagle 附件桥接安装与使用指南》](docs/Eagle附件桥接安装与使用指南.html)。
 
-升级到 v0.22.1 后，打开「设置 → ziminOS → 编辑 → Eagle 附件」，点「显示安装包」，在 Eagle 安装 `ziminOS-Eagle-Bridge.eagleplugin`，再用伴侣窗口里的 6 位码配对。关闭其他会接管附件粘贴的图床/附件插件后，图片、PDF 等会直接进入当前 Eagle 资源库，Obsidian 只写 `ziminos-eagle://…/{itemId}`。
+升级到 v0.22.2 后，打开「设置 → ziminOS → 编辑 → Eagle 附件」，点「显示安装包」，在 Eagle 安装 `ziminOS-Eagle-Bridge.eagleplugin`，再用伴侣窗口里的 6 位码配对。关闭其他会接管附件粘贴的图床/附件插件后，图片、PDF 等会直接进入当前 Eagle 资源库，Obsidian 只写 `ziminos-eagle://…/{itemId}`。
 
 阅读模式里普通单击即可在 Eagle 打开。实时预览、源码模式和 YAML 属性区需按 Obsidian 的编辑器规则：macOS 用 `⌘ + 单击`，Windows 用 `Ctrl + 单击`；普通单击留给放置光标和修改属性值。
+
+Eagle 已运行但窗口最小化时，点链接会把主窗口恢复到前台并定位附件；Eagle 完全退出时，会由系统原生深链自动启动 Eagle 并直达同一 `itemId`。建议使用 Eagle 4.0 Build 18 或更高。
 
 在**同一个 Eagle 资源库**里移动附件或更换文件夹，`itemId` 不变，Obsidian 链接不用更新；切换资源库或移动整个资源库目录时重新配对即可。导入失败不会偷偷退回 Obsidian 本地附件，避免你以为已经进 Eagle、实际库里又留了一份。
 

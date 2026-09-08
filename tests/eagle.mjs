@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、Eagle 原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -35,6 +35,7 @@ async function loadTypeScript(relativePath) {
 
 const {
     buildEagleMarkdown,
+    buildEagleNativeItemUri,
     buildEagleUri,
     eagleReferenceAtText,
     normalizeEaglePort,
@@ -50,6 +51,13 @@ test('Eagle 身份链接只由逻辑库与 itemId 构成，可无损往返', () 
     assert.deepEqual(parseEagleUri(uri), reference);
     assert.equal(uri.includes('23119'), false);
     assert.equal(uri.includes('Users'), false);
+});
+
+test('Eagle 原生深链只用于唤起并精确定位 itemId', () => {
+    const reference = { libraryKey: 'primary', itemId: 'MTS3IYYC6MW13' };
+
+    assert.equal(buildEagleNativeItemUri(reference), 'eagle://item/MTS3IYYC6MW13');
+    assert.throws(() => buildEagleNativeItemUri({ ...reference, itemId: '../bad' }));
 });
 
 test('Eagle 链接拒绝未知版本、路径与查询串', () => {
@@ -164,6 +172,8 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
     assert.ok(guide.includes(pkg.version));
     assert.ok(guide.includes('⌘ + 单击'));
     assert.ok(guide.includes('Ctrl + 单击'));
+    assert.ok(guide.includes('Eagle 4.0 Build 18'));
+    assert.ok(guide.includes('系统应自动启动 Eagle'));
     assert.ok(guide.includes('同一 Eagle 库里换文件夹'));
     assert.ok(guide.includes('不要手动编辑或分享配对令牌'));
     assert.equal(/<script\b/i.test(guide), false);
@@ -171,6 +181,7 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
 
 test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官方 API', () => {
     const source = readFileSync(path.join(ROOT, 'eagle-companion/js/service.js'), 'utf8');
+    const client = readFileSync(path.join(ROOT, 'src/modules/eagle/client.ts'), 'utf8');
 
     assert.ok(source.includes("server.listen(port, '127.0.0.1')"));
     assert.ok(source.includes("request.headers['x-ziminos-token']"));
@@ -180,6 +191,9 @@ test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官�
     assert.ok(source.includes('eagle.item.addFromPath'));
     assert.ok(source.includes('eagle.item.getById'));
     assert.ok(source.includes('eagle.item.open'));
+    assert.ok(source.includes('eagle.app.show'));
+    assert.ok(client.includes("require('electron')"));
+    assert.ok(client.includes('shell.openExternal(buildEagleNativeItemUri(reference))'));
     assert.equal(source.includes('Access-Control-Allow-Origin'), false);
     assert.equal(/writeFile[^\n]*metadata\.json/.test(source), false);
 });
@@ -246,10 +260,18 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
     const attachment = path.join(folder, 'sample.txt');
     const opened = [];
     const imported = [];
+    const shown = [];
+    const nativeLinks = [];
 
     writeFileSync(attachment, 'hello-eagle');
     context.document = { getElementById: () => ({ textContent: '' }) };
     context.eagle = {
+        app: {
+            show: async () => {
+                shown.push(true);
+                return true;
+            },
+        },
         library: { path: folder, name: '测试资源库' },
         item: {
             addFromPath: async (filePath, options) => {
@@ -332,6 +354,26 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
 
         assert.equal(openedResponse.status, 200);
         assert.deepEqual(opened, ['ITEM123']);
+        assert.deepEqual(shown, [true]);
+
+        context.eagle.app.show = async () => false;
+        context.eagle.shell = { openExternal: async (url) => nativeLinks.push(url) };
+
+        const fallbackOpen = await callBridge(port, 'POST', '/v1/items/ITEM123/open', {
+            libraryKey: 'primary',
+        }, headers);
+
+        assert.equal(fallbackOpen.status, 200);
+        assert.deepEqual(nativeLinks, ['eagle://item/ITEM123']);
+
+        context.eagle.app.show = async () => { throw new Error('show failed'); };
+
+        const rejectedShowFallback = await callBridge(port, 'POST', '/v1/items/ITEM123/open', {
+            libraryKey: 'primary',
+        }, headers);
+
+        assert.equal(rejectedShowFallback.status, 200);
+        assert.deepEqual(nativeLinks, ['eagle://item/ITEM123', 'eagle://item/ITEM123']);
 
         const disconnected = await callBridge(port, 'POST', '/v1/disconnect', {}, headers);
 
