@@ -9,7 +9,8 @@
  *        绝不混进 data.json。混进去的后果很具体：升级契约承诺 data.json 的 SHA-256
  *        前后不变，而一个每次翻笔记都在改的字段会让那条承诺变成噪音。
  *        它不装定时器也不轮询：位置只在「离开这一篇」时读一次，
- *        因为那一刻的光标正是下次要回到的地方，中间的每一次移动都不必知道
+ *        file-open 管同一分栏换文件，active-leaf-change 管已打开分栏间换焦点；
+ *        两条都走同一个切换入口，因为那一刻的光标正是下次要回到的地方
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -85,13 +86,16 @@ class CursorMemory {
             void this.load().then(() => this.adopt(true));
         });
 
-        plugin.registerEvent(
-            app.workspace.on('file-open', () => {
-                // 先记下刚离开那一篇（它的视图还活着），再认领新的这一篇并恢复它
-                this.remember();
-                this.adopt(true);
-            }),
-        );
+        const switchTrackedView = (): void => {
+            // 先记下刚离开那一篇（它的视图还活着），再认领新的这一篇并恢复它
+            this.remember();
+            this.adopt(true);
+        };
+
+        // 同一分栏换文件走 file-open；点另一个已打开的分栏只走 active-leaf-change。
+        // 漏后者会让 A 的位置没被记下，后台写入一刷新就只能回到文首。
+        plugin.registerEvent(app.workspace.on('file-open', switchTrackedView));
+        plugin.registerEvent(app.workspace.on('active-leaf-change', switchTrackedView));
 
         // 用户改名或删掉一篇笔记时，跟着搬走或丢掉那条记忆——
         // 留着的话它既永远命不中，又白占着上限里的一格

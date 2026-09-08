@@ -3,7 +3,8 @@
  * [OUTPUT]: 提供 npm test 的审计回归集，覆盖版本镜像、ISBN 校验、日期严格性、
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
  *           项目回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
- *           片段出境口的桌面端闸门、本机绝对路径的唯一算处与状态栏路径的看拿分离，以及
+ *           片段出境口的桌面端闸门、本机绝对路径的唯一算处、状态栏路径的看拿分离、
+ *           后台写入的分栏滚动保护与光标焦点切换，以及
  *           智能体路由完整性，并在专业版源码存在时额外覆盖出库单往返、《赛博永生》路径同构
  *           与第二版安装入口
  * [POS]: tests 的唯一可执行入口；只验证公开行为与关键平台边界，不复制业务实现
@@ -20,7 +21,9 @@ import { build } from 'esbuild';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function loadTypeScript(relativePath, options = {}) {
-    const plugins = options.stubObsidian
+    const obsidianStub = options.obsidianStub
+        ?? (options.stubObsidian ? "import moment from 'moment'; export { moment };" : null);
+    const plugins = obsidianStub
         ? [
               {
                   name: 'obsidian-test-stub',
@@ -30,7 +33,7 @@ async function loadTypeScript(relativePath, options = {}) {
                           namespace: 'test-stub',
                       }));
                       builder.onLoad({ filter: /.*/, namespace: 'test-stub' }, () => ({
-                          contents: "import moment from 'moment'; export { moment };",
+                          contents: obsidianStub,
                           loader: 'js',
                           resolveDir: ROOT,
                       }));
@@ -65,6 +68,18 @@ const { buildInitialInspirationContent, insertInspiration } = await loadTypeScri
     'src/modules/inspiration/templates.ts',
 );
 const { setSnippetEnabled } = await loadTypeScript('src/modules/appearance/snippets.ts');
+const { withPreservedMarkdownScroll } = await loadTypeScript(
+    'src/core/markdownViewState.ts',
+    {
+        obsidianStub: `
+            export class MarkdownView {
+                static [Symbol.hasInstance](value) {
+                    return value?.isMarkdownView === true;
+                }
+            }
+        `,
+    },
+);
 
 test('package 版本是唯一事实源，manifest 镜像已同步', () => {
     const packageJson = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
@@ -213,6 +228,81 @@ test('全部规则关闭时逐字节原样返回', () => {
     const input = '\ufeff中文English\r\n\r\n';
 
     assert.equal(formatMarkdown(input, []), input);
+});
+
+test('后台写笔记后保住所有已显示分栏的滚动位置', async () => {
+    const frames = [];
+    const originalWindow = globalThis.window;
+    const file = { path: 'A.md' };
+    const makeView = (path, scroll, mode = 'source') => ({
+        isMarkdownView: true,
+        file: { path },
+        getMode: () => mode,
+        currentMode: {
+            getScroll: () => scroll.value,
+            applyScroll: (next) => {
+                scroll.value = next;
+            },
+        },
+    });
+    const sourceScroll = { value: 420 };
+    const previewScroll = { value: 860 };
+    const otherScroll = { value: 210 };
+    const sourceView = makeView(file.path, sourceScroll);
+    const previewView = makeView(file.path, previewScroll, 'preview');
+    const otherView = makeView('B.md', otherScroll);
+    const app = {
+        workspace: {
+            iterateAllLeaves(callback) {
+                for (const view of [sourceView, previewView, otherView]) callback({ view });
+            },
+        },
+    };
+
+    globalThis.window = {
+        requestAnimationFrame(callback) {
+            frames.push(callback);
+            return frames.length;
+        },
+    };
+
+    try {
+        await withPreservedMarkdownScroll(app, file, async () => {
+            sourceScroll.value = 0;
+            previewScroll.value = 0;
+            otherScroll.value = 0;
+        });
+
+        assert.equal(sourceScroll.value, 420);
+        assert.equal(previewScroll.value, 860);
+        assert.equal(otherScroll.value, 0);
+
+        // 下一帧再压一次延后重排；已换走文件的分栏不受旧状态影响。
+        sourceScroll.value = 0;
+        previewScroll.value = 0;
+        previewView.file = { path: 'B.md' };
+        frames.shift()(0);
+
+        assert.equal(sourceScroll.value, 420);
+        assert.equal(previewScroll.value, 0);
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window;
+        else globalThis.window = originalWindow;
+    }
+});
+
+test('光标记忆同时覆盖换文件与分栏间换焦点', () => {
+    const source = readFileSync(path.join(ROOT, 'src/modules/editing/cursorMemory.ts'), 'utf8');
+    const formatter = readFileSync(path.join(ROOT, 'src/modules/format/formatter.ts'), 'utf8');
+    const updated = readFileSync(
+        path.join(ROOT, 'src/modules/projects/updatedMaintainer.ts'),
+        'utf8',
+    );
+
+    assert.ok(source.includes("on('file-open', switchTrackedView)"));
+    assert.ok(source.includes("on('active-leaf-change', switchTrackedView)"));
+    assert.ok(formatter.includes('withPreservedMarkdownScroll(ctx.app, file'));
+    assert.ok(updated.includes('withPreservedMarkdownScroll(ctx.app, file'));
 });
 
 test('持久化设置在进入运行时前逐字段验形', () => {

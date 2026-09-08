@@ -1,6 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian 的 TFile 与 TAbstractFile 类型；依赖 core/constants 的 FOLDERS、
- *          core/frontmatter 的 Frontmatter 类型、core/time 的 nowStamp、core/types 的 ZiminosContext
+ *          core/frontmatter 的 Frontmatter 类型、core/markdownViewState 的分栏滚动保护、
+ *          core/time 的 nowStamp、core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 registerUpdatedMaintainer（注册 updated 字段的自动维护）
  * [POS]: projects 模块里唯一常驻的编辑监听者，替代原方案中由 Linter 承担的 updated 维护职责。
  *        它与 cardInit 共守同一张卡片：那边写「出生」字段（created/UID/up），这边只碰 updated 一个字段，
@@ -16,6 +17,7 @@ import { TFile } from 'obsidian';
 import type { TAbstractFile } from 'obsidian';
 import { FOLDERS } from '../../core/constants';
 import type { Frontmatter } from '../../core/frontmatter';
+import { withPreservedMarkdownScroll } from '../../core/markdownViewState';
 import { nowStamp } from '../../core/time';
 import type { ZiminosContext } from '../../core/types';
 
@@ -65,9 +67,11 @@ export function registerUpdatedMaintainer(ctx: ZiminosContext): void {
         // 先声明自写，再动手；这次写入引发的 modify 事件会被守卫挡在门外，不会自激成环
         ctx.guard.mark(path);
 
-        await ctx.app.fileManager.processFrontMatter(file, (frontmatter: Frontmatter) => {
-            frontmatter.updated = nowStamp(ctx.settings.dateTimeFormat);
-        });
+        await withPreservedMarkdownScroll(ctx.app, file, () =>
+            ctx.app.fileManager.processFrontMatter(file, (frontmatter: Frontmatter) => {
+                frontmatter.updated = nowStamp(ctx.settings.dateTimeFormat);
+            }),
+        );
     };
 
     // ============================================================

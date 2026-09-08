@@ -274,7 +274,7 @@ ziminOS 不是一个插件，是三样东西咬合在一起。
 
 学员可直接打开这份完整步骤说明：[《ziminOS × Eagle 附件桥接安装与使用指南》](docs/Eagle附件桥接安装与使用指南.html)。
 
-升级到 v0.22.2 后，打开「设置 → ziminOS → 编辑 → Eagle 附件」，点「显示安装包」，在 Eagle 安装 `ziminOS-Eagle-Bridge.eagleplugin`，再用伴侣窗口里的 6 位码配对。关闭其他会接管附件粘贴的图床/附件插件后，图片、PDF 等会直接进入当前 Eagle 资源库，Obsidian 只写 `ziminos-eagle://…/{itemId}`。
+升级到 v0.22.3 后，打开「设置 → ziminOS → 编辑 → Eagle 附件」，点「显示安装包」，在 Eagle 安装 `ziminOS-Eagle-Bridge.eagleplugin`，再用伴侣窗口里的 6 位码配对。关闭其他会接管附件粘贴的图床/附件插件后，图片、PDF 等会直接进入当前 Eagle 资源库，Obsidian 只写 `ziminos-eagle://…/{itemId}`。
 
 阅读模式里普通单击即可在 Eagle 打开。实时预览、源码模式和 YAML 属性区需按 Obsidian 的编辑器规则：macOS 用 `⌘ + 单击`，Windows 用 `Ctrl + 单击`；普通单击留给放置光标和修改属性值。
 

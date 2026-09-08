@@ -1,6 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Notice 与 TFile/TAbstractFile 类型；依赖 core/commands 的 FORMAT_COMMAND、
- *          core/markdownStyle 的 formatMarkdown、core/types 的 ZiminosContext
+ *          core/markdownStyle 的 formatMarkdown、core/markdownViewState 的分栏滚动保护、
+ *          core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 registerFormatter（注册整理命令与自动整理）
  * [POS]: 排版模块的全部。规则本体住在 core/markdownStyle——那是一趟纯字符串变换，
  *        本文件只回答「什么时候对哪一篇跑它」，且自动写盘前以实时活动文件作最后闸门；
@@ -16,6 +17,7 @@ import { Notice, TFile } from 'obsidian';
 import type { TAbstractFile } from 'obsidian';
 import { FORMAT_COMMAND } from '../../core/commands';
 import { formatMarkdown } from '../../core/markdownStyle';
+import { withPreservedMarkdownScroll } from '../../core/markdownViewState';
 import type { ZiminosContext } from '../../core/types';
 
 // ============================================================
@@ -93,21 +95,23 @@ export function registerFormatter(ctx: ZiminosContext): void {
 
         let changed = false;
 
-        await ctx.app.vault.process(file, (content) => {
-            // 排队期间用户可能重新打开这篇；真正写盘的这一刻再问一次，人的编辑权优先
-            if (!mayWrite()) return content;
+        await withPreservedMarkdownScroll(ctx.app, file, () =>
+            ctx.app.vault.process(file, (content) => {
+                // 排队期间用户可能重新打开这篇；真正写盘的这一刻再问一次，人的编辑权优先
+                if (!mayWrite()) return content;
 
-            const next = formatMarkdown(content, rules);
+                const next = formatMarkdown(content, rules);
 
-            if (next === content) return content;
+                if (next === content) return content;
 
-            changed = true;
-            lastRun.set(file.path, Date.now());
-            // 只在确定要写时声明自写，失败或无变化不能遮掉随后真正的用户编辑
-            ctx.guard.mark(file.path);
+                changed = true;
+                lastRun.set(file.path, Date.now());
+                // 只在确定要写时声明自写，失败或无变化不能遮掉随后真正的用户编辑
+                ctx.guard.mark(file.path);
 
-            return next;
-        });
+                return next;
+            }),
+        );
 
         return changed;
     };
