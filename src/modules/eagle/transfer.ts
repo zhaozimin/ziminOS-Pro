@@ -1,6 +1,6 @@
 /**
- * [INPUT]: 依赖 obsidian 公开 editor-paste/editor-drop 事件与 Notice，依赖 main 注入的项目名解析器，依赖本模块 platform 的桌面闸门、EagleBridgeClient 导入与 protocol 图片识别/链接生成
- * [OUTPUT]: 对外提供 EagleProjectResolver/registerEagleTransfers，可将纯图片事件放行给图床，其他附件按笔记所属项目路由 Eagle 并以稳定链接替换占位符
+ * [INPUT]: 依赖 obsidian 公开 editor-paste/editor-drop 事件与 Notice，依赖 main 注入的容器/日记路由解析器，依赖本模块 platform 的桌面闸门、EagleBridgeClient 导入与 protocol 图片识别/链接生成
+ * [OUTPUT]: 对外提供 EagleRouteResolver/registerEagleTransfers，可将纯图片事件放行给图床，其他附件按宿主笔记路由到 Eagle 的项目容器或日记文件夹并以稳定链接替换占位符
  * [POS]: Eagle 模块的写入边界。图片排除判定先于 preventDefault；事件一经接管就 fail closed，导入失败只撤掉占位并报错，
  *        绝不回退到 Obsidian 本地附件。Electron/Node 仅在桌面守卫通过后按需取得，移动端加载不解析它们
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -10,7 +10,7 @@ import { Notice } from 'obsidian';
 import type { Editor, MarkdownFileInfo, MarkdownView } from 'obsidian';
 import type { ZiminosContext } from '../../core/types';
 import type { EagleBridgeClient } from './client';
-import type { EagleImportProject } from './client';
+import type { EagleImportRoute } from './client';
 import { isSupportedEagleDesktop } from './platform';
 import { buildEagleMarkdown, EAGLE_LIBRARY_KEY, isImageAttachment } from './protocol';
 
@@ -27,26 +27,26 @@ interface NodeTools {
 
 let cachedNodeTools: NodeTools | null | undefined;
 
-/** 项目业务规则留在 projects 模块；Eagle 只消费 main 注入的最小结果。 */
-export type EagleProjectResolver = (notePath: string) => EagleImportProject | null;
+/** 容器/日记业务规则留在上游模块；Eagle 只消费 main 注入的最小结果。 */
+export type EagleRouteResolver = (notePath: string) => EagleImportRoute | null;
 
 export function registerEagleTransfers(
     ctx: ZiminosContext,
     client: EagleBridgeClient,
-    resolveProject: EagleProjectResolver,
+    resolveRoute: EagleRouteResolver,
 ): void {
     if (!isSupportedEagleDesktop()) return;
 
     ctx.plugin.registerEvent(
         ctx.app.workspace.on('editor-paste', (event, editor, info) => {
-            void takeTransfer(ctx, client, resolveProject, event, editor, info).catch((error) => {
+            void takeTransfer(ctx, client, resolveRoute, event, editor, info).catch((error) => {
                 new Notice(`Eagle 附件处理失败：${errorMessage(error)}。未在 Obsidian 本地保留副本。`, 10000);
             });
         }),
     );
     ctx.plugin.registerEvent(
         ctx.app.workspace.on('editor-drop', (event, editor, info) => {
-            void takeTransfer(ctx, client, resolveProject, event, editor, info).catch((error) => {
+            void takeTransfer(ctx, client, resolveRoute, event, editor, info).catch((error) => {
                 new Notice(`Eagle 附件处理失败：${errorMessage(error)}。未在 Obsidian 本地保留副本。`, 10000);
             });
         }),
@@ -56,7 +56,7 @@ export function registerEagleTransfers(
 async function takeTransfer(
     ctx: ZiminosContext,
     client: EagleBridgeClient,
-    resolveProject: EagleProjectResolver,
+    resolveRoute: EagleRouteResolver,
     event: ClipboardEvent | DragEvent,
     editor: Editor,
     info: MarkdownView | MarkdownFileInfo,
@@ -86,7 +86,7 @@ async function takeTransfer(
     const links: string[] = [];
     const failures: string[] = [];
     const folderPaths = new Set<string>();
-    const project = info.file ? resolveProject(info.file.path) : null;
+    const route = info.file ? resolveRoute(info.file.path) : null;
 
     for (const file of files) {
         let materialized: MaterializedFile | null = null;
@@ -95,7 +95,7 @@ async function takeTransfer(
         try {
             materialized = await materialize(file, name);
 
-            const item = await client.importFile(materialized.path, name, project);
+            const item = await client.importFile(materialized.path, name, route);
 
             if (item.folderPath) folderPaths.add(item.folderPath);
 

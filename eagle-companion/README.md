@@ -1,3 +1,10 @@
+<!--
+ [INPUT]: 依赖随 ziminOS 交付的 Eagle 伴侣安装包、Obsidian 端配对界面与 Eagle 4.0 Build 18+ 公开 API
+ [OUTPUT]: 对学员和调试者说明伴侣安装、配对、容器/日记归档、打开手势与安全边界
+ [POS]: eagle-companion 的运行说明，与面向学员的 docs HTML 手册同源但服务伴侣源码读者
+ [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+
 # ziminOS Obsidian Bridge
 
 这是 ziminOS 的 Eagle 后台伴侣，不是第二个 Obsidian 插件。它负责让 Obsidian 端通过稳定的 Eagle `itemId` 导入、显示并打开附件。
@@ -7,9 +14,11 @@
 1. 在 Obsidian 的「设置 → ziminOS → 编辑 → Eagle 附件」点「显示安装包」，双击或拖入 Eagle 安装 `ziminOS-Eagle-Bridge.eagleplugin`。开发者调试源码时才从 Eagle「插件 → 开发者选项」导入本目录。
 2. 打开伴侣，记下 6 位配对码。
 3. 在 Obsidian 打开「设置 → ziminOS → 编辑 → Eagle 附件」，确认端口一致，点击「配对」并输入配对码。
-4. 关闭其他会接管附件粘贴的图床/附件插件，再复制粘贴一张图片验证。
+4. 默认由 Eagle 接管图片与其他附件。如果图片要继续走已有图床，保持图床插件启用，并在 ziminOS 打开「图片不交给 Eagle（交给图床）」；单独粘贴图片验证。
 
-配对成功后，图片和附件只存入当前 Eagle 资源库；Markdown 写入 `ziminos-eagle://v1/primary/{itemId}`。在 ziminOS 项目或归档项目内的笔记中粘贴/拖入时，伴侣通过官方 Folder API 自动创建或复用 `项目/项目名称`，附件在导入当下就归入该目录；项目外附件仍走 Obsidian 设置中的可选固定文件夹 ID，留空即未归类。同一资源库内移动附件或文件夹不会改变 `itemId`，因此不需要更新笔记。若切换了 Eagle 资源库或移动了整个资源库目录，请重新配对。
+配对成功后，由 Eagle 接管的附件只存入当前 Eagle 资源库；Markdown 写入 `ziminos-eagle://v1/primary/{itemId}`。在 ziminOS 的项目、领域、资源或存档根目录中，伴侣会按笔记所在的第一层容器创建或复用 `项目/容器名`；所有日/周/月/季/年日记则共用 Eagle 的单一 `日记` 根目录。内容根下直接散落的笔记与其他路径不猜归属，仍走 Obsidian 设置中的可选固定文件夹 ID，留空即未归类。同一资源库内移动附件或文件夹不会改变 `itemId`，因此不需要更新笔记。若切换了 Eagle 资源库或移动了整个资源库目录，请重新配对。
+
+v0.22.6 的容器/日记路由需要 Obsidian 与 Eagle 两端同时支持。升级时必须用「显示安装包」定位的同版 `.eagleplugin` 覆盖安装伴侣；旧伴侣不会静默接收新路由。
 
 点击链接时，伴侣会在定位附件后把最小化的 Eagle 主窗口恢复到前台。若 Eagle 已完全退出，Obsidian 端会用系统原生 `eagle://item/{itemId}` 深链启动 Eagle 并直达对应项目；这个启动链接不会写进笔记。
 

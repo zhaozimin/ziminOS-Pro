@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 obsidian/requestUrl 访问仅回环监听的 Eagle 伴侣，桌面端伴侣不在线时按需使用 Electron shell 打开 Eagle 原生深链，依赖 core/types 与本模块 platform/protocol
- * [OUTPUT]: 对外提供 EagleImportProject/EagleBridgeClient，封装配对、按项目导入、内容读取、Eagle 精确打开/离线唤起与本机令牌生命周期
+ * [OUTPUT]: 对外提供 EagleImportRoute/EagleBridgeClient，封装配对、项目/日记分类导入、内容读取、Eagle 精确打开/离线唤起与本机令牌生命周期
  * [POS]: Obsidian 半边唯一的 HTTP 出境口。认证令牌只进 Obsidian SecretStorage，不进 data.json、笔记或日志；
  *        上层只看业务结果，不自行拼端口、请求头或错误语义
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -25,10 +25,10 @@ export interface ImportedEagleItem {
     readonly folderPath: string;
 }
 
-/** 只在本次导入请求中使用；Markdown 的稳定附件身份仍不携带项目名或文件夹。 */
-export interface EagleImportProject {
-    readonly name: string;
-}
+/** 只在导入请求中使用；Markdown 的稳定附件身份仍不携带分类或文件夹。 */
+export type EagleImportRoute =
+    | { readonly kind: 'project'; readonly name: string }
+    | { readonly kind: 'diary' };
 
 export interface EagleItemContent {
     readonly bytes: ArrayBuffer;
@@ -81,26 +81,31 @@ export class EagleBridgeClient {
     async importFile(
         filePath: string,
         name: string,
-        project: EagleImportProject | null = null,
+        route: EagleImportRoute | null = null,
     ): Promise<ImportedEagleItem> {
         let result: JsonRecord;
+        const endpoint = route?.kind === 'project'
+            ? '/v1/projects/import'
+            : route?.kind === 'diary'
+                ? '/v1/diary/import'
+                : '/v1/import';
 
         try {
             result = await this.requestJson({
-                url: `${this.baseUrl()}${project ? '/v1/projects/import' : '/v1/import'}`,
+                url: `${this.baseUrl()}${endpoint}`,
                 method: 'POST',
                 contentType: 'application/json',
                 body: JSON.stringify({
                     libraryKey: this.libraryKey(),
                     filePath,
                     name,
-                    folderId: this.ctx.settings.eagleFolderId.trim(),
-                    ...(project ? { projectName: project.name } : {}),
+                    ...(route ? {} : { folderId: this.ctx.settings.eagleFolderId.trim() }),
+                    ...(route?.kind === 'project' ? { projectName: route.name } : {}),
                 }),
             });
         } catch (error) {
-            if (project && error instanceof EagleBridgeResponseError && error.status === 404) {
-                throw new Error('Eagle 伴侣版本过旧，请重新安装 ziminOS v0.22.4 随附的伴侣');
+            if (route && error instanceof EagleBridgeResponseError && error.status === 404) {
+                throw new Error('Eagle 伴侣版本过旧，请重新安装 ziminOS v0.22.6 随附的伴侣');
             }
             throw error;
         }

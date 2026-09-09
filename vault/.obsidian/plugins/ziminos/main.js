@@ -5019,24 +5019,25 @@ var EagleBridgeClient = class {
       method: "GET"
     }));
   }
-  async importFile(filePath, name, project = null) {
+  async importFile(filePath, name, route = null) {
     let result;
+    const endpoint = (route == null ? void 0 : route.kind) === "project" ? "/v1/projects/import" : (route == null ? void 0 : route.kind) === "diary" ? "/v1/diary/import" : "/v1/import";
     try {
       result = await this.requestJson({
-        url: `${this.baseUrl()}${project ? "/v1/projects/import" : "/v1/import"}`,
+        url: `${this.baseUrl()}${endpoint}`,
         method: "POST",
         contentType: "application/json",
         body: JSON.stringify({
           libraryKey: this.libraryKey(),
           filePath,
           name,
-          folderId: this.ctx.settings.eagleFolderId.trim(),
-          ...project ? { projectName: project.name } : {}
+          ...route ? {} : { folderId: this.ctx.settings.eagleFolderId.trim() },
+          ...(route == null ? void 0 : route.kind) === "project" ? { projectName: route.name } : {}
         })
       });
     } catch (error) {
-      if (project && error instanceof EagleBridgeResponseError && error.status === 404) {
-        throw new Error("Eagle \u4F34\u4FA3\u7248\u672C\u8FC7\u65E7\uFF0C\u8BF7\u91CD\u65B0\u5B89\u88C5 ziminOS v0.22.4 \u968F\u9644\u7684\u4F34\u4FA3");
+      if (route && error instanceof EagleBridgeResponseError && error.status === 404) {
+        throw new Error("Eagle \u4F34\u4FA3\u7248\u672C\u8FC7\u65E7\uFF0C\u8BF7\u91CD\u65B0\u5B89\u88C5 ziminOS v0.22.6 \u968F\u9644\u7684\u4F34\u4FA3");
       }
       throw error;
     }
@@ -5385,24 +5386,24 @@ function errorMessage3(error) {
 // src/modules/eagle/transfer.ts
 var import_obsidian22 = require("obsidian");
 var cachedNodeTools3;
-function registerEagleTransfers(ctx, client, resolveProject) {
+function registerEagleTransfers(ctx, client, resolveRoute) {
   if (!isSupportedEagleDesktop()) return;
   ctx.plugin.registerEvent(
     ctx.app.workspace.on("editor-paste", (event, editor, info) => {
-      void takeTransfer(ctx, client, resolveProject, event, editor, info).catch((error) => {
+      void takeTransfer(ctx, client, resolveRoute, event, editor, info).catch((error) => {
         new import_obsidian22.Notice(`Eagle \u9644\u4EF6\u5904\u7406\u5931\u8D25\uFF1A${errorMessage4(error)}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
       });
     })
   );
   ctx.plugin.registerEvent(
     ctx.app.workspace.on("editor-drop", (event, editor, info) => {
-      void takeTransfer(ctx, client, resolveProject, event, editor, info).catch((error) => {
+      void takeTransfer(ctx, client, resolveRoute, event, editor, info).catch((error) => {
         new import_obsidian22.Notice(`Eagle \u9644\u4EF6\u5904\u7406\u5931\u8D25\uFF1A${errorMessage4(error)}\u3002\u672A\u5728 Obsidian \u672C\u5730\u4FDD\u7559\u526F\u672C\u3002`, 1e4);
       });
     })
   );
 }
-async function takeTransfer(ctx, client, resolveProject, event, editor, info) {
+async function takeTransfer(ctx, client, resolveRoute, event, editor, info) {
   var _a;
   if (!ctx.settings.eagleEnabled || event.defaultPrevented) return;
   const data = "clipboardData" in event ? event.clipboardData : event.dataTransfer;
@@ -5417,13 +5418,13 @@ async function takeTransfer(ctx, client, resolveProject, event, editor, info) {
   const links = [];
   const failures = [];
   const folderPaths = /* @__PURE__ */ new Set();
-  const project = info.file ? resolveProject(info.file.path) : null;
+  const route = info.file ? resolveRoute(info.file.path) : null;
   for (const file of files) {
     let materialized = null;
     const name = attachmentName(file);
     try {
       materialized = await materialize(file, name);
-      const item = await client.importFile(materialized.path, name, project);
+      const item = await client.importFile(materialized.path, name, route);
       if (item.folderPath) folderPaths.add(item.folderPath);
       links.push(buildEagleMarkdown(
         { libraryKey: EAGLE_LIBRARY_KEY, itemId: item.itemId },
@@ -5556,10 +5557,10 @@ function errorMessage4(error) {
 }
 
 // src/modules/eagle/index.ts
-function registerEagleBridge(ctx, resolveProject) {
+function registerEagleBridge(ctx, resolveRoute) {
   const client = new EagleBridgeClient(ctx);
   const refreshRenderer = registerEagleRenderer(ctx, client);
-  registerEagleTransfers(ctx, client, resolveProject);
+  registerEagleTransfers(ctx, client, resolveRoute);
   const desktopOnly = () => {
     if (isSupportedEagleDesktop()) return true;
     new import_obsidian23.Notice("Eagle \u9644\u4EF6\u6865\u63A5\u53EA\u5728 macOS \u4E0E Windows \u684C\u9762\u7AEF\u5DE5\u4F5C\u3002");
@@ -21028,16 +21029,21 @@ function registerCreateProjectCommand(ctx, pickPerson2) {
 }
 
 // src/modules/projects/location.ts
-function projectNameOfNotePath(settings, notePath) {
-  const roots = Array.from(/* @__PURE__ */ new Set([
-    normalizeFolderPath(settings.projectFolder, DEFAULT_SETTINGS.projectFolder),
-    normalizeFolderPath(settings.archiveFolder, DEFAULT_SETTINGS.archiveFolder)
-  ])).sort((left, right) => right.length - left.length);
-  for (const root of roots) {
+function attachmentRouteOfNotePath(settings, notePath) {
+  const roots = [
+    { root: normalizeFolderPath(settings.projectFolder, DEFAULT_SETTINGS.projectFolder), kind: "project" },
+    { root: normalizeFolderPath(settings.areaFolder, DEFAULT_SETTINGS.areaFolder), kind: "project" },
+    { root: FOLDERS.resources, kind: "project" },
+    { root: normalizeFolderPath(settings.archiveFolder, DEFAULT_SETTINGS.archiveFolder), kind: "project" },
+    { root: normalizeFolderPath(settings.diaryFolder, DEFAULT_SETTINGS.diaryFolder), kind: "diary" }
+  ];
+  roots.sort((left, right) => right.root.length - left.root.length);
+  for (const { root, kind } of roots) {
     const prefix = `${root}/`;
     if (!notePath.startsWith(prefix)) continue;
+    if (kind === "diary") return { kind: "diary" };
     const parts = notePath.slice(prefix.length).split("/").filter(Boolean);
-    return parts.length >= 2 ? parts[0] : null;
+    return parts.length >= 2 ? { kind: "project", name: parts[0] } : null;
   }
   return null;
 }
@@ -23572,10 +23578,10 @@ var ZiminosPlugin = class extends import_obsidian52.Plugin {
     registerClientCommands(ctx, (seed) => applySeed(ctx, seed));
     registerFormatter(ctx);
     const syncAppearanceSwitch = registerAppearanceSwitch(ctx);
-    const eagleActions = registerEagleBridge(ctx, (notePath) => {
-      const name = projectNameOfNotePath(ctx.settings, notePath);
-      return name ? { name } : null;
-    });
+    const eagleActions = registerEagleBridge(
+      ctx,
+      (notePath) => attachmentRouteOfNotePath(ctx.settings, notePath)
+    );
     registerPasteLink(ctx);
     registerCursorMemory(ctx);
     const syncFolderCount = registerFolderCount(ctx);

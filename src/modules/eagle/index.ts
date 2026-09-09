@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian Notice、core/modals 的单行输入、core/localPath 的本机路径解算、
- *          core/types 的 ZiminosContext，依赖 main 注入的项目名解析器，依赖本模块 platform/client/transfer/render
- * [OUTPUT]: 对外提供 EagleSettingActions 与 registerEagleBridge，将项目路由、运行时行为及设置页所需操作收成一个边界
+ *          core/types 的 ZiminosContext，依赖 main 注入的容器/日记路由解析器，依赖本模块 platform/client/transfer/render
+ * [OUTPUT]: 对外提供 EagleSettingActions 与 registerEagleBridge，将附件分类路由、运行时行为及设置页所需操作收成一个边界
  * [POS]: Eagle 模块的唯一入口与局部装配点。main 只知道“注册一个 Eagle 能力”并拿回设置动作，
  *        不认证令牌、协议 URI、临时文件或 DOM 水合的任何细节
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -15,7 +15,7 @@ import { EagleBridgeClient } from './client';
 import { isSupportedEagleDesktop } from './platform';
 import { registerEagleRenderer } from './render';
 import { registerEagleTransfers } from './transfer';
-import type { EagleProjectResolver } from './transfer';
+import type { EagleRouteResolver } from './transfer';
 
 export interface EagleSettingActions {
     readonly pairEagle: () => Promise<boolean>;
@@ -27,12 +27,12 @@ export interface EagleSettingActions {
 
 export function registerEagleBridge(
     ctx: ZiminosContext,
-    resolveProject: EagleProjectResolver,
+    resolveRoute: EagleRouteResolver,
 ): EagleSettingActions {
     const client = new EagleBridgeClient(ctx);
     const refreshRenderer = registerEagleRenderer(ctx, client);
 
-    registerEagleTransfers(ctx, client, resolveProject);
+    registerEagleTransfers(ctx, client, resolveRoute);
 
     const desktopOnly = (): boolean => {
         if (isSupportedEagleDesktop()) return true;

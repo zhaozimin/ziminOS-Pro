@@ -4,7 +4,7 @@
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
  *           项目回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
  *           片段出境口的桌面端闸门、本机绝对路径的唯一算处、状态栏路径的看拿分离、
- *           后台写入的分栏滚动保护与光标焦点切换，以及
+ *           后台写入的分栏滚动保护、光标焦点切换、四类内容容器与日记附件路由，以及
  *           智能体路由完整性，并在专业版源码存在时额外覆盖出库单往返、《赛博永生》路径同构
  *           与第二版安装入口
  * [POS]: tests 的唯一可执行入口；只验证公开行为与关键平台边界，不复制业务实现
@@ -64,6 +64,9 @@ const { coalesceHighlights, normalizedHighlightKey } = await loadTypeScript(
 );
 const { dayText } = await loadTypeScript('src/core/time.ts', { stubObsidian: true });
 const { DEFAULT_SETTINGS, normalizeSettings } = await loadTypeScript('src/core/types.ts');
+const { attachmentRouteOfNotePath } = await loadTypeScript('src/modules/projects/location.ts', {
+    obsidianStub: 'export class TFolder {} export const normalizePath = (value) => String(value);',
+});
 const { buildInitialInspirationContent, insertInspiration } = await loadTypeScript(
     'src/modules/inspiration/templates.ts',
 );
@@ -336,6 +339,43 @@ test('老库升级后仍由 Eagle 接管图片，只有用户明确打开才分�
     assert.equal(DEFAULT_SETTINGS.eagleExcludeImages, false);
     assert.equal(normalizeSettings({}).eagleExcludeImages, false);
     assert.equal(normalizeSettings({ eagleExcludeImages: true }).eagleExcludeImages, true);
+});
+
+test('附件路由把四棵内容根归入项目容器，把全部日记折叠到单一文件夹', () => {
+    const settings = {
+        ...DEFAULT_SETTINGS,
+        projectFolder: '我的项目',
+        areaFolder: '我的领域',
+        archiveFolder: '我的存档',
+        diaryFolder: '我的日记',
+    };
+
+    assert.deepEqual(
+        attachmentRouteOfNotePath(settings, '我的项目/以人为本/卡片/课程.md'),
+        { kind: 'project', name: '以人为本' },
+    );
+    assert.deepEqual(
+        attachmentRouteOfNotePath(settings, '我的领域/内容创作/文章.md'),
+        { kind: 'project', name: '内容创作' },
+    );
+    assert.deepEqual(
+        attachmentRouteOfNotePath(settings, '03-resources/AI 工具/材料.md'),
+        { kind: 'project', name: 'AI 工具' },
+    );
+    assert.deepEqual(
+        attachmentRouteOfNotePath(settings, '我的存档/旧课程/往期/复盘.md'),
+        { kind: 'project', name: '旧课程' },
+    );
+    assert.deepEqual(
+        attachmentRouteOfNotePath(settings, '我的日记/01-daily/2026-09-08.md'),
+        { kind: 'diary' },
+    );
+    assert.deepEqual(
+        attachmentRouteOfNotePath(settings, '我的日记/05-yearly/2026.md'),
+        { kind: 'diary' },
+    );
+    assert.equal(attachmentRouteOfNotePath(settings, '我的领域/散落笔记.md'), null);
+    assert.equal(attachmentRouteOfNotePath(settings, '00-inbox/临时.md'), null);
 });
 
 /**

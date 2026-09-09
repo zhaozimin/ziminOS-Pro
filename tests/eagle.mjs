@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、项目名注入与 Eagle 两级目录归档、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、内容容器/日记路由注入、Eagle 两级项目目录与单层日记目录归档、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -152,16 +152,20 @@ test('Obsidian 半边只在 macOS/Windows 桌面端注册', () => {
     assert.ok(editor.includes('event.metaKey && !event.ctrlKey'));
 });
 
-test('项目归属只由 projects 模块判定，再由 main 注入 Eagle', () => {
+test('容器与日记归属只由上游模块判定，再由 main 注入 Eagle', () => {
     const location = readFileSync(path.join(ROOT, 'src/modules/projects/location.ts'), 'utf8');
     const main = readFileSync(path.join(ROOT, 'src/main.ts'), 'utf8');
     const transfer = readFileSync(path.join(ROOT, 'src/modules/eagle/transfer.ts'), 'utf8');
 
     assert.ok(location.includes('settings.projectFolder'));
+    assert.ok(location.includes('settings.areaFolder'));
     assert.ok(location.includes('settings.archiveFolder'));
-    assert.ok(location.includes('parts.length >= 2 ? parts[0] : null'));
-    assert.ok(main.includes('projectNameOfNotePath(ctx.settings, notePath)'));
-    assert.ok(transfer.includes('resolveProject(info.file.path)'));
+    assert.ok(location.includes('settings.diaryFolder'));
+    assert.ok(location.includes('FOLDERS.resources'));
+    assert.ok(location.includes("{ kind: 'diary' }"));
+    assert.ok(location.includes("{ kind: 'project', name: parts[0] }"));
+    assert.ok(main.includes('attachmentRouteOfNotePath(ctx.settings, notePath)'));
+    assert.ok(transfer.includes('resolveRoute(info.file.path)'));
     assert.equal(transfer.includes('settings.projectFolder'), false);
 });
 
@@ -197,11 +201,16 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
     assert.ok(guide.includes('Eagle 4.0 Build 18'));
     assert.ok(guide.includes('系统应自动启动 Eagle'));
     assert.ok(guide.includes('项目/以人为本系列课程'));
+    assert.ok(guide.includes('02-areas/容器名'));
+    assert.ok(guide.includes('03-resources/容器名'));
+    assert.ok(guide.includes('04-archives/容器名'));
+    assert.ok(guide.includes('<code>日记</code>'));
     assert.ok(guide.includes('图片不交给 Eagle（交给图床）'));
     assert.ok(guide.includes('图片与其他附件请分两次操作'));
     assert.ok(guide.includes('ziminOS 不保存图床密钥'));
     assert.ok(guide.includes('同一级出现多个同名目录'));
     assert.ok(guide.includes('伴侣版本过旧'));
+    assert.ok(guide.includes('覆盖安装同版 Eagle 伴侣'));
     assert.ok(guide.includes('同一 Eagle 库里换文件夹'));
     assert.ok(guide.includes('不要手动编辑或分享配对令牌'));
     assert.equal(/<script\b/i.test(guide), false);
@@ -217,6 +226,7 @@ test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官�
     assert.ok(source.includes("/^[a-f0-9]{64}$/.test(value.token)"));
     assert.ok(source.includes("url.pathname === '/v1/disconnect'"));
     assert.ok(source.includes("url.pathname === '/v1/projects/import'"));
+    assert.ok(source.includes("url.pathname === '/v1/diary/import'"));
     assert.ok(source.includes('eagle.item.addFromPath'));
     assert.ok(source.includes('eagle.folder.getAll'));
     assert.ok(source.includes('eagle.folder.create'));
@@ -225,7 +235,8 @@ test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官�
     assert.ok(source.includes('eagle.item.open'));
     assert.ok(source.includes('eagle.app.show'));
     assert.ok(client.includes("require('electron')"));
-    assert.ok(client.includes("project ? '/v1/projects/import' : '/v1/import'"));
+    assert.ok(client.includes("? '/v1/projects/import'"));
+    assert.ok(client.includes("? '/v1/diary/import'"));
     assert.ok(client.includes('Eagle 伴侣版本过旧'));
     assert.ok(client.includes('shell.openExternal(buildEagleNativeItemUri(reference))'));
     assert.equal(source.includes('Access-Control-Allow-Origin'), false);
@@ -326,7 +337,8 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
         folder: {
             getAll: async () => eagleFolders,
             create: async (options) => {
-                const created = { id: 'PROJECT_ROOT', parent: '', children: [], ...options };
+                const id = options.name === '日记' ? 'DIARY_ROOT' : 'PROJECT_ROOT';
+                const created = { id, parent: '', children: [], ...options };
 
                 eagleFolders.push(created);
                 createdFolders.push({ kind: 'root', options });
@@ -481,6 +493,41 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
 
         assert.equal(recoveredProject.status, 200);
         assert.equal(imported.length, 4);
+
+        const diaryImport = await callBridge(port, 'POST', '/v1/diary/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '日记附件.txt',
+            folderId: 'IGNORED_FOR_DIARY',
+        }, headers);
+
+        assert.equal(diaryImport.status, 200);
+        assert.equal(JSON.parse(diaryImport.body).folderPath, '日记');
+        assert.equal(createdFolders[3].kind, 'root');
+        assert.equal(createdFolders[3].options.name, '日记');
+        assert.deepEqual(Array.from(imported[4].options.folders), ['DIARY_ROOT']);
+
+        const repeatedDiaryImport = await callBridge(port, 'POST', '/v1/diary/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '第二份日记附件.txt',
+        }, headers);
+
+        assert.equal(repeatedDiaryImport.status, 200);
+        assert.equal(createdFolders.length, 4);
+        assert.deepEqual(Array.from(imported[5].options.folders), ['DIARY_ROOT']);
+
+        eagleFolders.push({ id: 'DIARY_ROOT_DUP', name: '日记', parent: '', children: [] });
+        const ambiguousDiary = await callBridge(port, 'POST', '/v1/diary/import', {
+            libraryKey: 'primary',
+            filePath: attachment,
+            name: '不能误放的日记附件.txt',
+        }, headers);
+
+        assert.equal(ambiguousDiary.status, 409);
+        assert.match(JSON.parse(ambiguousDiary.body).error, /多个同名“日记”/);
+        assert.equal(imported.length, 6);
+        eagleFolders.pop();
 
         const content = await callBridge(port, 'GET', '/v1/items/ITEM123/content?library=primary', null, headers);
 

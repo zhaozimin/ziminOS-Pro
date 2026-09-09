@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Eagle 官方 plugin API 的 app/library/item/folder/shell 与生命周期事件，依赖 Node 16 内建 http/fs/path/crypto
- * [OUTPUT]: 在 127.0.0.1 提供配对、按 Obsidian 项目建目录并导入、内容读取与项目打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
+ * [OUTPUT]: 在 127.0.0.1 提供配对、按 Obsidian 容器建“项目/容器名”或单层“日记”目录并导入、内容读取与项目打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
  * [POS]: 两端架构的 Eagle 执行边界。它只调官方 item/folder API，不修改 metadata.json；服务只绑定回环，
  *        变更/读取端点全部验令牌与已配对资源库，令牌不写入响应以外的 DOM、URL 或日志
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -21,6 +21,7 @@ const BODY_LIMIT = 64 * 1024;
 const CLIENTS_KEY = 'ziminos:eagle-bridge:clients:v1';
 const PORT_KEY = 'ziminos:eagle-bridge:port:v1';
 const PROJECT_ROOT_NAME = '项目';
+const DIARY_ROOT_NAME = '日记';
 const IDENTITY = /^[A-Za-z0-9_-]{1,128}$/;
 
 class BridgeConflictError extends Error {}
@@ -33,7 +34,7 @@ class BridgeService {
         this.pairCodeExpiresAt = 0;
         this.pairFailures = [];
         this.selectedItem = null;
-        // 所有建目录操作串行化：两个项目同时上传时也只能有一个请求创建根目录，避免长出两个“项目”。
+        // 所有建目录操作串行化：并发上传时也只能有一个请求创建“项目”或“日记”根目录。
         this.folderOperation = Promise.resolve();
         this.refreshPairCode();
     }
@@ -131,12 +132,17 @@ class BridgeService {
         }
 
         if (request.method === 'POST' && url.pathname === '/v1/import') {
-            await this.importItem(request, response, client, false);
+            await this.importItem(request, response, client, 'fixed');
             return;
         }
 
         if (request.method === 'POST' && url.pathname === '/v1/projects/import') {
-            await this.importItem(request, response, client, true);
+            await this.importItem(request, response, client, 'project');
+            return;
+        }
+
+        if (request.method === 'POST' && url.pathname === '/v1/diary/import') {
+            await this.importItem(request, response, client, 'diary');
             return;
         }
 
@@ -219,12 +225,14 @@ class BridgeService {
         };
     }
 
-    async importItem(request, response, client, projectRouting) {
+    async importItem(request, response, client, routing) {
         const body = await readJson(request);
         const libraryKey = stringField(body, 'libraryKey');
         const filePath = stringField(body, 'filePath');
         const name = stringField(body, 'name').slice(0, 255) || path.basename(filePath);
         const folderId = stringField(body, 'folderId');
+        const projectRouting = routing === 'project';
+        const diaryRouting = routing === 'diary';
         const projectName = projectRouting && typeof body.projectName === 'string' ? body.projectName : '';
 
         if (!this.ensureLibrary(response, client, libraryKey)) return;
@@ -240,14 +248,18 @@ class BridgeService {
             this.json(response, 400, { ok: false, error: 'Obsidian 项目名称不能作为 Eagle 文件夹名' });
             return;
         }
-        if (!projectName && folderId && !IDENTITY.test(folderId)) {
+        if (routing === 'fixed' && folderId && !IDENTITY.test(folderId)) {
             this.json(response, 400, { ok: false, error: 'Eagle 文件夹 ID 格式无效' });
             return;
         }
 
         const options = { name };
-        const projectFolderId = projectName ? await this.ensureProjectFolder(projectName) : '';
-        const targetFolderId = projectFolderId || folderId;
+        const routedFolderId = projectRouting
+            ? await this.ensureRoutedFolder(PROJECT_ROOT_NAME, projectName)
+            : diaryRouting
+                ? await this.ensureRoutedFolder(DIARY_ROOT_NAME)
+                : '';
+        const targetFolderId = routedFolderId || folderId;
 
         if (targetFolderId) options.folders = [targetFolderId];
 
@@ -258,16 +270,18 @@ class BridgeService {
             ok: true,
             itemId,
             name,
-            folderPath: projectName ? `${PROJECT_ROOT_NAME}/${projectName}` : '',
+            folderPath: projectRouting
+                ? `${PROJECT_ROOT_NAME}/${projectName}`
+                : diaryRouting ? DIARY_ROOT_NAME : '',
         });
     }
 
     /**
-     * 项目文件夹是导入事务的一部分：只有准确取得“项目/项目名”的 folderId 后才允许写附件。
+     * 分类文件夹是导入事务的一部分：只有准确取得“项目/容器名”或“日记”的 folderId 后才允许写附件。
      * 队列在成功与失败后都会恢复，单次 Eagle API 错误不能毒死后续导入。
      */
-    ensureProjectFolder(projectName) {
-        const operation = this.folderOperation.then(() => createOrFindProjectFolder(projectName));
+    ensureRoutedFolder(rootName, childName = '') {
+        const operation = this.folderOperation.then(() => createOrFindRoutedFolder(rootName, childName));
 
         this.folderOperation = operation.then(() => undefined, () => undefined);
 
@@ -518,41 +532,45 @@ function contentType(filePath) {
 }
 
 /**
- * 用官方 Folder API 创建或复用严格的两级目录。重名不是“随便挑一个”的理由：
- * 同级出现多个同名文件夹时中止导入，避免附件被无声分到错误项目。
+ * 用官方 Folder API 创建或复用严格的一/两级目录。重名不是“随便挑一个”的理由：
+ * 同级出现多个同名文件夹时中止导入，避免附件被无声分到错误容器。
  */
-async function createOrFindProjectFolder(projectName) {
+async function createOrFindRoutedFolder(rootName, childName = '') {
     if (typeof eagle.folder?.getAll !== 'function' ||
         typeof eagle.folder?.create !== 'function' ||
         typeof eagle.folder?.createSubfolder !== 'function') {
-        throw new Error('当前 Eagle 版本不支持项目文件夹自动归档，请升级到 4.0 Build 18 或更高');
+        throw new Error('当前 Eagle 版本不支持附件文件夹自动归档，请升级到 4.0 Build 18 或更高');
     }
 
     const all = flattenFolders(await eagle.folder.getAll());
-    const roots = all.filter((folder) => folder.name === PROJECT_ROOT_NAME && !parentId(folder));
+    const roots = all.filter((folder) => folder.name === rootName && !parentId(folder));
 
-    if (roots.length > 1) throw new BridgeConflictError('Eagle 根目录存在多个同名“项目”文件夹，请合并或改名后重试');
+    if (roots.length > 1) {
+        throw new BridgeConflictError(`Eagle 根目录存在多个同名“${rootName}”文件夹，请合并或改名后重试`);
+    }
 
     const root = roots[0] || await eagle.folder.create({
-        name: PROJECT_ROOT_NAME,
-        description: '由 ziminOS 自动归档 Obsidian 项目附件',
+        name: rootName,
+        description: `由 ziminOS 自动归档 Obsidian ${rootName}附件`,
     });
 
-    assertFolder(root, 'Eagle 没有返回有效的项目根文件夹');
+    assertFolder(root, `Eagle 没有返回有效的“${rootName}”根文件夹`);
+
+    if (!childName) return root.id;
 
     const children = flattenFolders([root, ...all])
-        .filter((folder) => parentId(folder) === root.id && folder.name === projectName);
+        .filter((folder) => parentId(folder) === root.id && folder.name === childName);
 
     if (children.length > 1) {
-        throw new BridgeConflictError(`Eagle 的“${PROJECT_ROOT_NAME}”下存在多个“${projectName}”文件夹，请合并或改名后重试`);
+        throw new BridgeConflictError(`Eagle 的“${rootName}”下存在多个“${childName}”文件夹，请合并或改名后重试`);
     }
 
     const project = children[0] || await eagle.folder.createSubfolder(root.id, {
-        name: projectName,
-        description: `Obsidian 项目：${projectName}`,
+        name: childName,
+        description: `Obsidian 容器：${childName}`,
     });
 
-    assertFolder(project, 'Eagle 没有返回有效的项目文件夹');
+    assertFolder(project, 'Eagle 没有返回有效的容器文件夹');
 
     return project.id;
 }
