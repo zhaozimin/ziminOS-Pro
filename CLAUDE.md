@@ -28,7 +28,7 @@ vault-pro/ - 第二版特有的笔记库成品 (3子目录: 兼收并蓄 进料�
 
 vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，Obsidian/Eagle 两份 manifest 都由构建链同步，main.js 是刻意入库的构建产物（三十五枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 服务二十二个笔记内视图、中国日历与最近文件两个 ItemView、Eagle 附件呈现、外观开关浮层、文件夹计数、状态栏当前路径、八张设置页与作者名片（手工维护，不经 esbuild），ziminOS-Eagle-Bridge.eagleplugin 是同版伴侣的可安装 ZIP 产物；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
 vault/.obsidian/snippets/ - 十二个 CSS 片段，外观包的可拆装部分；十个默认启用，全部由右下角外观开关逐个开关。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源
-tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，覆盖数据合并、划线身份、日期、换行符、ISBN、设置验形、外观拒写、数据库选择、项目回滚、版本同构、Eagle 稳定身份/安全边界/伴侣包完整性、灵感行与灵感集版式两侧同源、公开源码隐私边界与移动端 Node 边界
+tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，覆盖数据合并、划线身份、日期、换行符、ISBN、设置验形、外观拒写、数据库选择、项目回滚、版本同构、Outliner 默认启用/手册/致谢同构、Eagle 稳定身份/安全边界/伴侣包完整性、灵感行与灵感集版式两侧同源、公开源码隐私边界与移动端 Node 边界
 src/ - 插件源码 (2子目录: core 无业务的基础设施、命令注册台、视图引擎与版次闸门 edition.ts、modules 含 setup 开荒、projects 项目领域与容器流程、books 读书笔记与划线导入、inspiration 灵感收集、calendar 中国日历与节假日缓存、review 五级复盘、contacts 人脉与客户、appearance 外观开关与片段出境口、format 排版整理、editing 粘贴成链接与光标记忆、eagle 附件桥接的 Obsidian 半边、explorer 文件夹计数与最近文件与当前路径、legacy 旧版三入口、ribbon 左侧边栏命令、about 作者名片)
 </directory>
 
