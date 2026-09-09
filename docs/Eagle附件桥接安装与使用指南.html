@@ -1,5 +1,5 @@
 <!--
-  [INPUT]: 依赖 README 的三库升级口令、skill-pro/SKILL.md 的程序升级边界，以及 v0.22.7 交付的 Eagle 配对、编辑器跳转、应用唤起、内容容器/日记归档与图片分流语义
+  [INPUT]: 依赖 README 的三库升级口令、skill-pro/SKILL.md 的程序升级边界，以及 v0.22.8 交付的 Eagle 配对、编辑器跳转、应用唤起、内容容器/日记归档与图片分流语义
   [OUTPUT]: 提供可单文件打开、打印或转发给学员的 macOS/Windows 升级、安装、配对、图床分流、内容容器/日记归档验收与排障指南
   [POS]: docs 的用户交付说明；只翻译既有施工契约与产品行为，不另造安装流程，不要求学员接触源码或 data.json
   [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -101,7 +101,7 @@
 <body>
   <main class="page">
     <header class="hero">
-      <p class="eyebrow">ziminOS PRO · v0.22.7</p>
+      <p class="eyebrow">ziminOS PRO · v0.22.8</p>
       <h1>Obsidian × Eagle<br>附件桥接安装指南</h1>
       <p class="lead">给 ziminOS 学员的完整操作手册：先安全升级三库系统并覆盖安装同版 Eagle 伴侣，再完成配对；图片可继续走现有图床，其他附件会按笔记位置进入 Eagle 的“项目/容器名”或“日记”。</p>
       <div class="tags"><span class="tag">macOS</span><span class="tag">Windows</span><span class="tag">图片走图床</span><span class="tag">附件走 Eagle</span><span class="tag">容器与日记归档</span></div>
@@ -128,10 +128,10 @@
 
     <section id="upgrade">
       <div class="kicker">Step 01</div>
-      <h2>先把 ziminOS 升级到 v0.22.7</h2>
+      <h2>先把 ziminOS 升级到 v0.22.8</h2>
       <p>用桌面智能体打开三本笔记库外面的<strong>系统根</strong>，不是打开“以人为本”或另外两本库。把下面整段原样发给智能体：</p>
       <pre>请读取并严格执行 https://gitee.com/ziminzhao/ziminos-pro/blob/main/skill-pro/SKILL.md 中的「三、C 三库系统的日常升级」。当前工作区是已经装好的 ziminOS 三库系统的系统根，这是升级不是安装：不要重新铺库，不要询问名称或位置，不要动我的笔记、配色、我自己放进 snippets/ 的片段与其他插件的配置。必须先完整执行「二、在工作区外取得施工源」（仓库 https://gitee.com/ziminzhao/ziminos-pro.git，克隆到系统临时目录，不要克隆进工作区），再逐条执行 C 模式，然后按「四、验证」核对、按「五、清理」删掉临时源码。最后把升级前后的插件版本号一起报给我。任何一步失败就停下来告诉我是哪一步，不要跳过，也不要换别的做法绕过去。</pre>
-      <div class="callout ok"><strong>合格回执必须出现两个版本号。</strong>升级后的版本应为 <code>0.22.7</code> 或更高；如果只说“完成了”却没有升级前后版本，让智能体重新执行验证。</div>
+      <div class="callout ok"><strong>合格回执必须出现两个版本号。</strong>升级后的版本应为 <code>0.22.8</code> 或更高；如果只说“完成了”却没有升级前后版本，让智能体重新执行验证。</div>
       <p class="muted">升级程序会把 Eagle 伴侣安装包同时放进“以人为本”和“赛博永生”的 ziminOS 插件目录，但不会替你安装进 Eagle，也不会读取或覆盖任何 <code>data.json</code>。</p>
     </section>
 
@@ -144,7 +144,7 @@
         <article class="step"><h3>把安装包交给 Eagle</h3><p>双击这个 <code>.eagleplugin</code> 文件并确认安装。如果双击没有唤起 Eagle，就保持 Eagle 已打开，再把文件拖进 Eagle 窗口完成安装。</p></article>
         <article class="step"><h3>打开伴侣窗口</h3><p>安装后窗口通常会自动出现。若没有出现，打开 Eagle 的插件面板（可按 <code>P</code>），找到 <strong>ziminOS Obsidian Bridge</strong> 并打开。</p></article>
       </div>
-      <div class="callout warn"><strong>升级到 v0.22.7 时，所有旧版用户都必须覆盖安装随包附带的 v0.22.7 Eagle 伴侣。</strong>内容容器与日记分流需要 Obsidian 和 Eagle 两端共同完成；只更新 Obsidian 端时会在写入前明确提示“伴侣版本过旧”，不会把附件误放进“全部”。</div>
+      <div class="callout warn"><strong>升级到 v0.22.8 时，所有旧版用户都必须覆盖安装随包附带的 v0.22.8 Eagle 伴侣。</strong>内容容器与日记分流需要 Obsidian 和 Eagle 两端共同完成；只更新 Obsidian 端时会在写入前明确提示“伴侣版本过旧”，不会把附件误放进“全部”。</div>
       <div class="callout"><strong>平时只需安装一次 Eagle 伴侣。</strong>以后更新 ziminOS 时，新版 <code>.eagleplugin</code> 会随包送到 Obsidian 插件目录；版本说明要求升级伴侣时，用同样方式覆盖安装即可。</div>
     </section>
 
@@ -229,7 +229,7 @@
           </tbody>
         </table>
       </div>
-      <p class="muted">v0.22.7 的容器/日记路由与图片分流都只作用于此后新粘贴或拖入的附件。已有 Eagle 附件不会被批量搬家，已有本地附件也不会自动迁移或删除。</p>
+      <p class="muted">v0.22.8 的容器/日记路由与图片分流都只作用于此后新粘贴或拖入的附件。已有 Eagle 附件不会被批量搬家，已有本地附件也不会自动迁移或删除。</p>
     </section>
 
     <section id="troubleshoot">
@@ -244,12 +244,12 @@
             <tr><td>提示当前资源库不同</td><td>Eagle 是否切到了另一套库，或是否搬动了整个库目录</td><td>确认目标资源库后重新配对；笔记链接不用改</td></tr>
             <tr><td>开启图片分流后，图片没有上图床</td><td>图床插件是否已启用且本身上传正常</td><td>先关闭 Eagle 接管单独测试图床插件；ziminOS 只放行事件，不代替图床上传</td></tr>
             <tr><td>同时拖入图片和 PDF 后提示跳过图片</td><td>是否把两类附件混在同一次操作</td><td>PDF 已进 Eagle；请把图片单独再粘贴或拖入一次</td></tr>
-            <tr><td>领域、资源或存档附件仍停在“全部”</td><td>ziminOS 和 Eagle 伴侣是否都已升级到 v0.22.7；笔记是否位于内容根下的某个一级容器</td><td>覆盖安装同版 Eagle 伴侣；把散落在内容根的笔记放入准确的一级容器后重新导入</td></tr>
+            <tr><td>领域、资源或存档附件仍停在“全部”</td><td>ziminOS 和 Eagle 伴侣是否都已升级到 v0.22.8；笔记是否位于内容根下的某个一级容器</td><td>覆盖安装同版 Eagle 伴侣；把散落在内容根的笔记放入准确的一级容器后重新导入</td></tr>
             <tr><td>日记附件没有进入“日记”</td><td>当前笔记是否位于设置中的日记根；Eagle 是否有多个同名“日记”根目录</td><td>确认日记路径设置；合并重复目录，只保留一个“日记”后重新导入</td></tr>
             <tr><td>提示存在多个同名项目文件夹</td><td>Eagle 的根目录或“项目”目录内是否有重复同名文件夹</td><td>在 Eagle 合并或改名，只保留一个准确目录，再重新粘贴附件</td></tr>
             <tr><td>链接存在但图片不显示</td><td>伴侣“检测”是否正常、Eagle 项目是否被删除</td><td>恢复连接或从 Eagle 恢复项目；不要手改链接里的 itemId</td></tr>
             <tr><td>YAML 或实时预览单击不跳转</td><td>是否使用了编辑器的修饰键手势</td><td>macOS 按 <code>⌘ + 单击</code>，Windows 按 <code>Ctrl + 单击</code>；升级到 v0.22.1 或更高</td></tr>
-            <tr><td>Eagle 最小化后只定位、不出现窗口</td><td>Eagle 是否低于 4.0 Build 18，ziminOS 是否低于 v0.22.2</td><td>先升级 Eagle 和 ziminOS，然后覆盖安装 v0.22.7 Eagle 伴侣</td></tr>
+            <tr><td>Eagle 最小化后只定位、不出现窗口</td><td>Eagle 是否低于 4.0 Build 18，ziminOS 是否低于 v0.22.2</td><td>先升级 Eagle 和 ziminOS，然后覆盖安装 v0.22.8 Eagle 伴侣</td></tr>
             <tr><td>Eagle 完全退出后无法自动启动</td><td>操作系统是否将 <code>eagle://</code> 协议正确关联到 Eagle</td><td>手动启动 Eagle 并升级/重装 Eagle；这不需要修改笔记链接</td></tr>
             <tr><td>换到另一台电脑后未配对</td><td>配对令牌属于当前设备与当前 Obsidian 库</td><td>在新电脑安装伴侣并重新配对；Markdown 不需要迁移或改写</td></tr>
             <tr><td>离线时点了“断开”</td><td>Obsidian 会先清本机凭据，但 Eagle 端可能没收到撤销请求</td><td>以后打开 Eagle 伴侣，在“已配对的 Obsidian 库”里手动移除旧授权</td></tr>
@@ -281,7 +281,7 @@
       </ul>
     </section>
 
-    <footer class="footer">ziminOS × Eagle 附件桥接安装与使用指南 · v0.22.7 · 2026-09-09</footer>
+    <footer class="footer">ziminOS × Eagle 附件桥接安装与使用指南 · v0.22.8 · 2026-09-09</footer>
   </main>
 </body>
 </html>

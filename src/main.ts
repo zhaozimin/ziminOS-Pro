@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 obsidian 的 Plugin 基类；依赖 core 的 SelfWriteGuard、CommandRegistry、
  *          INIT_VAULT_COMMAND、DEFAULT_SETTINGS/normalizeSettings、
  *          ZiminosSettings/ZiminosContext/VaultSeed 契约、PERIODS 与 registerViewCodeBlock；
- *          依赖 modules/setup 的 initializeVault/applySeed，以及项目管理、读书笔记、灵感收集、
+ *          依赖 modules/setup 的 initializeVault/applySeed，以及项目管理（含存量 Bases 迁移）、读书笔记、灵感收集、
  *          日历、复盘、人脉与客户七个模块各自的 seed、register 函数与视图数组，
  *          其中读书笔记那三条命令还要 modules/projects/createContainer 的 createContainer/BOOK_KIND
  *          来填「建一个书籍容器」那个洞，设置页那颗「扫码连接」还要 modules/books/sourceWeread
@@ -80,6 +80,7 @@ import { createExportHook } from './modules/eternal/export';
 import { eternalRawViews, humanEternalViews } from './modules/eternal/views';
 import { registerCreateProjectCommand } from './modules/projects/createProject';
 import { attachmentRouteOfNotePath } from './modules/projects/location';
+import { registerBaseMigrationCommand } from './modules/projects/migrateBases';
 import { projectsSeed } from './modules/projects/seed';
 import { registerTransitionCommands } from './modules/projects/transitions';
 import { registerUpdatedMaintainer } from './modules/projects/updatedMaintainer';
@@ -157,6 +158,7 @@ export default class ZiminosPlugin extends Plugin {
         registerCreateProjectCommand(ctx, (title) => pickPerson(ctx, title));
         registerCreateAreaCommand(ctx);
         registerCardInitCommand(ctx);
+        registerBaseMigrationCommand(ctx);
         registerCardAutoInit(ctx);
         // 归档移交：只有第二版的「以人为本」库才递得出这个洞。
         // 免费版与另外两本库拿到的是 undefined，于是流转命令里那条 if 恒为假，

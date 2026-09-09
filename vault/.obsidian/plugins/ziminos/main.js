@@ -34,7 +34,7 @@ __export(main_exports, {
   default: () => ZiminosPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian52 = require("obsidian");
+var import_obsidian53 = require("obsidian");
 
 // src/core/codeblock.ts
 var import_obsidian3 = require("obsidian");
@@ -841,6 +841,7 @@ var COMMAND_ICONS = {
   project: "ziminos-project",
   area: "ziminos-area",
   card: "ziminos-card",
+  migrate: "ziminos-migrate",
   done: "ziminos-done",
   paused: "ziminos-paused",
   dropped: "ziminos-dropped",
@@ -913,6 +914,13 @@ var PROJECT_COMMANDS = {
     id: "init-card",
     name: "\u521D\u59CB\u5316\u5F53\u524D\u5361\u7247",
     icon: COMMAND_ICONS.card,
+    group: COMMAND_GROUPS.projects
+  },
+  /** 用户主动触发的存量升级：预览导航/MOC Base 差异，确认后写入，失败整批回滚 */
+  migrate: {
+    id: "migrate-moc-bases",
+    name: "\u5347\u7EA7\u5B58\u91CF MOC \u6570\u636E\u5E93",
+    icon: COMMAND_ICONS.migrate,
     group: COMMAND_GROUPS.projects
   }
 };
@@ -21085,6 +21093,562 @@ function attachmentRouteOfNotePath(settings, notePath) {
   return null;
 }
 
+// src/modules/projects/migrateBases.ts
+var import_obsidian43 = require("obsidian");
+
+// src/modules/projects/baseMigration.ts
+var MigrationBatchError = class extends Error {
+  constructor(operationError, rollbackFailures) {
+    const operationMessage = errorMessage6(operationError);
+    const detail = rollbackFailures.length ? `\u81EA\u52A8\u56DE\u6EDA\u672A\u80FD\u6062\u590D\uFF1A${rollbackFailures.join("\uFF1B")}` : "\u672C\u8F6E\u5DF2\u4FEE\u6539\u6587\u4EF6\u5DF2\u5168\u90E8\u56DE\u6EDA";
+    super(`\u8FC1\u79FB\u5931\u8D25\uFF1A${operationMessage}\u3002${detail}\u3002`);
+    this.name = "MigrationBatchError";
+    this.operationError = operationError;
+    this.rollbackFailures = rollbackFailures;
+  }
+};
+var CURRENT_MOC_BASE = mocBaseBlock();
+var CURRENT_NAV_BASE = currentNavigationBase();
+var MIGRATABLE_MOC_TYPES = /* @__PURE__ */ new Set([
+  NOTE_TYPES.project,
+  NOTE_TYPES.area,
+  NOTE_TYPES.book
+]);
+var LEGACY_NAV_BASE = [
+  "```base",
+  "properties:",
+  "  note.description:",
+  "    displayName: \u6982\u8FF0",
+  "  note.status:",
+  "    displayName: \u72B6\u6001",
+  "views:",
+  "  - type: table",
+  "    name: \u6B63\u5728\u8FDB\u884C\u4E2D",
+  "    filters:",
+  "      and:",
+  '        - status == "active"',
+  "    order:",
+  "      - file.name",
+  "      - description",
+  "      - status",
+  "  - type: table",
+  "    name: \u9879\u76EE",
+  "    filters:",
+  "      and:",
+  '        - type == "project"',
+  "    order:",
+  "      - file.name",
+  "      - description",
+  "      - status",
+  "  - type: table",
+  "    name: \u9886\u57DF",
+  "    filters:",
+  "      and:",
+  '        - type == "area"',
+  "    order:",
+  "      - file.name",
+  "      - description",
+  "      - status",
+  "  - type: table",
+  "    name: \u4E66\u7C4D",
+  "    filters:",
+  "      and:",
+  '        - type == "book"',
+  "    order:",
+  "      - file.name",
+  "      - description",
+  "      - status",
+  "",
+  "```"
+].join("\n");
+var LEGACY_RELATIVE_MOC_BASE = [
+  "```base",
+  "filters:",
+  "  and:",
+  "    - file.path != this.file.path",
+  `    - '!file.inFolder("90-system")'`,
+  "properties:",
+  "  note.description:",
+  "    displayName: \u6982\u8FF0",
+  "  note.rating:",
+  "    displayName: \u8BC4\u5206",
+  "views:",
+  "  - type: table",
+  "    name: \u9879\u76EE\u6587\u4EF6",
+  "    filters:",
+  "      or:",
+  "        - up.contains(this.file.asLink())",
+  "        - file.folder == this.file.folder",
+  "    order:",
+  "      - file.name",
+  "      - description",
+  "      - rating",
+  "    sort:",
+  "      - property: rating",
+  "        direction: DESC",
+  "    columnSize:",
+  "      file.name: 170",
+  "      note.description: 421",
+  "",
+  "```"
+].join("\n");
+var LEGACY_HARDCODED_MOC_SKELETON = [
+  "```base",
+  "filters:",
+  "  and:",
+  "    - file.path != this.file.path",
+  "properties:",
+  "  note.description:",
+  "    displayName: \u6982\u8FF0",
+  "  note.rating:",
+  "    displayName: \u8BC4\u5206",
+  "views:",
+  "  - type: table",
+  "    name: <view>",
+  "    filters:",
+  "      or:",
+  "        - up == link(<moc>)",
+  "        - file.folder == <folder>",
+  "    order:",
+  "      - file.name",
+  "      - description",
+  "      - rating",
+  "    sort:",
+  "      - property: rating",
+  "        direction: DESC",
+  "    columnSize:",
+  "      file.name: 170",
+  "      note.description: 421",
+  "",
+  "```"
+].join("\n");
+function planMocBaseUpgrade(content) {
+  const scan = scanBaseBlocks(content);
+  if (scan.unclosed) {
+    return { status: "conflict", reason: "\u5B58\u5728\u672A\u95ED\u5408\u7684 ```base \u4EE3\u7801\u5757" };
+  }
+  if (scan.blocks.length > 1) {
+    return { status: "conflict", reason: `\u5B58\u5728 ${scan.blocks.length} \u4E2A Base\uFF0C\u65E0\u6CD5\u5224\u65AD\u8BE5\u66FF\u6362\u54EA\u4E00\u4E2A` };
+  }
+  if (scan.blocks.length === 0) {
+    const afterBlock2 = withDocumentLineEnding(CURRENT_MOC_BASE, content);
+    return {
+      status: "change",
+      action: "\u8865\u4E0A\u7F3A\u5931 Base",
+      content: appendBlock(content, afterBlock2),
+      beforeBlock: null,
+      afterBlock: afterBlock2
+    };
+  }
+  const block = scan.blocks[0];
+  const normalized = normalizeLineEndings(block.text);
+  if (normalized === CURRENT_MOC_BASE) return { status: "unchanged" };
+  if (normalized !== LEGACY_RELATIVE_MOC_BASE && !isLegacyHardcodedMocBase(normalized)) {
+    return { status: "conflict", reason: "Base \u542B\u6709\u81EA\u5B9A\u4E49\u5185\u5BB9\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u8986\u76D6" };
+  }
+  const afterBlock = withDocumentLineEnding(CURRENT_MOC_BASE, content);
+  return {
+    status: "change",
+    action: "\u66FF\u6362\u65E7 Base",
+    content: replaceBlock(content, block, afterBlock),
+    beforeBlock: block.text,
+    afterBlock
+  };
+}
+function isContainerMocIdentity(basename, parentName, type) {
+  const normalizedType = typeof type === "string" ? type.trim() : "";
+  const nameMatches = basename === parentName || basename === `${MOC_PREFIX}${parentName}`;
+  return nameMatches && MIGRATABLE_MOC_TYPES.has(normalizedType);
+}
+function planNavigationBaseUpgrade(content) {
+  const scan = scanBaseBlocks(content);
+  if (scan.unclosed) {
+    return { status: "conflict", reason: "\u5BFC\u822A\u9875\u5B58\u5728\u672A\u95ED\u5408\u7684 ```base \u4EE3\u7801\u5757" };
+  }
+  if (scan.blocks.length !== 1) {
+    return {
+      status: "conflict",
+      reason: scan.blocks.length === 0 ? "\u5BFC\u822A\u9875\u6CA1\u6709 Base\uFF0C\u65E0\u6CD5\u786E\u8BA4\u5176\u7ED3\u6784" : `\u5BFC\u822A\u9875\u5B58\u5728 ${scan.blocks.length} \u4E2A Base\uFF0C\u65E0\u6CD5\u5224\u65AD\u8BE5\u66FF\u6362\u54EA\u4E00\u4E2A`
+    };
+  }
+  const block = scan.blocks[0];
+  const normalized = normalizeLineEndings(block.text);
+  if (normalized === CURRENT_NAV_BASE) return { status: "unchanged" };
+  if (normalized !== LEGACY_NAV_BASE) {
+    return { status: "conflict", reason: "\u5BFC\u822A Base \u542B\u6709\u81EA\u5B9A\u4E49\u5185\u5BB9\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u8986\u76D6" };
+  }
+  const afterBlock = withDocumentLineEnding(CURRENT_NAV_BASE, content);
+  return {
+    status: "change",
+    action: "\u5347\u7EA7\u5BFC\u822A Base",
+    content: replaceBlock(content, block, afterBlock),
+    beforeBlock: block.text,
+    afterBlock
+  };
+}
+async function applyMigrationBatch(items, applyItem, rollbackItem, describeItem) {
+  const attempted = [];
+  try {
+    for (const item of items) {
+      attempted.push(item);
+      await applyItem(item);
+    }
+  } catch (operationError) {
+    const rollbackFailures = [];
+    for (const item of [...attempted].reverse()) {
+      try {
+        await rollbackItem(item);
+      } catch (rollbackError) {
+        rollbackFailures.push(`${describeItem(item)}\uFF08${errorMessage6(rollbackError)}\uFF09`);
+      }
+    }
+    throw new MigrationBatchError(operationError, rollbackFailures);
+  }
+}
+function currentNavigationBase() {
+  const scan = scanBaseBlocks(navContent());
+  if (scan.unclosed || scan.blocks.length !== 1) {
+    throw new Error("\u5F53\u524D\u5BFC\u822A\u6A21\u677F\u5FC5\u987B\u4E14\u53EA\u80FD\u5305\u542B\u4E00\u4E2A\u95ED\u5408 Base");
+  }
+  return normalizeLineEndings(scan.blocks[0].text);
+}
+function isLegacyHardcodedMocBase(block) {
+  var _a, _b, _c;
+  const lines = block.split("\n");
+  if (lines.length !== LEGACY_HARDCODED_MOC_SKELETON.split("\n").length) return false;
+  if (!/^    name: (项目文件|读书卡片)$/.test((_a = lines[11]) != null ? _a : "")) return false;
+  if (!isJsonStringExpression((_b = lines[14]) != null ? _b : "", "        - up == link(", ")")) return false;
+  if (!isJsonStringExpression((_c = lines[15]) != null ? _c : "", "        - file.folder == ", "")) return false;
+  const normalized = [...lines];
+  normalized[11] = "    name: <view>";
+  normalized[14] = "        - up == link(<moc>)";
+  normalized[15] = "        - file.folder == <folder>";
+  return normalized.join("\n") === LEGACY_HARDCODED_MOC_SKELETON;
+}
+function isJsonStringExpression(line, prefix, suffix) {
+  if (!line.startsWith(prefix) || !line.endsWith(suffix)) return false;
+  const end = suffix ? line.length - suffix.length : line.length;
+  const expression = line.slice(prefix.length, end);
+  try {
+    return typeof JSON.parse(expression) === "string";
+  } catch (e) {
+    return false;
+  }
+}
+function scanBaseBlocks(content) {
+  const lines = lineRanges(content);
+  const blocks = [];
+  let opening = null;
+  for (const line of lines) {
+    if (!opening) {
+      if (line.text.trimEnd() === "```base") opening = line;
+      continue;
+    }
+    if (line.text.trimEnd() !== "```") continue;
+    blocks.push({
+      start: opening.start,
+      end: line.end,
+      text: content.slice(opening.start, line.end)
+    });
+    opening = null;
+  }
+  return { blocks, unclosed: opening !== null };
+}
+function lineRanges(content) {
+  const lines = [];
+  let start = 0;
+  while (start < content.length) {
+    let cursor = start;
+    while (cursor < content.length && content[cursor] !== "\r" && content[cursor] !== "\n") {
+      cursor += 1;
+    }
+    lines.push({ start, end: cursor, text: content.slice(start, cursor) });
+    if (cursor >= content.length) break;
+    start = content[cursor] === "\r" && content[cursor + 1] === "\n" ? cursor + 2 : cursor + 1;
+  }
+  return lines;
+}
+function replaceBlock(content, block, replacement) {
+  return content.slice(0, block.start) + replacement + content.slice(block.end);
+}
+function appendBlock(content, block) {
+  var _a, _b, _c, _d;
+  if (!content) return `${block}${lineEndingOf(block)}`;
+  const lineEnding = lineEndingOf(content);
+  const trailingBreaks = (_d = (_c = (_b = (_a = content.match(/(?:(?:\r\n|\r|\n))+$/)) == null ? void 0 : _a[0]) == null ? void 0 : _b.match(/\r\n|\r|\n/g)) == null ? void 0 : _c.length) != null ? _d : 0;
+  const gap = lineEnding.repeat(Math.max(0, 2 - trailingBreaks));
+  return `${content}${gap}${block}${lineEnding}`;
+}
+function withDocumentLineEnding(block, content) {
+  return block.replace(/\n/g, lineEndingOf(content));
+}
+function normalizeLineEndings(content) {
+  return content.replace(/\r\n|\r/g, "\n");
+}
+function errorMessage6(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// src/modules/projects/migrateBases.ts
+function registerBaseMigrationCommand(ctx) {
+  let running = false;
+  ctx.commands.register(PROJECT_COMMANDS.migrate, () => {
+    if (running) {
+      new import_obsidian43.Notice("\u5B58\u91CF MOC \u6570\u636E\u5E93\u5347\u7EA7\u6B63\u5728\u8FDB\u884C\uFF0C\u8BF7\u5148\u5B8C\u6210\u5F53\u524D\u7A97\u53E3\u3002");
+      return;
+    }
+    running = true;
+    void runBaseMigration(ctx).catch((error) => {
+      new MigrationReportModal(ctx.app, "\u5B58\u91CF\u6570\u636E\u5E93\u5347\u7EA7\u5931\u8D25", [errorMessage7(error)]).open();
+    }).finally(() => {
+      running = false;
+    });
+  });
+}
+async function runBaseMigration(ctx) {
+  const scanning = new import_obsidian43.Notice("\u6B63\u5728\u68C0\u67E5\u5BFC\u822A\u4E0E\u5B58\u91CF MOC \u6570\u636E\u5E93\u2026", 0);
+  let preview;
+  try {
+    preview = await buildMigrationPreview(ctx);
+  } catch (error) {
+    scanning.hide();
+    new MigrationReportModal(ctx.app, "\u68C0\u67E5\u5931\u8D25", [errorMessage7(error)]).open();
+    return;
+  }
+  scanning.hide();
+  const confirmed = await new BaseMigrationPreviewModal(ctx.app, preview).openAndConfirm();
+  if (!confirmed || preview.changes.length === 0) return;
+  const migrating = new import_obsidian43.Notice(`\u6B63\u5728\u8FC1\u79FB ${preview.changes.length} \u4E2A\u6587\u4EF6\u2026`, 0);
+  try {
+    await applyMigrationsWithRollback(ctx, preview.changes);
+    migrating.hide();
+    const summary = [`\u5DF2\u5347\u7EA7 ${preview.changes.length} \u4E2A\u6587\u4EF6\u3002`];
+    if (preview.conflicts.length) {
+      summary.push(`${preview.conflicts.length} \u4E2A\u81EA\u5B9A\u4E49\u6216\u5F02\u5E38\u6587\u4EF6\u4FDD\u6301\u539F\u6837\uFF0C\u8BF7\u6309\u9884\u89C8\u6E05\u5355\u4EBA\u5DE5\u5904\u7406\u3002`);
+    }
+    new MigrationReportModal(ctx.app, "\u5B58\u91CF\u6570\u636E\u5E93\u5347\u7EA7\u5B8C\u6210", summary).open();
+  } catch (error) {
+    migrating.hide();
+    new MigrationReportModal(ctx.app, "\u5B58\u91CF\u6570\u636E\u5E93\u5347\u7EA7\u5931\u8D25", [errorMessage7(error)]).open();
+  }
+}
+async function buildMigrationPreview(ctx) {
+  const changes = [];
+  const conflicts = [];
+  let unchangedCount = 0;
+  const navigation = ctx.app.vault.getAbstractFileByPath(NAV_FILE);
+  if (navigation instanceof import_obsidian43.TFile) {
+    const content = await ctx.app.vault.read(navigation);
+    const result = planNavigationBaseUpgrade(content);
+    const counted = collectResult(navigation, content, result, changes, conflicts);
+    if (counted === "unchanged") unchangedCount += 1;
+  } else if (navigation) {
+    conflicts.push({ path: NAV_FILE, reason: "\u5BFC\u822A\u8DEF\u5F84\u5B58\u5728\uFF0C\u4F46\u4E0D\u662F Markdown \u6587\u4EF6" });
+  } else {
+    conflicts.push({ path: NAV_FILE, reason: "\u5BFC\u822A\u9875\u4E0D\u5B58\u5728\uFF1B\u8BF7\u5148\u6267\u884C\u201C\u521D\u59CB\u5316\u7B14\u8BB0\u5E93\u201D\u8865\u9F50" });
+  }
+  for (const file of ctx.app.vault.getMarkdownFiles()) {
+    if (file.path === NAV_FILE) continue;
+    if (!await isMocCandidate(ctx, file)) continue;
+    try {
+      const content = await ctx.app.vault.read(file);
+      const result = planMocBaseUpgrade(content);
+      const counted = collectResult(file, content, result, changes, conflicts);
+      if (counted === "unchanged") unchangedCount += 1;
+    } catch (error) {
+      conflicts.push({ path: file.path, reason: `\u8BFB\u53D6\u5931\u8D25\uFF1A${errorMessage7(error)}` });
+    }
+  }
+  return {
+    changes: changes.sort(comparePath),
+    conflicts: conflicts.sort(comparePath),
+    unchangedCount
+  };
+}
+function collectResult(file, before, result, changes, conflicts) {
+  if (result.status === "unchanged") return "unchanged";
+  if (result.status === "conflict") {
+    conflicts.push({ path: file.path, reason: result.reason });
+    return "conflict";
+  }
+  changes.push({
+    path: file.path,
+    action: result.action,
+    before,
+    after: result.content,
+    beforeBlock: result.beforeBlock,
+    afterBlock: result.afterBlock
+  });
+  return "change";
+}
+async function isMocCandidate(ctx, file) {
+  var _a, _b, _c, _d, _e, _f, _g;
+  if (file.path === TEMPLATE_FILES.moc) return true;
+  const parentName = (_a = file.parent) == null ? void 0 : _a.name;
+  if (!parentName) return false;
+  const type = (_c = (_b = ctx.app.metadataCache.getFileCache(file)) == null ? void 0 : _b.frontmatter) == null ? void 0 : _c.type;
+  if (isContainerMocIdentity(file.basename, parentName, type)) return true;
+  const nameMatches = file.basename === parentName || file.basename === `${MOC_PREFIX}${parentName}`;
+  if (!nameMatches) return false;
+  const content = await ctx.app.vault.read(file);
+  const frontmatter = (_e = (_d = content.match(/^---(?:\r\n|\r|\n)([\s\S]*?)(?:\r\n|\r|\n)---(?:\r\n|\r|\n|$)/)) == null ? void 0 : _d[1]) != null ? _e : "";
+  const rawType = (_g = (_f = frontmatter.match(/^type:\s*["']?([^"'\s#]+)["']?\s*(?:#.*)?$/m)) == null ? void 0 : _f[1]) != null ? _g : "";
+  return isContainerMocIdentity(file.basename, parentName, rawType);
+}
+async function applyMigrationsWithRollback(ctx, changes) {
+  await applyMigrationBatch(
+    changes,
+    async (change) => {
+      const currentFile = ctx.app.vault.getAbstractFileByPath(change.path);
+      if (!(currentFile instanceof import_obsidian43.TFile)) {
+        throw new Error(`${change.path} \u5728\u786E\u8BA4\u540E\u88AB\u79FB\u52A8\u6216\u5220\u9664`);
+      }
+      ctx.guard.mark(change.path);
+      await ctx.app.vault.process(currentFile, (current) => {
+        if (current !== change.before) {
+          throw new Error(`${change.path} \u5728\u9884\u89C8\u540E\u53D1\u751F\u53D8\u5316\uFF0C\u5DF2\u505C\u6B62\u4EE5\u514D\u8986\u76D6\u65B0\u5185\u5BB9`);
+        }
+        return change.after;
+      });
+    },
+    async (change) => {
+      const file = ctx.app.vault.getAbstractFileByPath(change.path);
+      if (!(file instanceof import_obsidian43.TFile)) throw new Error("\u6587\u4EF6\u5DF2\u88AB\u79FB\u52A8\u6216\u5220\u9664");
+      ctx.guard.mark(change.path);
+      await ctx.app.vault.process(file, (current) => {
+        if (current === change.before) return current;
+        if (current !== change.after) throw new Error("\u56DE\u6EDA\u524D\u6587\u4EF6\u53C8\u53D1\u751F\u53D8\u5316\uFF0C\u62D2\u7EDD\u8986\u76D6");
+        return change.before;
+      });
+    },
+    (change) => change.path
+  );
+}
+var BaseMigrationPreviewModal = class extends import_obsidian43.Modal {
+  constructor(app, preview) {
+    super(app);
+    this.resolver = null;
+    this.settled = false;
+    this.preview = preview;
+  }
+  openAndConfirm() {
+    return new Promise((resolve) => {
+      this.resolver = resolve;
+      this.open();
+    });
+  }
+  onOpen() {
+    const { changes, conflicts, unchangedCount } = this.preview;
+    this.titleEl.setText("\u9884\u89C8\u5B58\u91CF\u6570\u636E\u5E93\u5347\u7EA7");
+    this.contentEl.empty();
+    const summary = this.contentEl.createEl("p", {
+      text: `\u5F85\u5347\u7EA7 ${changes.length} \u4E2A \xB7 \u5DF2\u662F\u65B0\u7248 ${unchangedCount} \u4E2A \xB7 \u51B2\u7A81\u8DF3\u8FC7 ${conflicts.length} \u4E2A`
+    });
+    summary.style.margin = "0 0 12px";
+    summary.style.fontWeight = "600";
+    const note = this.contentEl.createEl("p", {
+      text: "\u5C55\u5F00\u6587\u4EF6\u53EF\u67E5\u770B Base \u7684\u5F53\u524D\u5185\u5BB9\u4E0E\u5347\u7EA7\u540E\u5185\u5BB9\u3002\u786E\u8BA4\u540E\u53EA\u4FEE\u6539\u201C\u5F85\u5347\u7EA7\u201D\u6587\u4EF6\uFF1B\u51B2\u7A81\u6587\u4EF6\u4FDD\u6301\u539F\u6837\u3002"
+    });
+    note.style.margin = "0 0 14px";
+    note.style.color = "var(--text-muted)";
+    note.style.lineHeight = "1.6";
+    const list = this.contentEl.createDiv();
+    list.style.maxHeight = "52vh";
+    list.style.overflow = "auto";
+    list.style.border = "1px solid var(--background-modifier-border)";
+    list.style.borderRadius = "8px";
+    list.style.padding = "6px 10px";
+    for (const [index, change] of changes.entries()) {
+      const details = list.createEl("details");
+      details.open = index === 0;
+      const label = details.createEl("summary", {
+        text: `${change.action} \xB7 ${change.path}`
+      });
+      label.style.cursor = "pointer";
+      label.style.padding = "8px 2px";
+      const diff = details.createEl("pre");
+      diff.setText(renderBlockDiff(change.beforeBlock, change.afterBlock));
+      diff.style.margin = "0 0 10px";
+      diff.style.padding = "10px";
+      diff.style.maxHeight = "320px";
+      diff.style.overflow = "auto";
+      diff.style.whiteSpace = "pre";
+      diff.style.fontSize = "0.82em";
+      diff.style.background = "var(--background-primary-alt)";
+    }
+    if (conflicts.length) {
+      const heading = list.createEl("h4", { text: "\u4FDD\u6301\u539F\u6837\u7684\u51B2\u7A81\u6587\u4EF6" });
+      heading.style.margin = "12px 0 4px";
+      const conflictList = list.createEl("ul");
+      for (const conflict of conflicts) {
+        conflictList.createEl("li", { text: `${conflict.path}\uFF1A${conflict.reason}` });
+      }
+    }
+    if (!changes.length && !conflicts.length) {
+      list.createEl("p", { text: "\u6CA1\u6709\u53D1\u73B0\u9700\u8981\u5347\u7EA7\u7684\u5BFC\u822A\u6216 MOC\u3002" });
+    }
+    const buttonBar = this.contentEl.createDiv();
+    buttonBar.style.display = "flex";
+    buttonBar.style.justifyContent = "flex-end";
+    buttonBar.style.gap = "8px";
+    buttonBar.style.marginTop = "16px";
+    new import_obsidian43.ButtonComponent(buttonBar).setButtonText(changes.length ? "\u53D6\u6D88" : "\u5173\u95ED").onClick(() => this.settle(false));
+    if (changes.length) {
+      new import_obsidian43.ButtonComponent(buttonBar).setButtonText(`\u786E\u8BA4\u8FC1\u79FB ${changes.length} \u4E2A\u6587\u4EF6`).setCta().onClick(() => this.settle(true));
+    }
+  }
+  onClose() {
+    this.settle(false);
+    this.contentEl.empty();
+  }
+  settle(confirmed) {
+    if (this.settled) return;
+    this.settled = true;
+    const resolve = this.resolver;
+    this.resolver = null;
+    if (resolve) resolve(confirmed);
+    this.close();
+  }
+};
+var MigrationReportModal = class extends import_obsidian43.Modal {
+  constructor(app, heading, lines) {
+    super(app);
+    this.heading = heading;
+    this.lines = lines;
+  }
+  onOpen() {
+    this.titleEl.setText(this.heading);
+    this.contentEl.empty();
+    for (const line of this.lines) {
+      const paragraph = this.contentEl.createEl("p", { text: line });
+      paragraph.style.lineHeight = "1.6";
+    }
+    const buttonBar = this.contentEl.createDiv();
+    buttonBar.style.display = "flex";
+    buttonBar.style.justifyContent = "flex-end";
+    new import_obsidian43.ButtonComponent(buttonBar).setButtonText("\u5173\u95ED").setCta().onClick(() => this.close());
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+function renderBlockDiff(before, after) {
+  const beforeLines = before === null ? ["\uFF08\u5F53\u524D\u6CA1\u6709 Base\uFF09"] : before.replace(/\r\n|\r/g, "\n").split("\n");
+  const afterLines = after.replace(/\r\n|\r/g, "\n").split("\n");
+  return [
+    "--- \u5F53\u524D",
+    "+++ \u5347\u7EA7\u540E",
+    ...beforeLines.map((line) => `- ${line}`),
+    ...afterLines.map((line) => `+ ${line}`)
+  ].join("\n");
+}
+function comparePath(left, right) {
+  return left.path.localeCompare(right.path, "zh-CN");
+}
+function errorMessage7(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 // src/modules/projects/seed.ts
 function projectsSeed() {
   return {
@@ -21098,7 +21662,7 @@ function projectsSeed() {
 }
 
 // src/modules/projects/transitions.ts
-var import_obsidian43 = require("obsidian");
+var import_obsidian44 = require("obsidian");
 var MOVABLE_TYPES = CONTAINER_TYPES;
 var CONFIRM_MODAL_CLASS = "qa-project-transition-confirm";
 var ARCHIVE_HANDOVER_STATUS = TRANSITIONS.done.status;
@@ -21113,7 +21677,7 @@ async function runProjectTransition(ctx, action, onArchived) {
   try {
     const transition = TRANSITIONS[action];
     if (!transition) {
-      new import_obsidian43.Notice(`\u672A\u77E5\u7684\u9879\u76EE\u6D41\u8F6C\u52A8\u4F5C\uFF1A${action}`);
+      new import_obsidian44.Notice(`\u672A\u77E5\u7684\u9879\u76EE\u6D41\u8F6C\u52A8\u4F5C\uFF1A${action}`);
       return;
     }
     const plan = resolveTransitionPlan(ctx, transition);
@@ -21122,7 +21686,7 @@ async function runProjectTransition(ctx, action, onArchived) {
     if (!confirmed) return;
     await applyTransition(ctx, plan);
     await reopenMovedMoc(ctx, plan.targetMocPath);
-    new import_obsidian43.Notice(
+    new import_obsidian44.Notice(
       `\u9879\u76EE\u5DF2${transition.label}\uFF1A${plan.projectName} \u2192 ${formatStatusForDisplay(transition.status)}`
     );
     if (onArchived && transition.status === ARCHIVE_HANDOVER_STATUS) {
@@ -21135,7 +21699,7 @@ async function runProjectTransition(ctx, action, onArchived) {
       });
     }
   } catch (error) {
-    new import_obsidian43.Notice(`\u9879\u76EE\u72B6\u6001\u6D41\u8F6C\u5931\u8D25\uFF1A${getErrorMessage(error)}`);
+    new import_obsidian44.Notice(`\u9879\u76EE\u72B6\u6001\u6D41\u8F6C\u5931\u8D25\uFF1A${getErrorMessage(error)}`);
   }
 }
 function resolveTransitionPlan(ctx, transition) {
@@ -21144,46 +21708,46 @@ function resolveTransitionPlan(ctx, transition) {
   const activeFolder = normalizeFolderPath(settings.projectFolder, DEFAULT_SETTINGS.projectFolder);
   const archiveFolder = normalizeFolderPath(settings.archiveFolder, DEFAULT_SETTINGS.archiveFolder);
   if (activeFolder === archiveFolder) {
-    new import_obsidian43.Notice("\u9879\u76EE\u76EE\u5F55\u548C\u5F52\u6863\u76EE\u5F55\u4E0D\u80FD\u8BBE\u7F6E\u4E3A\u540C\u4E00\u8DEF\u5F84\u3002");
+    new import_obsidian44.Notice("\u9879\u76EE\u76EE\u5F55\u548C\u5F52\u6863\u76EE\u5F55\u4E0D\u80FD\u8BBE\u7F6E\u4E3A\u540C\u4E00\u8DEF\u5F84\u3002");
     return null;
   }
   const sourceRoot = transition.source === "active" ? activeFolder : archiveFolder;
   const targetRoot = transition.target === "active" ? activeFolder : archiveFolder;
   const mocFile = app.workspace.getActiveFile();
-  if (!(mocFile instanceof import_obsidian43.TFile) || mocFile.extension !== "md") {
-    new import_obsidian43.Notice("\u8BF7\u5148\u6253\u5F00\u9700\u8981\u8FDB\u884C\u72B6\u6001\u6D41\u8F6C\u7684\u9879\u76EE MOC\u3002");
+  if (!(mocFile instanceof import_obsidian44.TFile) || mocFile.extension !== "md") {
+    new import_obsidian44.Notice("\u8BF7\u5148\u6253\u5F00\u9700\u8981\u8FDB\u884C\u72B6\u6001\u6D41\u8F6C\u7684\u9879\u76EE MOC\u3002");
     return null;
   }
   const projectFolder = mocFile.parent;
-  if (!(projectFolder instanceof import_obsidian43.TFolder)) {
-    new import_obsidian43.Notice("\u65E0\u6CD5\u8BC6\u522B\u5F53\u524D\u9879\u76EE\u6587\u4EF6\u5939\u3002");
+  if (!(projectFolder instanceof import_obsidian44.TFolder)) {
+    new import_obsidian44.Notice("\u65E0\u6CD5\u8BC6\u522B\u5F53\u524D\u9879\u76EE\u6587\u4EF6\u5939\u3002");
     return null;
   }
   const projectName = projectFolder.name;
-  const sourceProjectPath = (0, import_obsidian43.normalizePath)(`${sourceRoot}/${projectName}`);
+  const sourceProjectPath = (0, import_obsidian44.normalizePath)(`${sourceRoot}/${projectName}`);
   const expectedMocPath = resolveMocPath(app, sourceProjectPath, projectName);
-  if ((0, import_obsidian43.normalizePath)(mocFile.path) !== expectedMocPath) {
-    new import_obsidian43.Notice(`\u5F53\u524D\u547D\u4EE4\u53EA\u80FD\u5728\u4EE5\u4E0B\u9879\u76EE MOC \u4E2D\u6267\u884C\uFF1A${expectedMocPath}`);
+  if ((0, import_obsidian44.normalizePath)(mocFile.path) !== expectedMocPath) {
+    new import_obsidian44.Notice(`\u5F53\u524D\u547D\u4EE4\u53EA\u80FD\u5728\u4EE5\u4E0B\u9879\u76EE MOC \u4E2D\u6267\u884C\uFF1A${expectedMocPath}`);
     return null;
   }
   const frontmatter = (_a = app.metadataCache.getFileCache(mocFile)) == null ? void 0 : _a.frontmatter;
   const type = normalizeText(frontmatter == null ? void 0 : frontmatter.type);
   const currentStatus = normalizeText(frontmatter == null ? void 0 : frontmatter.status);
   if (!MOVABLE_TYPES.includes(type)) {
-    new import_obsidian43.Notice("\u5F53\u524D\u7B14\u8BB0\u4E0D\u662F\u9879\u76EE\u6216\u8BFB\u4E66\u7B14\u8BB0 MOC\uFF1A\u7F3A\u5C11 type: project\uFF08\u9879\u76EE\uFF09\u6216 type: book\uFF08\u4E66\uFF09\u3002");
+    new import_obsidian44.Notice("\u5F53\u524D\u7B14\u8BB0\u4E0D\u662F\u9879\u76EE\u6216\u8BFB\u4E66\u7B14\u8BB0 MOC\uFF1A\u7F3A\u5C11 type: project\uFF08\u9879\u76EE\uFF09\u6216 type: book\uFF08\u4E66\uFF09\u3002");
     return null;
   }
   if (!transition.allowedStatuses.includes(currentStatus)) {
-    new import_obsidian43.Notice(
+    new import_obsidian44.Notice(
       `\u9879\u76EE\u5F53\u524D\u72B6\u6001\u4E3A\u201C${formatStatusForDisplay(currentStatus)}\u201D\uFF0C\u4E0D\u80FD\u6267\u884C\u201C${transition.label}\u201D\u64CD\u4F5C\u3002`
     );
     return null;
   }
-  const targetProjectPath = (0, import_obsidian43.normalizePath)(`${targetRoot}/${projectName}`);
-  const targetMocPath = (0, import_obsidian43.normalizePath)(`${targetProjectPath}/${mocFile.name}`);
+  const targetProjectPath = (0, import_obsidian44.normalizePath)(`${targetRoot}/${projectName}`);
+  const targetMocPath = (0, import_obsidian44.normalizePath)(`${targetProjectPath}/${mocFile.name}`);
   const existingTarget = app.vault.getAbstractFileByPath(targetProjectPath);
   if (existingTarget) {
-    new import_obsidian43.Notice(`\u76EE\u6807\u4F4D\u7F6E\u5DF2\u7ECF\u5B58\u5728\u540C\u540D\u9879\u76EE\uFF0C\u64CD\u4F5C\u5DF2\u505C\u6B62\uFF1A${targetProjectPath}`);
+    new import_obsidian44.Notice(`\u76EE\u6807\u4F4D\u7F6E\u5DF2\u7ECF\u5B58\u5728\u540C\u540D\u9879\u76EE\uFF0C\u64CD\u4F5C\u5DF2\u505C\u6B62\uFF1A${targetProjectPath}`);
     return null;
   }
   return {
@@ -21213,7 +21777,7 @@ async function applyTransition(ctx, plan) {
     markFolderTree(ctx, plan.projectFolder, plan.targetProjectPath);
     await app.fileManager.renameFile(plan.projectFolder, plan.targetProjectPath);
     const movedMoc = app.vault.getAbstractFileByPath(plan.targetMocPath);
-    if (!(movedMoc instanceof import_obsidian43.TFile)) {
+    if (!(movedMoc instanceof import_obsidian44.TFile)) {
       throw new Error(`\u79FB\u52A8\u540E\u6CA1\u6709\u627E\u5230\u9879\u76EE MOC\uFF1A${plan.targetMocPath}`);
     }
     guard.mark(movedMoc.path);
@@ -21251,16 +21815,16 @@ function markFolderTree(ctx, folder, targetPath) {
   const sourcePath = folder.path;
   guard.mark(sourcePath);
   guard.mark(targetPath);
-  import_obsidian43.Vault.recurseChildren(folder, (child) => {
-    if (!(child instanceof import_obsidian43.TFile)) return;
+  import_obsidian44.Vault.recurseChildren(folder, (child) => {
+    if (!(child instanceof import_obsidian44.TFile)) return;
     const relativePath = child.path.slice(sourcePath.length + 1);
     guard.mark(child.path);
-    guard.mark((0, import_obsidian43.normalizePath)(`${targetPath}/${relativePath}`));
+    guard.mark((0, import_obsidian44.normalizePath)(`${targetPath}/${relativePath}`));
   });
 }
 async function reopenMovedMoc(ctx, targetMocPath) {
   const movedMoc = ctx.app.vault.getAbstractFileByPath(targetMocPath);
-  if (!(movedMoc instanceof import_obsidian43.TFile)) return;
+  if (!(movedMoc instanceof import_obsidian44.TFile)) return;
   try {
     await ctx.app.workspace.getLeaf(false).openFile(movedMoc, { active: true });
   } catch (e) {
@@ -21277,11 +21841,11 @@ async function rollbackTransition(ctx, plan, original, frontmatterVisited) {
     if (!sourceEntry && !targetEntry) {
       throw new Error("\u56DE\u6EDA\u65F6\u539F\u4F4D\u7F6E\u4E0E\u76EE\u6807\u4F4D\u7F6E\u90FD\u4E0D\u5B58\u5728\uFF0C\u65E0\u6CD5\u5B9A\u4F4D\u9879\u76EE\u76EE\u5F55");
     }
-    if (sourceEntry && !(sourceEntry instanceof import_obsidian43.TFolder)) {
+    if (sourceEntry && !(sourceEntry instanceof import_obsidian44.TFolder)) {
       throw new Error(`\u56DE\u6EDA\u65F6\u539F\u4F4D\u7F6E\u4E0D\u662F\u9879\u76EE\u76EE\u5F55\uFF1A${plan.sourceProjectPath}`);
     }
     if (targetEntry) {
-      if (!(targetEntry instanceof import_obsidian43.TFolder)) {
+      if (!(targetEntry instanceof import_obsidian44.TFolder)) {
         throw new Error(`\u56DE\u6EDA\u65F6\u76EE\u6807\u4F4D\u7F6E\u4E0D\u662F\u9879\u76EE\u76EE\u5F55\uFF1A${plan.targetProjectPath}`);
       }
       markFolderTree(ctx, targetEntry, plan.sourceProjectPath);
@@ -21290,12 +21854,12 @@ async function rollbackTransition(ctx, plan, original, frontmatterVisited) {
       } catch (renameError) {
         const restored = app.vault.getAbstractFileByPath(plan.sourceProjectPath);
         const remains = app.vault.getAbstractFileByPath(plan.targetProjectPath);
-        if (!(restored instanceof import_obsidian43.TFolder) || remains) throw renameError;
+        if (!(restored instanceof import_obsidian44.TFolder) || remains) throw renameError;
       }
     }
     if (!frontmatterVisited) return null;
     const restoredMoc = app.vault.getAbstractFileByPath(plan.expectedMocPath);
-    if (!(restoredMoc instanceof import_obsidian43.TFile)) {
+    if (!(restoredMoc instanceof import_obsidian44.TFile)) {
       throw new Error(`\u56DE\u6EDA\u540E\u6CA1\u6709\u627E\u5230\u9879\u76EE MOC\uFF1A${plan.expectedMocPath}`);
     }
     guard.mark(restoredMoc.path);
@@ -21314,7 +21878,7 @@ async function showProjectTransitionConfirm(app, plan) {
     new ProjectTransitionConfirmModal(app, plan, resolve).open();
   });
 }
-var ProjectTransitionConfirmModal = class extends import_obsidian43.Modal {
+var ProjectTransitionConfirmModal = class extends import_obsidian44.Modal {
   constructor(app, plan, resolver) {
     super(app);
     /** 按钮结算与关闭结算都会走到 settle，用它保证只生效一次 */
@@ -21365,8 +21929,8 @@ var ProjectTransitionConfirmModal = class extends import_obsidian43.Modal {
     buttonBar.style.justifyContent = "flex-end";
     buttonBar.style.gap = "8px";
     buttonBar.style.marginTop = "18px";
-    new import_obsidian43.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88").onClick(() => this.settle(false));
-    const confirmButton = new import_obsidian43.ButtonComponent(buttonBar).setButtonText(`\u786E\u8BA4${transition.label}`).setCta().onClick(() => this.settle(true));
+    new import_obsidian44.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88").onClick(() => this.settle(false));
+    const confirmButton = new import_obsidian44.ButtonComponent(buttonBar).setButtonText(`\u786E\u8BA4${transition.label}`).setCta().onClick(() => this.settle(true));
     confirmButton.buttonEl.focus();
   }
   onClose() {
@@ -21417,7 +21981,7 @@ function getErrorMessage(error) {
 }
 
 // src/modules/projects/updatedMaintainer.ts
-var import_obsidian44 = require("obsidian");
+var import_obsidian45 = require("obsidian");
 var UPDATED_DEBOUNCE_MS = 2e3;
 var SYSTEM_PREFIX = `${FOLDERS.system}/`;
 function registerUpdatedMaintainer(ctx) {
@@ -21427,7 +21991,7 @@ function registerUpdatedMaintainer(ctx) {
     if (!ctx.settings.autoUpdated) return;
     if (path.startsWith(SYSTEM_PREFIX)) return;
     const file = ctx.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian44.TFile)) return;
+    if (!(file instanceof import_obsidian45.TFile)) return;
     if (!((_a = ctx.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter)) return;
     ctx.guard.mark(path);
     await withPreservedMarkdownScroll(
@@ -21468,7 +22032,7 @@ function registerUpdatedMaintainer(ctx) {
           cancelUpdate(file.path);
           return;
         }
-        if (!(file instanceof import_obsidian44.TFile) || file.extension !== "md") return;
+        if (!(file instanceof import_obsidian45.TFile) || file.extension !== "md") return;
         if (file.path.startsWith(SYSTEM_PREFIX)) {
           cancelUpdate(file.path);
           return;
@@ -21485,7 +22049,7 @@ function registerUpdatedMaintainer(ctx) {
 }
 
 // src/modules/review/periodic.ts
-var import_obsidian45 = require("obsidian");
+var import_obsidian46 = require("obsidian");
 function periodFolderOf(ctx, period) {
   const root = normalizeFolderPath(ctx.settings.diaryFolder, FOLDERS.diary);
   const leaf = period.folder.slice(FOLDERS.diary.length + 1);
@@ -21533,14 +22097,14 @@ async function openPeriodNote(ctx, period, options) {
   try {
     const title = (options == null ? void 0 : options.day) ? titleOfDay(options.day, period) : currentPeriodTitle(period);
     if (!title) {
-      new import_obsidian45.Notice(`\u65E0\u6CD5\u4ECE\u65E5\u671F ${(_a = options == null ? void 0 : options.day) != null ? _a : ""} \u5B9A\u4F4D${period.label}`);
+      new import_obsidian46.Notice(`\u65E0\u6CD5\u4ECE\u65E5\u671F ${(_a = options == null ? void 0 : options.day) != null ? _a : ""} \u5B9A\u4F4D${period.label}`);
       return null;
     }
     const folder = periodFolderOf(ctx, period);
     const path = `${folder}/${title}.md`;
     const existing = ctx.app.vault.getAbstractFileByPath(path);
-    if (existing && !(existing instanceof import_obsidian45.TFile)) {
-      new import_obsidian45.Notice(`\u540C\u540D\u7684\u4E0D\u662F\u7B14\u8BB0\u800C\u662F\u6587\u4EF6\u5939\uFF1A${path}`);
+    if (existing && !(existing instanceof import_obsidian46.TFile)) {
+      new import_obsidian46.Notice(`\u540C\u540D\u7684\u4E0D\u662F\u7B14\u8BB0\u800C\u662F\u6587\u4EF6\u5939\uFF1A${path}`);
       return null;
     }
     const content = periodNoteContent(period, title, ctx.settings.dateTimeFormat);
@@ -21557,7 +22121,7 @@ async function openPeriodNote(ctx, period, options) {
     return file;
   } catch (error) {
     const message2 = error instanceof Error ? error.message : String(error);
-    new import_obsidian45.Notice(`\u6253\u5F00${period.label}\u5931\u8D25\uFF1A${message2}`);
+    new import_obsidian46.Notice(`\u6253\u5F00${period.label}\u5931\u8D25\uFF1A${message2}`);
     return null;
   }
 }
@@ -21861,7 +22425,7 @@ function reviewSeed(ctx) {
 }
 
 // src/modules/review/theme.ts
-var import_obsidian46 = require("obsidian");
+var import_obsidian47 = require("obsidian");
 var MESSAGES8 = {
   unchanged: "\u4E3B\u9898\u6CA1\u6709\u53D8\u5316\uFF08\u7559\u7A7A\u4E0D\u4F1A\u6E05\u6389\u5DF2\u7ECF\u5199\u597D\u7684\u4E3B\u9898\uFF09",
   donePrefix: "\u5DF2\u5199\u5165",
@@ -21900,14 +22464,14 @@ async function promptAndWriteTheme(ctx, file, period, current) {
   if (answer === null) return;
   const theme = answer.trim();
   if (!theme) {
-    new import_obsidian46.Notice(MESSAGES8.unchanged);
+    new import_obsidian47.Notice(MESSAGES8.unchanged);
     return;
   }
   ctx.guard.mark(file.path);
   await ctx.app.fileManager.processFrontMatter(file, (frontmatter) => {
     frontmatter[FIELDS.theme] = theme;
   });
-  new import_obsidian46.Notice(`${MESSAGES8.donePrefix}${period.label}\u4E3B\u9898\uFF1A${theme}`);
+  new import_obsidian47.Notice(`${MESSAGES8.donePrefix}${period.label}\u4E3B\u9898\uFF1A${theme}`);
 }
 function themeOf(ctx, file) {
   var _a, _b, _c;
@@ -21917,7 +22481,7 @@ function themeOf(ctx, file) {
 }
 function reportFailure(error) {
   const message2 = error instanceof Error ? error.message : String(error);
-  new import_obsidian46.Notice(MESSAGES8.failedPrefix + message2);
+  new import_obsidian47.Notice(MESSAGES8.failedPrefix + message2);
 }
 async function resolveTarget(ctx) {
   const active = ctx.app.workspace.getActiveFile();
@@ -22107,10 +22671,10 @@ function themeCell(view, note, missing) {
 var reviewThemeViews = [dailyOutput, themeChain];
 
 // src/modules/ribbon/dock.ts
-var import_obsidian48 = require("obsidian");
+var import_obsidian49 = require("obsidian");
 
 // src/modules/ribbon/icons.ts
-var import_obsidian47 = require("obsidian");
+var import_obsidian48 = require("obsidian");
 var GRID = 24;
 var BOX = 100;
 var STROKE = "var(--icon-stroke, 2)";
@@ -22141,6 +22705,12 @@ var ARTWORK = {
   /** 初始化当前卡片：一页笔记。它做的事就是把眼前这一页登记成卡片（Pikaicons 原图） */
   [COMMAND_ICONS.card]: [
     "M14 2.05752V3.2C14 4.88016 14 5.72024 14.327 6.36197C14.6146 6.92646 15.0735 7.3854 15.638 7.67302C16.2798 8 17.1198 8 18.8 8L19.9425 8M14 2.05752C13.6065 2 13.136 2 12.349 2H10.4C8.15979 2 7.03968 2 6.18404 2.43597C5.43139 2.81947 4.81947 3.43139 4.43597 4.18404C4 5.03969 4 6.15979 4 8.4V15.6C4 17.8402 4 18.9603 4.43597 19.816C4.81947 20.5686 5.43139 21.1805 6.18404 21.564C7.03968 22 8.15979 22 10.4 22H13.6C15.8402 22 16.9603 22 17.816 21.564C18.5686 21.1805 19.1805 20.5686 19.564 19.816C20 18.9603 20 17.8402 20 15.6V9.65097C20 8.864 20 8.39354 19.9425 8M14 2.05752C14.0957 2.07151 14.1869 2.0889 14.2769 2.11052C14.6851 2.20851 15.0753 2.37013 15.4331 2.58944C15.8368 2.83681 16.1827 3.18271 16.8745 3.87452L18.1255 5.12548C18.8173 5.81729 19.1632 6.16319 19.4106 6.56686C19.6299 6.92475 19.7915 7.31493 19.8895 7.72307C19.9111 7.81313 19.9285 7.90429 19.9425 8"
+  ],
+  /** 升级存量 MOC：数据库圆柱旁一支向前箭头，表达“看清旧数据后迁到新规则” */
+  [COMMAND_ICONS.migrate]: [
+    "M4 6C4 4.34315 7.58172 3 12 3C16.4183 3 20 4.34315 20 6C20 7.65685 16.4183 9 12 9C7.58172 9 4 7.65685 4 6Z",
+    "M4 6V11C4 12.6569 7.58172 14 12 14M4 11V16C4 17.6569 7.58172 19 12 19",
+    "M15 17H21M21 17L18.5 14.5M21 17L18.5 19.5"
   ],
   /** 完成项目：圈里一个勾（Pikaicons 原图） */
   [COMMAND_ICONS.done]: [
@@ -22380,8 +22950,8 @@ var ARTWORK = {
 };
 function registerZiminosIcons(plugin) {
   for (const [name, paths] of Object.entries(ARTWORK)) {
-    (0, import_obsidian47.addIcon)(name, wrap(paths));
-    plugin.register(() => (0, import_obsidian47.removeIcon)(name));
+    (0, import_obsidian48.addIcon)(name, wrap(paths));
+    plugin.register(() => (0, import_obsidian48.removeIcon)(name));
   }
 }
 function wrap(paths) {
@@ -22410,11 +22980,11 @@ var RibbonDock = class {
    *
    * 这里有两条纪律，都来自 Obsidian 边栏的真实模型，不是口味问题：
    *
-   * 其一，**只为勾上的命令建按钮**，而不是一次建齐二十六个再切显隐。
+   * 其一，**只为勾上的命令建按钮**，而不是一次建齐全部命令再切显隐。
    * Obsidian 的 leftRibbon 自己存着一份 items，手机端底栏的边栏菜单与
    * 桌面「设置 → 外观 → 功能区」的管理弹窗都是遍历这份 items 画出来的，
    * 两处的过滤条件都只有 item.hidden，与 DOM 无关（边栏右键菜单会多看一眼 buttonEl 在不在，
-   * 但那对我们没用——被藏起来的按钮 buttonEl 还在）。一次建齐的话，那两处永远列着全部三十条，
+   * 但那对我们没用——被藏起来的按钮 buttonEl 还在）。一次建齐的话，那两处永远列着全部命令，
    * 包括「初始化笔记库」这种一辈子只该按一次的——那正是这个功能想消灭的杂乱。
    *
    * 其二，**藏起来走 class 不走 inline display**，理由见 HIDDEN_CLASS。
@@ -22434,7 +23004,7 @@ var RibbonDock = class {
       if (!enabled.has(id)) {
         if (existing && !existing.hasClass(HIDDEN_CLASS)) {
           existing.addClass(HIDDEN_CLASS);
-          if (import_obsidian48.Platform.isPhone) new import_obsidian48.Notice(MOBILE_PENDING);
+          if (import_obsidian49.Platform.isPhone) new import_obsidian49.Notice(MOBILE_PENDING);
         }
         continue;
       }
@@ -22453,7 +23023,7 @@ var RibbonDock = class {
 };
 
 // src/modules/setup/init.ts
-var import_obsidian49 = require("obsidian");
+var import_obsidian50 = require("obsidian");
 
 // src/modules/setup/celebrate.ts
 var PIECES_PER_SIDE = 36;
@@ -22671,7 +23241,7 @@ async function initializeVault(ctx, seeds) {
   try {
     const isFirstRun = ctx.settings.initializedAt === "";
     if (isFirstRun && hasUserNotes(ctx, seeds)) {
-      new import_obsidian49.Notice(MESSAGES9.notEmpty);
+      new import_obsidian50.Notice(MESSAGES9.notEmpty);
       return;
     }
     for (const folder of INIT_FOLDERS) {
@@ -22686,13 +23256,13 @@ async function initializeVault(ctx, seeds) {
       ctx.settings.initializedAt = nowStamp(ctx.settings.dateTimeFormat);
       await ctx.saveSettings();
     }
-    new import_obsidian49.Notice(MESSAGES9.done);
+    new import_obsidian50.Notice(MESSAGES9.done);
     celebrate(ctx);
     const landing = ctx.app.vault.getAbstractFileByPath(README_FILE) ? README_FILE : NAV_FILE;
     await ctx.app.workspace.openLinkText(landing, "", false);
   } catch (error) {
     const message2 = error instanceof Error ? error.message : String(error);
-    new import_obsidian49.Notice(MESSAGES9.failedPrefix + message2);
+    new import_obsidian50.Notice(MESSAGES9.failedPrefix + message2);
   }
 }
 async function applySeed(ctx, seed) {
@@ -22719,7 +23289,7 @@ async function createFileIfMissing(ctx, path, content) {
 }
 
 // src/settings.ts
-var import_obsidian51 = require("obsidian");
+var import_obsidian52 = require("obsidian");
 
 // src/settingsModel.ts
 var TABS = [
@@ -22777,7 +23347,7 @@ var TABS = [
     label: "\u8FB9\u680F",
     icon: COMMAND_ICONS.dock,
     module: "\u5DE6\u4FA7\u8FB9\u680F v1",
-    status: "\u8FD0\u884C\u4E2D \xB7 \u4E09\u5341\u4E94\u6761\u547D\u4EE4\u914D Pikaicons \u56FE\u6807\uFF0C\u9ED8\u8BA4\u6446\u51FA\u5341\u6761"
+    status: "\u8FD0\u884C\u4E2D \xB7 \u4E09\u5341\u516D\u6761\u547D\u4EE4\u914D Pikaicons \u56FE\u6807\uFF0C\u9ED8\u8BA4\u6446\u51FA\u5341\u6761"
   }
 ];
 var TEXTS6 = {
@@ -22887,16 +23457,16 @@ var BOOK_TAG_PREFIX_FIELD = {
 };
 
 // src/settingsPanels.ts
-var import_obsidian50 = require("obsidian");
+var import_obsidian51 = require("obsidian");
 var FIELDS_ONLY = () => {
 };
 var SettingsPanels = class {
   constructor(host) {
     /**
-     * 「已摆出 N / 35 条」那行字。
+     * 「已摆出 N / 36 条」那行字。
      *
      * 这是全文件唯一一处持有 DOM 引用的地方，理由很具体：勾选要即时更新这个数，
-     * 而重建整页会把滚动条弹回顶部——三十五行排下来，用户勾第二十行时页面一跳，
+     * 而重建整页会把滚动条弹回顶部——三十六行排下来，用户勾第二十行时页面一跳，
      * 他就得重新找回刚才那一行。持有的是一个渲染出来的节点，不是第二份状态：
      * 数字仍然现算自设置对象，每次重画也会把它换成新节点。
      */
@@ -22929,7 +23499,7 @@ var SettingsPanels = class {
    * 状态说明随之从「尚未初始化」翻面成「已就绪」——停留的页不变，重建的是内容。
    */
   renderInitButton(containerEl) {
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.initName).setDesc(this.describeInitState()).addButton((button) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.initName).setDesc(this.describeInitState()).addButton((button) => {
       button.setButtonText(TEXTS6.initButton).setCta().onClick(async () => {
         button.setDisabled(true);
         try {
@@ -22963,9 +23533,9 @@ var SettingsPanels = class {
    * 因为它们没有口味可言——豆瓣怎么写就怎么落，让人去配等于让人去改事实。
    */
   renderBooksSection(containerEl) {
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.booksHeading).setDesc(TEXTS6.booksIntro).setHeading();
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.booksHeading).setDesc(TEXTS6.booksIntro).setHeading();
     this.host.renderTextField(containerEl, BOOK_TAG_PREFIX_FIELD);
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.bookTagCountName).setDesc(TEXTS6.bookTagCountDesc).addDropdown((dropdown) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.bookTagCountName).setDesc(TEXTS6.bookTagCountDesc).addDropdown((dropdown) => {
       for (const count of BOOK_TAG_COUNTS) {
         dropdown.addOption(String(count), count === 0 ? "\u4E0D\u5199\u6807\u7B7E" : `\u524D ${count} \u4E2A`);
       }
@@ -22991,10 +23561,10 @@ var SettingsPanels = class {
    */
   renderWereadRow(containerEl) {
     const connected = !!this.ctx.settings.wereadCookie.trim();
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.wereadName).setDesc(
-      import_obsidian50.Platform.isDesktopApp ? connected ? TEXTS6.wereadConnected : TEXTS6.wereadDisconnected : TEXTS6.wereadMobile
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.wereadName).setDesc(
+      import_obsidian51.Platform.isDesktopApp ? connected ? TEXTS6.wereadConnected : TEXTS6.wereadDisconnected : TEXTS6.wereadMobile
     ).addButton((button) => {
-      button.setButtonText(connected ? "\u65AD\u5F00" : "\u626B\u7801\u8FDE\u63A5").setDisabled(!import_obsidian50.Platform.isDesktopApp);
+      button.setButtonText(connected ? "\u65AD\u5F00" : "\u626B\u7801\u8FDE\u63A5").setDisabled(!import_obsidian51.Platform.isDesktopApp);
       if (!connected) button.setCta();
       button.onClick(async () => {
         button.setDisabled(true);
@@ -23018,14 +23588,14 @@ var SettingsPanels = class {
    * 落点那三个文本框已由骨架照字段表画在上方，这里只补两个非文本控件。
    */
   renderInspirationPanel(containerEl) {
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.inspirationPositionName).setDesc(TEXTS6.inspirationPositionDesc).addDropdown((dropdown) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.inspirationPositionName).setDesc(TEXTS6.inspirationPositionDesc).addDropdown((dropdown) => {
       dropdown.addOption("heading-top", "\u6807\u9898\u4E0B\u65B9\uFF08\u65B0\u5185\u5BB9\u5728\u524D\uFF09").addOption("heading-bottom", "\u6807\u9898\u533A\u672B\u5C3E\uFF08\u65B0\u5185\u5BB9\u5728\u540E\uFF09").addOption("file-top", "\u6B63\u6587\u9876\u90E8").addOption("file-bottom", "\u6B63\u6587\u5E95\u90E8").setValue(this.normalizeInspirationPosition(this.ctx.settings.inspirationInsertPosition)).onChange(async (value) => {
         const position = this.normalizeInspirationPosition(value);
         this.ctx.settings.inspirationInsertPosition = position;
         await this.ctx.saveSettings();
       });
     });
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.inspirationFormatName).setDesc(TEXTS6.inspirationFormatDesc).addTextArea((textArea) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.inspirationFormatName).setDesc(TEXTS6.inspirationFormatDesc).addTextArea((textArea) => {
       textArea.setPlaceholder(INSPIRATION_DEFAULTS.format).setValue(this.ctx.settings.inspirationFormat).onChange(async (value) => {
         this.ctx.settings.inspirationFormat = value;
         await this.ctx.saveSettings();
@@ -23060,7 +23630,7 @@ var SettingsPanels = class {
       TEXTS6.autoFormatName,
       TEXTS6.autoFormatDesc
     );
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.formatRulesHeading).setDesc(TEXTS6.formatRulesIntro).setHeading();
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.formatRulesHeading).setDesc(TEXTS6.formatRulesIntro).setHeading();
     for (const rule of FORMAT_RULES) {
       this.renderRuleRow(containerEl, rule.key, rule.name, rule.desc);
     }
@@ -23068,12 +23638,12 @@ var SettingsPanels = class {
   /**
    * 一条规则一行。
    *
-   * 它与边栏那三十行是同一种控件——勾选决定一个 id 在不在清单里，而不是翻一个布尔字段。
+   * 它与边栏命令行是同一种控件——勾选决定一个 id 在不在清单里，而不是翻一个布尔字段。
    * 存清单而不是九个布尔字段，是为了让「加一条规则」不必动设置契约：
    * 老库升级时那条新规则不在清单里，于是默认不开，这与「不替用户改他没选过的东西」同源。
    */
   renderRuleRow(containerEl, key, name, desc) {
-    new import_obsidian50.Setting(containerEl).setName(name).setDesc(desc).addToggle((toggle) => {
+    new import_obsidian51.Setting(containerEl).setName(name).setDesc(desc).addToggle((toggle) => {
       toggle.setValue(this.ctx.settings.formatRules.includes(key)).onChange(async (value) => {
         this.ctx.settings.formatRules = this.nextFormatRules(key, value);
         await this.ctx.saveSettings();
@@ -23107,17 +23677,17 @@ var SettingsPanels = class {
     );
   }
   // ============================================================
-  // 六、边栏页：三十五行
+  // 六、边栏页：三十六行
   // ============================================================
   /**
-   * 边栏页：一句说明 + 按分组排下来的三十行。
+   * 边栏页：一句说明 + 按分组排下来的全部命令。
    *
    * 清单现读花名册而不是自己维护一份，因此它与命令面板里能搜到的命令永远是同一批；
    * 分组标题按「相邻两行的 group 不同」切出来，与外观开关面板用的是同一套画法——
    * 分组顺序不需要另一张表，它就是命令的注册顺序。
    */
   renderRibbonPanel(containerEl) {
-    const summary = new import_obsidian50.Setting(containerEl).setName(this.describeRibbonCount()).setDesc(TEXTS6.ribbonIntro);
+    const summary = new import_obsidian51.Setting(containerEl).setName(this.describeRibbonCount()).setDesc(TEXTS6.ribbonIntro);
     this.ribbonCountEl = summary.nameEl;
     let currentGroup = "";
     for (const command of this.ctx.commands.list()) {
@@ -23133,7 +23703,7 @@ var SettingsPanels = class {
     if (this.ribbonCountEl) this.ribbonCountEl.setText(this.describeRibbonCount());
   }
   /**
-   * 「已摆出 7 / 30 条」。给的是一个量级感：勾多了那条边栏会变成谁也不看的图标柱。
+   * 「已摆出 7 / 36 条」。给的是一个量级感：勾多了那条边栏会变成谁也不看的图标柱。
    * 总数现算自花名册，不写死——这一页不认识任何一条具体命令，也就不该认识它们有几条。
    */
   describeRibbonCount() {
@@ -23145,11 +23715,11 @@ var SettingsPanels = class {
     const { id, icon, name } = spec;
     const label = createFragment((frag) => {
       const iconEl = frag.createSpan({ cls: "ziminos-ribbon-icon" });
-      (0, import_obsidian50.setIcon)(iconEl, icon);
+      (0, import_obsidian51.setIcon)(iconEl, icon);
       iconEl.style.color = GROUP_COLORS[spec.group];
       frag.createSpan({ text: name });
     });
-    new import_obsidian50.Setting(containerEl).setName(label).setClass("ziminos-ribbon-row").addToggle((toggle) => {
+    new import_obsidian51.Setting(containerEl).setName(label).setClass("ziminos-ribbon-row").addToggle((toggle) => {
       toggle.setValue(this.ctx.settings.ribbonCommands.includes(id)).onChange(async (value) => {
         this.ctx.settings.ribbonCommands = this.nextRibbonCommands(id, value);
         await this.ctx.saveSettings();
@@ -23194,7 +23764,7 @@ var SettingsPanels = class {
       TEXTS6.folderCountDesc,
       this.actions.syncExplorer
     );
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.folderCountTargetName).setDesc(TEXTS6.folderCountTargetDesc).addDropdown((dropdown) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.folderCountTargetName).setDesc(TEXTS6.folderCountTargetDesc).addDropdown((dropdown) => {
       for (const target of FOLDER_COUNT_TARGETS) {
         dropdown.addOption(target, FOLDER_COUNT_LABELS[target]);
       }
@@ -23231,7 +23801,7 @@ var SettingsPanels = class {
       TEXTS6.filePathDesc,
       this.actions.syncExplorer
     );
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.filePathScopeName).setDesc(TEXTS6.filePathScopeDesc).addDropdown((dropdown) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.filePathScopeName).setDesc(TEXTS6.filePathScopeDesc).addDropdown((dropdown) => {
       for (const scope of FILE_PATH_SCOPES) {
         dropdown.addOption(scope, FILE_PATH_SCOPE_LABELS[scope]);
       }
@@ -23244,8 +23814,8 @@ var SettingsPanels = class {
   }
   /** 最近文件那一段：一句说明，加「显示几条」与「怎么排」两个下拉框 */
   renderRecentSection(containerEl) {
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.recentHeading).setDesc(TEXTS6.recentIntro).setHeading();
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.recentLimitName).setDesc(TEXTS6.recentLimitDesc).addDropdown((dropdown) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.recentHeading).setDesc(TEXTS6.recentIntro).setHeading();
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.recentLimitName).setDesc(TEXTS6.recentLimitDesc).addDropdown((dropdown) => {
       for (const limit of RECENT_FILES_LIMITS) {
         dropdown.addOption(String(limit), `${limit} \u6761`);
       }
@@ -23255,7 +23825,7 @@ var SettingsPanels = class {
         this.actions.syncExplorer();
       });
     });
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.recentSortName).setDesc(TEXTS6.recentSortDesc).addDropdown((dropdown) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.recentSortName).setDesc(TEXTS6.recentSortDesc).addDropdown((dropdown) => {
       for (const sort of RECENT_FILES_SORTS) {
         dropdown.addOption(sort, RECENT_SORT_LABELS[sort]);
       }
@@ -23298,12 +23868,12 @@ var SettingsPanels = class {
       TEXTS6.rememberCursorName,
       TEXTS6.rememberCursorDesc
     );
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.formatHeading).setDesc(TEXTS6.formatIntro).setHeading();
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.formatHeading).setDesc(TEXTS6.formatIntro).setHeading();
     this.renderFormatSection(containerEl);
   }
   /** Eagle 是编辑页的附件支线：行为/图片分流、项目归档、本机连接与设备参数收在同一段 */
   renderEaglePanel(containerEl) {
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.eagleHeading).setDesc(TEXTS6.eagleIntro).setHeading();
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.eagleHeading).setDesc(TEXTS6.eagleIntro).setHeading();
     this.host.renderToggle(containerEl, "eagleEnabled", TEXTS6.eagleEnabledName, TEXTS6.eagleEnabledDesc);
     this.host.renderToggle(
       containerEl,
@@ -23311,8 +23881,8 @@ var SettingsPanels = class {
       TEXTS6.eagleExcludeImagesName,
       TEXTS6.eagleExcludeImagesDesc
     );
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.eaglePackageName).setDesc(TEXTS6.eaglePackageDesc).addButton((button) => button.setButtonText("\u663E\u793A\u5B89\u88C5\u5305").onClick(() => void this.actions.revealEaglePackage()));
-    const connection = new import_obsidian50.Setting(containerEl).setName(TEXTS6.eagleStatusName).setDesc(TEXTS6.eagleStatusChecking).addButton((button) => button.setButtonText("\u914D\u5BF9").setCta().onClick(async () => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.eaglePackageName).setDesc(TEXTS6.eaglePackageDesc).addButton((button) => button.setButtonText("\u663E\u793A\u5B89\u88C5\u5305").onClick(() => void this.actions.revealEaglePackage()));
+    const connection = new import_obsidian51.Setting(containerEl).setName(TEXTS6.eagleStatusName).setDesc(TEXTS6.eagleStatusChecking).addButton((button) => button.setButtonText("\u914D\u5BF9").setCta().onClick(async () => {
       button.setDisabled(true);
       await this.actions.pairEagle();
       this.host.rebuild();
@@ -23323,13 +23893,13 @@ var SettingsPanels = class {
     void this.actions.describeEagleStatus().then((status) => {
       if (connection.descEl.isConnected) connection.setDesc(status);
     });
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.eaglePortName).setDesc(TEXTS6.eaglePortDesc).addText((text3) => text3.setPlaceholder(String(EAGLE_DEFAULTS.port)).setValue(String(this.ctx.settings.eaglePort)).onChange(async (value) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.eaglePortName).setDesc(TEXTS6.eaglePortDesc).addText((text3) => text3.setPlaceholder(String(EAGLE_DEFAULTS.port)).setValue(String(this.ctx.settings.eaglePort)).onChange(async (value) => {
       const candidate = Number(value);
       if (!Number.isInteger(candidate) || candidate < EAGLE_PORT_RANGE.min || candidate > EAGLE_PORT_RANGE.max) return;
       this.ctx.settings.eaglePort = candidate;
       await this.ctx.saveSettings();
     }));
-    new import_obsidian50.Setting(containerEl).setName(TEXTS6.eagleFolderName).setDesc(TEXTS6.eagleFolderDesc).addText((text3) => text3.setPlaceholder("\u9879\u76EE\u5916\u7559\u7A7A\uFF1A\u672A\u5F52\u7C7B").setValue(this.ctx.settings.eagleFolderId).onChange(async (value) => {
+    new import_obsidian51.Setting(containerEl).setName(TEXTS6.eagleFolderName).setDesc(TEXTS6.eagleFolderDesc).addText((text3) => text3.setPlaceholder("\u9879\u76EE\u5916\u7559\u7A7A\uFF1A\u672A\u5F52\u7C7B").setValue(this.ctx.settings.eagleFolderId).onChange(async (value) => {
       this.ctx.settings.eagleFolderId = value.trim();
       await this.ctx.saveSettings();
     }));
@@ -23355,7 +23925,7 @@ var SettingsPanels = class {
 };
 
 // src/settings.ts
-var ZiminosSettingTab = class extends import_obsidian51.PluginSettingTab {
+var ZiminosSettingTab = class extends import_obsidian52.PluginSettingTab {
   constructor(ctx, actions) {
     super(ctx.app, ctx.plugin);
     /**
@@ -23404,7 +23974,7 @@ var ZiminosSettingTab = class extends import_obsidian51.PluginSettingTab {
         attr: { type: "button", "aria-pressed": String(active) }
       });
       if (active) button.addClass("is-active");
-      (0, import_obsidian51.setIcon)(button.createSpan({ cls: "ziminos-settings-tab-icon" }), tab.icon);
+      (0, import_obsidian52.setIcon)(button.createSpan({ cls: "ziminos-settings-tab-icon" }), tab.icon);
       button.createSpan({ text: tab.label });
       button.addEventListener("click", () => this.switchTo(tab));
     }
@@ -23429,9 +23999,9 @@ var ZiminosSettingTab = class extends import_obsidian51.PluginSettingTab {
    */
   renderPanel(body) {
     const tab = this.activeTab;
-    const header2 = new import_obsidian51.Setting(body).setDesc(tab.status).setHeading();
+    const header2 = new import_obsidian52.Setting(body).setDesc(tab.status).setHeading();
     const title = header2.nameEl.createSpan({ cls: "ziminos-settings-page-title" });
-    (0, import_obsidian51.setIcon)(title.createSpan({ cls: "ziminos-settings-page-icon" }), tab.icon);
+    (0, import_obsidian52.setIcon)(title.createSpan({ cls: "ziminos-settings-page-icon" }), tab.icon);
     title.createSpan({ text: tab.module });
     this.renderTextFields(body, tab.id, false);
     this.panels.render[tab.id](body);
@@ -23458,7 +24028,7 @@ var ZiminosSettingTab = class extends import_obsidian51.PluginSettingTab {
    * 天然看得见新值；只有已经画在屏幕上的东西（状态栏按钮）才需要有人去推它一把。
    */
   renderToggle(containerEl, key, name, desc, onApplied) {
-    new import_obsidian51.Setting(containerEl).setName(name).setDesc(desc).addToggle((toggle) => {
+    new import_obsidian52.Setting(containerEl).setName(name).setDesc(desc).addToggle((toggle) => {
       toggle.setValue(this.ctx.settings[key]).onChange(async (value) => {
         this.ctx.settings[key] = value;
         await this.ctx.saveSettings();
@@ -23480,7 +24050,7 @@ var ZiminosSettingTab = class extends import_obsidian51.PluginSettingTab {
     for (const field2 of fields) {
       const section = (_a = field2.section) != null ? _a : "";
       if (section && section !== currentSection) {
-        new import_obsidian51.Setting(containerEl).setName(section).setHeading();
+        new import_obsidian52.Setting(containerEl).setName(section).setHeading();
       }
       currentSection = section;
       this.renderTextField(containerEl, field2);
@@ -23505,7 +24075,7 @@ var ZiminosSettingTab = class extends import_obsidian51.PluginSettingTab {
   renderTextField(containerEl, field2) {
     const fallback = DEFAULT_SETTINGS[field2.key];
     const desc = field2.advanced ? `${field2.hint}${TEXTS6.advancedSuffixPrefix}${fallback}${TEXTS6.advancedSuffixTail}` : field2.hint;
-    new import_obsidian51.Setting(containerEl).setName(field2.name).setDesc(desc).addText((text3) => {
+    new import_obsidian52.Setting(containerEl).setName(field2.name).setDesc(desc).addText((text3) => {
       text3.setPlaceholder(fallback).setValue(this.ctx.settings[field2.key]).onChange(async (value) => {
         this.ctx.settings[field2.key] = value;
         await this.ctx.saveSettings();
@@ -23515,7 +24085,7 @@ var ZiminosSettingTab = class extends import_obsidian51.PluginSettingTab {
 };
 
 // src/main.ts
-var ZiminosPlugin = class extends import_obsidian52.Plugin {
+var ZiminosPlugin = class extends import_obsidian53.Plugin {
   constructor() {
     super(...arguments);
     /**
@@ -23551,6 +24121,7 @@ var ZiminosPlugin = class extends import_obsidian52.Plugin {
     registerCreateProjectCommand(ctx, (title) => pickPerson(ctx, title));
     registerCreateAreaCommand(ctx);
     registerCardInitCommand(ctx);
+    registerBaseMigrationCommand(ctx);
     registerCardAutoInit(ctx);
     registerTransitionCommands(
       ctx,

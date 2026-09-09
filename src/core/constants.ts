@@ -20,7 +20,7 @@
  *           以及第二版三库系统的赛博永生契约 EXPORT_MANIFEST_FILE/EXPORT_MANIFEST_HEADING/
  *           EXPORT_MANIFEST_SEPARATOR 与 ETERNAL_FOLDERS/ETERNAL_INDEX_FILE/ETERNAL_LOG_FILE/
  *           ETERNAL_LOG_INGEST_MARKS。
- *           三十条命令的身份（id/名字/图标/分组）不在这里，在 ./commands——
+ *           全部命令的身份（id/名字/图标/分组）不在这里，在 ./commands——
  *           本文件回答「系统里有哪些东西」，那里回答「用户能让系统做哪些事」
  * [POS]: 全仓库的业务字典；目录名、字段名、状态名与时间格式在此收口，
  *        只随本机交互变化的参数由 device.ts 承担。两者都零依赖，不向上认识任何模块

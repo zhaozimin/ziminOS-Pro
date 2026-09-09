@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Plugin 类型；依赖 ./constants 的 PeriodKey 与 TransitionAction 两个类型
  * [OUTPUT]: 对外提供命令身份契约 CommandSpec、分组名 COMMAND_GROUPS、图标名 COMMAND_ICONS，
- *           三十五条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
+ *           三十六条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
  *           TransitionCommand）/BOOK_COMMANDS/INSPIRATION_COMMAND/PERIOD_COMMANDS/THEME_COMMAND/
  *           OPEN_CALENDAR_COMMAND/CONTACT_COMMANDS/CLIENT_COMMANDS/APPEARANCE_COMMAND/FORMAT_COMMAND/
  *           RECENT_FILES_COMMAND/COPY_PATH_COMMAND/LEGACY_COMMANDS，
@@ -43,7 +43,7 @@ export interface CommandSpec {
      * `插件id + ":" + 标题` 当作一个边栏项的身份，也就是说这个**中文名**才是
      * 用户拖出来的顺序与「在 Obsidian 里藏掉它」这两件事被记进 workspace.json 的键。
      * 改名等于换一个新按钮，用户在边栏上的排布会静默丢失。
-     * 由此还得出一条不变式：三十个 name 必须互不相同——撞名会让两条命令共用同一个边栏项。
+     * 由此还得出一条不变式：全部 name 必须互不相同——撞名会让两条命令共用同一个边栏项。
      */
     readonly name: string;
     /** 图标名，取值必须来自 COMMAND_ICONS */
@@ -85,7 +85,7 @@ export type CommandGroup = (typeof COMMAND_GROUPS)[keyof typeof COMMAND_GROUPS];
 /**
  * 每个分组一种功能色，左侧边栏的图标与设置页边栏清单照它上色。
  *
- * 色不是装饰，是索引：二十六个同画法的笔画图标排成一列时，形状要凑近看才认得出，
+ * 色不是装饰，是索引：几十个同画法的笔画图标排成一列时，形状要凑近看才认得出，
  * 颜色隔着半个屏幕就分了组。取色全部从功能的天然联想出发，学员不需要背——
  * 开荒是垦土、读书是朱批、灵感是灯泡、复盘是沉思、人脉是心、客户是钱、外观是调色盘。
  * 全部取中间明度，深浅两种主题下都立得住；写成十六进制而非主题变量，
@@ -108,7 +108,7 @@ export const GROUP_COLORS: Readonly<Record<CommandGroup, string>> = {
 };
 
 /**
- * 三十八个图标名：三十五条命令各一枚，加设置页那三张没有命令与之对应的标签页（边栏、文件、编辑）。
+ * 三十九个图标名：三十六条命令各一枚，加设置页那三张没有命令与之对应的标签页（边栏、文件、编辑）。
  *
  * 一律带 `ziminos-` 前缀：图标名是 Obsidian 全局共享的命名空间，
  * 不加前缀就可能盖掉 lucide 里的同名图标，或者被后装的插件盖掉。
@@ -121,6 +121,7 @@ export const COMMAND_ICONS = {
     project: 'ziminos-project',
     area: 'ziminos-area',
     card: 'ziminos-card',
+    migrate: 'ziminos-migrate',
     done: 'ziminos-done',
     paused: 'ziminos-paused',
     dropped: 'ziminos-dropped',
@@ -168,7 +169,7 @@ export const COMMAND_ICONS = {
 } as const;
 
 // ============================================================
-// 三十五条命令：顺序即它们在左侧边栏里的先后
+// 三十六条命令：顺序即它们在左侧边栏里的先后
 // ============================================================
 
 /**
@@ -182,8 +183,8 @@ export const INIT_VAULT_COMMAND: CommandSpec = {
     group: COMMAND_GROUPS.setup,
 };
 
-/** 项目模块的三条日常命令；四条状态流转另见 TRANSITION_COMMANDS */
-export const PROJECT_COMMANDS: Readonly<Record<'create' | 'area' | 'card', CommandSpec>> = {
+/** 项目模块的四个入口（含一次性迁移）；四条状态流转另见 TRANSITION_COMMANDS */
+export const PROJECT_COMMANDS: Readonly<Record<'create' | 'area' | 'card' | 'migrate', CommandSpec>> = {
     create: {
         id: 'create-project',
         name: '新建项目',
@@ -204,6 +205,13 @@ export const PROJECT_COMMANDS: Readonly<Record<'create' | 'area' | 'card', Comma
         id: 'init-card',
         name: '初始化当前卡片',
         icon: COMMAND_ICONS.card,
+        group: COMMAND_GROUPS.projects,
+    },
+    /** 用户主动触发的存量升级：预览导航/MOC Base 差异，确认后写入，失败整批回滚 */
+    migrate: {
+        id: 'migrate-moc-bases',
+        name: '升级存量 MOC 数据库',
+        icon: COMMAND_ICONS.migrate,
         group: COMMAND_GROUPS.projects,
     },
 };
@@ -496,10 +504,10 @@ export const LEGACY_COMMANDS: Readonly<Record<'vault' | 'help' | 'settings', Com
 /**
  * 全新库默认摆进左侧边栏的十条命令。
  *
- * 三十条全摆上去等于把选择的负担丢回给学员——那条边栏会长成一根谁也不看的图标柱。
+ * 全部命令都摆上去等于把选择的负担丢回给学员——那条边栏会长成一根谁也不看的图标柱。
  * 这七条的判据是「一天里可能按不止一次」：记灵感、开日记、写主题是每天的动作，
  * 新建项目与新建人脉是每周的动作，记人情发生在关系推进的当下，外观开关是刚上手时天天在调的。
- * 其余十九条要么一辈子只按一次（初始化笔记库、初始化客户模块），
+ * 其余命令要么一辈子只按一次（初始化笔记库、初始化客户模块、升级存量 MOC 数据库），
  * 要么发生在某个具体场景里（新建领域、初始化当前卡片、四条流转、读书三条、
  * 三条客户流水、周月季年四级复盘）——
  * 那些场景里用户本来就停在对的笔记上，命令面板比一根图标柱更快。
@@ -537,7 +545,7 @@ export const DEFAULT_RIBBON_COMMANDS: readonly string[] = [
  * 包括下面的高级设置。收敛一次，两个消费方（边栏与设置页）都不必各自判空。
  *
  * 不是数组就退回默认清单（等同于「这个键没写过」），是数组则只留下字符串项。
- * 空数组是合法的：用户把三十条全取消了，那就一个图标都不摆。
+ * 空数组是合法的：用户把全部命令都取消了，那就一个图标都不摆。
  */
 export function normalizeRibbonCommands(value: unknown): readonly string[] {
     if (!Array.isArray(value)) return DEFAULT_RIBBON_COMMANDS;

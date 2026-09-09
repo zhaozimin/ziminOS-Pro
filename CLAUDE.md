@@ -26,16 +26,16 @@ vault/ - 笔记库成品模板；同一交付物内独立放置 ziminOS、Datavi
 vault-pro/ - 第二版特有的笔记库成品 (3子目录: 兼收并蓄 进料口、以人为本 只放一个版次标记叠加件、赛博永生 卡帕西三层结构与它的 Schema)；子目录名就是三本库的目录名，是「那本库叫什么」的事实源。《赛博永生》的三层目录名 v0.19.0 起是中文（`10-原料` / `20-知识` / `90-系统`），与《以人为本》的 `00-inbox`…`90-system` 刻意不同：PARA 那六个是外面世界的既有约定，改名等于让学员查不到资料；这三层是本产品自有的结构，没有外部约定要守。数字前缀两边都留着，它保证文件树的顺序稳定
 **开荒不再弹窗（v0.19.0）。** 点完「初始化」原本会跳出一个输入框问用户的名字、替他开出第一个项目。那一步的用意是好的——让他立刻看见一件成品；可它出现的时机恰恰是他刚点完按钮、正等着看结果的一瞬间，于是「装好了」变成了「怎么又要我填」。**开荒的职责到骨架为止**，建项目本来就有一条命令。收尾改成从左右两侧向中间对喷一次礼花（`modules/setup/celebrate`）：同样是告诉他成了，但不索取、不阻塞、不需要他做任何决定。随之作废的是 `templates` 里的首个项目概述与 `VaultSeed` 的 `finish` 钩子——后者唯一的实现者就是那个弹窗，留着是一份没有实现的契约，而**扩展点的价值不在于它可能有人用，在于它现在有人用**。
 
-**导航与 MOC 的 Bases 不再保存项目位置（v0.22.7）。** 导航用公式把四种 status 翻译成 Emoji，并以 `!file.inFolder("90-system")` 排除整棵系统目录树。项目、领域、书籍与手动 MOC 则共用同一块内联 Base：`this.file.folder` 一直指向宿主 MOC 当下的目录，`this.file.asLink()` 一直指向它自己，因此「项目文件」、「附件」、「全部」三个视图在整个项目搬进存档后自动重算。状态流转于是只改位置、status 与 archived，不再搜索或替换 MOC 正文。这不只是少一段代码：查询若必须由业务命令改写才能继续成立，它保存的就不是规则，而是一份会过期的位置副本。
+**导航与 MOC 的 Bases 不再保存项目位置（v0.22.7），存量库由显式命令迁移（v0.22.8）。** 导航用公式把四种 status 翻译成 Emoji，并以 `!file.inFolder("90-system")` 排除整棵系统目录树。项目、领域、书籍与手动 MOC 共用同一块内联 Base：`this.file.folder` 指向宿主 MOC 当下的目录，`this.file.asLink()` 指向它自己，因此「项目文件」、「附件」、「全部」三个视图在整个项目搬进存档后自动重算。状态流转只改位置、status 与 archived，不搜索或替换 MOC 正文。老学员通过「升级存量 MOC 数据库」主动迁移：先预览每个文件的 Base 前后差异，自定义/多 Base 只报告不覆盖；确认后逐篇做乐观并发校验，任何一步失败都逆序回滚本批已触达文件。查询与迁移因此各守一责——模板定义正确终态，迁移器只负责把可证明的旧模板送过去。
 
-vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，Obsidian/Eagle 两份 manifest 都由构建链同步，main.js 是刻意入库的构建产物（三十五枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 服务二十二个笔记内视图、中国日历与最近文件两个 ItemView、Eagle 附件呈现、外观开关浮层、文件夹计数、状态栏当前路径、八张设置页与作者名片（手工维护，不经 esbuild），ziminOS-Eagle-Bridge.eagleplugin 是同版伴侣的可安装 ZIP 产物；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
+vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，Obsidian/Eagle 两份 manifest 都由构建链同步，main.js 是刻意入库的构建产物（三十六枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 服务二十二个笔记内视图、中国日历与最近文件两个 ItemView、Eagle 附件呈现、外观开关浮层、文件夹计数、状态栏当前路径、八张设置页与作者名片（手工维护，不经 esbuild），ziminOS-Eagle-Bridge.eagleplugin 是同版伴侣的可安装 ZIP 产物；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
 vault/.obsidian/snippets/ - 十二个 CSS 片段，外观包的可拆装部分；十个默认启用，全部由右下角外观开关逐个开关。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源
 tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，覆盖数据合并、划线身份、日期、换行符、ISBN、设置验形、外观拒写、数据库选择、项目回滚、版本同构、Outliner 默认启用/手册/致谢同构、Eagle 稳定身份/安全边界/伴侣包完整性、灵感行与灵感集版式两侧同源、公开源码隐私边界与移动端 Node 边界
 src/ - 插件源码 (2子目录: core 无业务的基础设施、命令注册台、视图引擎与版次闸门 edition.ts、modules 含 setup 开荒、projects 项目领域与容器流程、books 读书笔记与划线导入、inspiration 灵感收集、calendar 中国日历与节假日缓存、review 五级复盘、contacts 人脉与客户、appearance 外观开关与片段出境口、format 排版整理、editing 粘贴成链接与光标记忆、eagle 附件桥接的 Obsidian 半边、explorer 文件夹计数与最近文件与当前路径、legacy 旧版三入口、ribbon 左侧边栏命令、about 作者名片)
 </directory>
 
 <commands>
-三十五条命令，身份（id / 中文名 / 图标 / 分组）全在 src/core/commands.ts，一律经 CommandRegistry 注册——它在交给 Obsidian 的同时留一份花名册，左侧边栏与设置页照着它摆，三处因此不可能对不齐。默认十条摆进左侧边栏（新建项目、记录灵感、今天的日记、写复盘主题、新建人脉、记人情、外观开关，加 v0.17.0 请回来的切换笔记库/帮助/设置），其余二十五条勾一下就上；新增的「打开中国日历」默认不占用边栏命令坞，日历 ItemView 会自动出现在右侧边栏。「今天的日记」在日记缺主题时顺手补问、已有主题时只打开，「写复盘主题」则是日/周/月/季/年五级的明确修改入口，两条命令语义不重复。首次摆出的先后即命令的注册顺序，此后顺序归用户（Obsidian 自带的边栏拖拽）。图标全程只用公开 API（addIcon / addRibbonIcon / Command.icon）。边栏图标与设置页清单按十一个分组着功能色（GROUP_COLORS：垦土棕/工程蓝/朱批红/灯泡黄/沉思紫/玫红/钱绿/调色盘橙/青/罗盘靛/中性灰），颜色即索引，隔着半个屏幕就分得出组；最后那个中性灰是「旧版」三条——它们做的是 Obsidian 自己的事，灰色把这句话说出来。
+三十六条命令，身份（id / 中文名 / 图标 / 分组）全在 src/core/commands.ts，一律经 CommandRegistry 注册——它在交给 Obsidian 的同时留一份花名册，左侧边栏与设置页照着它摆，三处因此不可能对不齐。默认十条摆进左侧边栏（新建项目、记录灵感、今天的日记、写复盘主题、新建人脉、记人情、外观开关，加 v0.17.0 请回来的切换笔记库/帮助/设置），其余二十六条勾一下就上；新增的「打开中国日历」与「升级存量 MOC 数据库」都不预占命令坞——前者已有右侧日历入口，后者是升级时只需主动执行一次的维护动作。「今天的日记」在日记缺主题时顺手补问、已有主题时只打开，「写复盘主题」则是日/周/月/季/年五级的明确修改入口，两条命令语义不重复。首次摆出的先后即命令的注册顺序，此后顺序归用户（Obsidian 自带的边栏拖拽）。图标全程只用公开 API（addIcon / addRibbonIcon / Command.icon）。边栏图标与设置页清单按十一个分组着功能色（GROUP_COLORS：垦土棕/工程蓝/朱批红/灯泡黄/沉思紫/玫红/钱绿/调色盘橙/青/罗盘靛/中性灰），颜色即索引，隔着半个屏幕就分得出组；最后那个中性灰是「旧版」三条——它们做的是 Obsidian 自己的事，灰色把这句话说出来。
 </commands>
 
 <settings>
@@ -77,7 +77,7 @@ esbuild.config.mjs - Obsidian 构建出口；打包前把 package.json 版本同
 .gitignore - 忽略依赖、系统杂项、历史发布压缩包、常见凭据、开发库私有状态与发布/Eagle 打包暂存；main.js、`.eagleplugin` 与公共 vault 资产不忽略，学员浅克隆即可用
 .gitattributes - 锁定 Dataview、Minimal、Style Settings、fonts/ 字体及 Eagle 图标/安装包等二进制发布资产的原始字节，防止 Git 换行/格式化破坏 SHA-256
 docs/第三方组件.md - lunar-typescript / holiday-cn / Dataview / Outliner / Quiet Outline / Minimal / Style Settings / Pikaicons / Simple Icons / Eagle 官方 API 与两款桥接参考插件 / 四款正文字体的版本、上游、许可与升级边界
-docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26 中国农历日历、§27 审计加固、§28 Gitee 部署、§29 文件夹计数、§30 社区功能取舍、§33 片段出境口、§34 状态栏路径、§35 手机窗口口令、§36 Eagle 附件桥接（v0.22.0 建立稳定 itemId/双运行时/回环鉴权/fail-closed，v0.22.1–v0.22.6 依次补编辑器跳转、应用唤起、按项目自动归档、图片分流与四类内容容器/日记分流），§37 定义分栏后台写入契约，§38 定义导航 Emoji 与 MOC 相对上下文 Bases。与 V1 规格并存，交集处以 V2 为准
+docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26 中国农历日历、§27 审计加固、§28 Gitee 部署、§29 文件夹计数、§30 社区功能取舍、§33 片段出境口、§34 状态栏路径、§35 手机窗口口令、§36 Eagle 附件桥接（v0.22.0 建立稳定 itemId/双运行时/回环鉴权/fail-closed，v0.22.1–v0.22.6 依次补编辑器跳转、应用唤起、按项目自动归档、图片分流与四类内容容器/日记分流），§37 定义分栏后台写入契约，§38 定义导航 Emoji 与 MOC 相对上下文 Bases，§39 定义存量 Bases 的差异预览、确认、并发校验与失败回滚。与 V1 规格并存，交集处以 V2 为准
 docs/Eagle附件桥接安装与使用指南.html - 面向学员的单文件安装说明；把三库升级口令、Eagle 伴侣安装/配对、无本地副本验收、四类内容容器/日记分流、移动附件语义与端口/换库/图床冲突排障收成一份 macOS/Windows 可转发手册
 </delivery>
 
