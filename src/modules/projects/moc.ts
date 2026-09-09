@@ -2,10 +2,10 @@
  * [INPUT]: 依赖 obsidian 的 normalizePath 与 App 类型；依赖 core/constants 的 MOC_PREFIX
  * [OUTPUT]: 对外提供 mocBasenameOf / mocPathOf / legacyMocPathOf / resolveMocPath
  * [POS]: 「一个项目（或领域）的 MOC 叫什么名字」这件事的唯一出处。
- *        它从 createProject 里分出来，是因为这个约定有四个消费方而不是一个：
- *        建项目时照它落笔、卡片登记时照它反推归属、状态流转时照它认出「这是不是一篇 MOC」、
- *        MOC 正文里那个 base 视图还要照它写筛选表达式。四处各拼一遍的话，
- *        改一次命名就要同时改对四处，而漏改任何一处都不报错——只是某张表从此少收一半文件。
+ *        它从 createProject 里分出来，是因为这个约定有三个消费方而不是一个：
+ *        建项目时照它落笔、卡片登记时照它反推归属、状态流转时照它认出「这是不是一篇 MOC」。
+ *        三处各拼一遍的话，改一次命名就要同时改对三处，而漏改任何一处都不会立即报错。
+ *        MOC 内嵌 Base 自 v0.22.7 起用 this.file.asLink() 识别宿主，不再消费文件名约定。
  *        V3 起命名是 `MOC-文件夹名`，为的是让学员在文件树里一眼认出哪篇是总览；
  *        但 V3 之前建的项目叫 `文件夹名.md`，那些笔记不会被改名，
  *        所以读取侧一律走 resolveMocPath：先认新名，认不到再认老名
@@ -18,8 +18,8 @@ import { MOC_PREFIX } from '../../core/constants';
 
 /**
  * MOC 笔记的文件名（不含扩展名）。
- * 它同时是 base 视图里 `up == link(…)` 那个参数——卡片的 up 指向的是这个名字，
- * 不是文件夹名，两者一旦不一致，项目文件表会静默少收一半文件。
+ * 卡片的 up 会指向这个名字；MOC 内嵌 Base 则通过 this.file.asLink() 读取宿主链接，
+ * 因而项目改名或搬家不再要求同步改写 Base 代码。
  */
 export function mocBasenameOf(containerName: string): string {
     return `${MOC_PREFIX}${containerName}`;

@@ -1,16 +1,16 @@
 /**
- * [INPUT]: 依赖 ../../core/constants 的 CARD_FIELDS（卡片十字段的权威顺序）。
- *          MOC 的文件名由调用方经 ./moc 算好递进来，本文件不认识命名约定
+ * [INPUT]: 依赖 ../../core/constants 的 CARD_FIELDS（卡片十字段的权威顺序）
  * [OUTPUT]: 对外提供 MocContentOptions 类型与六个纯生成函数：mocFrontmatter、mocBaseBlock、mocContent、
  *           cardTemplateFile、mocTemplateFile、navContent
  * [POS]: projects 模块的文本工厂，是「笔记长成什么样」的唯一出处。
  *        全部函数无副作用、只吐字符串，既不碰 App 也不碰文件系统——因此建项目与开荒共用同一套骨架，
  *        库里所有 MOC 的 YAML 与 base 视图才可能长期同构；日后改版式只需动这一个文件。
- *        MOC 的 frontmatter 与 base 块自 create-project-moc.js 逐字移植，仅把项目名与路径参数化，
- *        任何"顺手优化"都会让存量笔记与新笔记分叉，禁止。
- *        v0.12.0 为书籍容器添的三处可选参数（author 行、小节骨架、base 视图名）全部缺省即旧产出，
- *        v0.14.0 又添一处（tags 列表）同样缺省即旧产出——
- *        项目与领域的正文至今逐字节不变，授权见规格书-V2 §19 与 §21
+ *        MOC 的 base 块只读 this.file 的实时位置与身份，不接收、不冻结项目路径；
+ *        项目、领域、书籍与手动 MOC 因此共用同一块数据库代码，整个容器搬移后零改写自适应。
+ *        它把直属笔记、up 归属笔记、递归附件与全部内容分成三个视图，
+ *        并在全局排除当前 MOC 与 90-system 整棵系统目录树。
+ *        书籍只在 YAML 与正文小节上增量，不再分叉 base 视图；
+ *        新建、手动插入与状态流转于是都没有第二份查询协议可以漂移
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -39,16 +39,28 @@ const MOC_FIELDS: readonly string[] = [
 /** 导航页开头的一行说明。面向零基础学员，不出现术语 */
 const NAV_INTRO = '这里是你的家。下面四张表会自动列出库里所有项目、领域和书籍，新建之后自动出现，不用手动维护。';
 
-/**
- * 导航页的四个表格视图：显示名 + 筛选表达式。
- * 只用等值判断（== 加字面量），不用未经验证的函数式筛选——导航页是学员每天打开的第一个页面，
- * 语法一旦被 Bases 拒绝整页都会空白，稳比巧重要。
- */
-const NAV_VIEWS: readonly { readonly name: string; readonly filter: string }[] = [
-    { name: '正在进行中', filter: 'status == "active"' },
-    { name: '项目', filter: 'type == "project"' },
-    { name: '领域', filter: 'type == "area"' },
-    { name: '书籍', filter: 'type == "book"' },
+/** 导航页的四个表格视图：显示名、筛选表达式与列顺序 */
+const NAV_VIEWS: readonly {
+    readonly name: string;
+    readonly filter: string;
+    readonly columns: readonly string[];
+}[] = [
+    {
+        name: '正在进行中',
+        filter: 'status == "active"',
+        columns: ['file.name', 'description', 'formula.status_icon'],
+    },
+    {
+        name: '项目',
+        filter: 'type == "project"',
+        columns: ['file.name', 'description', 'formula.status_icon'],
+    },
+    { name: '领域', filter: 'type == "area"', columns: ['file.name', 'description'] },
+    {
+        name: '书籍',
+        filter: 'type == "book"',
+        columns: ['file.name', 'description', 'formula.status_icon'],
+    },
 ];
 
 // ============================================================
@@ -140,22 +152,13 @@ export interface ContainerSection {
     readonly body?: string;
 }
 
-/** MOC 正文的全部可变量：YAML 那一份，加上 base 视图要用的两个名字 */
+/** MOC 正文的全部可变量：身份 YAML 与可选的正文小节 */
 export interface MocContentOptions extends MocFrontmatterOptions {
     /**
-     * MOC 自己的文件名（不含扩展名），由调用方经 ./moc 的 mocBasenameOf 算好递进来。
-     * base 视图的 `up == link(…)` 用的是它——卡片的 up 指向这篇笔记，不是文件夹。
-     */
-    readonly mocBasename: string;
-    /** 项目或领域的文件夹路径，base 视图据此收集同目录文件 */
-    readonly projectFolderPath: string;
-    /**
      * 正文小节骨架，排在写字位之后、base 块之前。
-     * 只有书籍容器带它（书籍信息与全部划线两个落点）；项目与领域不带，产出与 V2 逐字相同。
+     * 只有书籍容器带它（当前是「全部划线」落点）；项目与领域不带，产出与 V2 逐字相同。
      */
     readonly sections?: readonly ContainerSection[];
-    /** base 视图的显示名；缺省即项目的「项目文件」，书籍容器传「读书卡片」 */
-    readonly baseViewName?: string;
 }
 
 /**
@@ -251,21 +254,18 @@ function bibliographyLines(bibliography?: Bibliography): string[] {
 }
 
 /**
- * 生成 MOC 正文的 base 代码块——项目的文件清单视图。
- * 两条 or 筛选是这个设计的核心：既收 up 指向本 MOC 的卡片（可以散落库内任何角落），
- * 也收项目文件夹里的所有文件（附件、草稿、来不及登记的笔记），
- * 因此"整理"这件事对学员是可选的，而不是前提。
+ * 生成全部 MOC 共用的 base 代码块。
+ * this.file 在内联 base 中恒指宿主 MOC：文件夹移动只改变实时结果，不再改写查询本身。
+ * 「项目文件」优先呈现直属笔记与 up 归属；「附件」递归收非 Markdown；
+ * 「全部」才把容器整棵子树铺开，三个视角不互相冒充。
  */
-export function mocBaseBlock(
-    mocBasename: string,
-    projectFolderPath: string,
-    viewName = '项目文件',
-): string {
+export function mocBaseBlock(): string {
     return [
         '```base',
         'filters:',
         '  and:',
         '    - file.path != this.file.path',
+        `    - '!file.inFolder("90-system")'`,
         'properties:',
         '  note.description:',
         '    displayName: 概述',
@@ -273,13 +273,11 @@ export function mocBaseBlock(
         '    displayName: 评分',
         'views:',
         '  - type: table',
-        `    name: ${viewName}`,
+        '    name: 项目文件',
         '    filters:',
         '      or:',
-        // 这一行必须是 MOC 自己的文件名，不是文件夹名：卡片的 up 指向的是这篇笔记。
-        // 两者一旦分叉，这张表会静默少收一半文件——它不报错，只是变短
-        `        - up == link(${JSON.stringify(mocBasename)})`,
-        `        - file.folder == ${JSON.stringify(projectFolderPath)}`,
+        '        - up.contains(this.file.asLink())',
+        '        - file.folder == this.file.folder',
         '    order:',
         '      - file.name',
         '      - description',
@@ -290,6 +288,33 @@ export function mocBaseBlock(
         '    columnSize:',
         '      file.name: 170',
         '      note.description: 421',
+        '  - type: table',
+        '    name: 附件',
+        '    filters:',
+        '      and:',
+        '        - file.inFolder(this.file.folder)',
+        '        - file.ext != "md"',
+        '    order:',
+        '      - file.name',
+        '      - file.ext',
+        '      - file.mtime',
+        '    sort:',
+        '      - property: file.mtime',
+        '        direction: DESC',
+        '  - type: table',
+        '    name: 全部',
+        '    filters:',
+        '      or:',
+        '        - up.contains(this.file.asLink())',
+        '        - file.inFolder(this.file.folder)',
+        '    order:',
+        '      - file.name',
+        '      - file.ext',
+        '      - description',
+        '      - file.mtime',
+        '    sort:',
+        '      - property: file.mtime',
+        '        direction: DESC',
         '',
         '```',
     ].join('\n');
@@ -304,11 +329,7 @@ export function mocBaseBlock(
  */
 export function mocContent(options: MocContentOptions): string {
     const frontmatter = mocFrontmatter(options);
-    const baseBlock = mocBaseBlock(
-        options.mocBasename,
-        options.projectFolderPath,
-        options.baseViewName,
-    );
+    const baseBlock = mocBaseBlock();
     const sectionBlock = (options.sections ?? [])
         .map((section) => (section.body ? `${section.heading}\n\n${section.body}\n\n` : `${section.heading}\n\n`))
         .join('');
@@ -333,9 +354,9 @@ export function cardTemplateFile(): string {
     return emptyFrontmatter(CARD_FIELDS);
 }
 
-/** MOC 模板：八字段，供手动新建书籍等非项目非领域型 MOC 使用（项目与领域各有命令） */
+/** MOC 模板：八字段 + 与自动建容器完全同源的数据库块 */
 export function mocTemplateFile(): string {
-    return emptyFrontmatter(MOC_FIELDS);
+    return `${emptyFrontmatter(MOC_FIELDS)}\n\n${mocBaseBlock()}\n`;
 }
 
 // ============================================================
@@ -354,10 +375,17 @@ export function navContent(): string {
         NAV_INTRO,
         '',
         '```base',
+        'filters:',
+        '  and:',
+        `    - '!file.inFolder("90-system")'`,
+        'formulas:',
+        '  status_icon: if(status == "active", "🟢 进行中", if(status == "paused", "🟡 搁置", if(status == "done", "✅ 完成", if(status == "dropped", "⚫️ 弃", if(status.isEmpty(), "", "⚠️ " + status)))))',
         'properties:',
         '  note.description:',
         '    displayName: 概述',
         '  note.status:',
+        '    displayName: 状态',
+        '  formula.status_icon:',
         '    displayName: 状态',
         'views:',
     ];
@@ -370,9 +398,7 @@ export function navContent(): string {
             '      and:',
             `        - ${view.filter}`,
             '    order:',
-            '      - file.name',
-            '      - description',
-            '      - status',
+            ...view.columns.map((column) => `      - ${column}`),
         );
     }
 

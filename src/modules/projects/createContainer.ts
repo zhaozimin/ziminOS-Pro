@@ -3,12 +3,13 @@
  *          依赖 core/constants 的 FIELDS/FOLDERS/NOTE_TYPES、core/folders 的
  *          ensureFolderPath/normalizeFolderPath、core/modals 的 TextInputModal/ChoiceModal、
  *          core/time 的 nowStampAndUid、core/types 的 ZiminosContext/ZiminosSettings，
- *          依赖同目录 moc 的 mocBasenameOf/mocPathOf 与 templates 的 mocContent/mocFrontmatter
+ *          依赖同目录 moc 的 mocPathOf 与 templates 的 mocContent/mocFrontmatter
  * [OUTPUT]: 对外提供 ContainerKind 契约、PROJECT_KIND/AREA_KIND/BOOK_KIND 三份规格、
  *           CreateContainerPreset 预设契约、PersonPicker 选人能力契约、createContainer
  * [POS]: 「一个文件夹 + 一篇 MOC」这件事的唯一实现，项目、领域与书籍共用它。
  *        三者的差别全部收在 ContainerKind 那张表里：落在哪个根目录、
- *        写什么 type、问不问归属、带不带小节骨架。除此之外它们连一个字的提示文案都不该分叉——
+ *        写什么 type、问不问归属、带不带小节骨架。三者的 Base 必须同源且只读
+ *        this.file 实时上下文，不得把命名或路径再塞回容器规格。除此之外它们连一个字的提示文案都不该分叉——
  *        分叉的代价不是重复代码，是「新建领域」某天悄悄少了一道防覆盖校验。
  *        名称合法性、防覆盖、光标落点这些规矩因此只在此处定义一次。
  *        问答顺序是设计过的：名称 → 归属 →（只有挂了人的归属才问）选人 → 概述。
@@ -26,7 +27,7 @@ import { ensureFolderPath, normalizeFolderPath } from '../../core/folders';
 import { ChoiceModal, TextInputModal } from '../../core/modals';
 import { nowStampAndUid } from '../../core/time';
 import type { ZiminosContext, ZiminosSettings } from '../../core/types';
-import { mocBasenameOf, mocPathOf } from './moc';
+import { mocPathOf } from './moc';
 import { mocContent, mocFrontmatter } from './templates';
 import type { Bibliography, ContainerSection, ProjectRelation } from './templates';
 
@@ -122,8 +123,6 @@ export interface ContainerKind {
     readonly asksOwnership: boolean;
     /** MOC 正文的小节骨架。只有书籍带（全部划线一个落点），项目与领域不带 */
     readonly sections?: readonly ContainerSection[];
-    /** base 视图的显示名。缺省即「项目文件」，书籍传「读书卡片」 */
-    readonly baseViewName?: string;
 }
 
 export const PROJECT_KIND: ContainerKind = {
@@ -148,8 +147,8 @@ export const AREA_KIND: ContainerKind = {
  *
  * 一本书就是一个项目——读完是它的终点，所以有 status: active，
  * 住项目目录（不新增设置字段），读完用既有的「完成项目」归档。
- * 不问归属：书没有委托人。它比另两类多两样东西——正文的「全部划线」落点，
- * 以及 base 视图的书面名字。曾经还有一个「书籍信息」小节，v0.14.0 撤了：
+ * 不问归属：书没有委托人。它比另两类多一样东西——正文的「全部划线」落点。
+ * 曾经还有一个「书籍信息」小节，v0.14.0 撤了：
  * 那一节是一张给人读的登记表，而那些值机器读得更多（按出版年排、按页数挑），
  * 于是整体搬进 YAML——摆在正文里它们只是五行谁也不会读第二遍的字。
  * 问答不走本流程：建书的三问（书名/作者/为什么读）由 books 模块自己问，
@@ -163,7 +162,6 @@ export const BOOK_KIND: ContainerKind = {
     folderFallback: FOLDERS.projects,
     asksOwnership: false,
     sections: [{ heading: BOOK_HEADINGS.highlights }],
-    baseViewName: '读书卡片',
 };
 
 /**
@@ -307,7 +305,6 @@ export async function createContainer(
         // ============================================================
 
         const containerFolderPath = normalizePath(`${baseFolder}/${containerName}`);
-        const mocBasename = mocBasenameOf(containerName);
         const mocFilePath = mocPathOf(containerFolderPath, containerName);
 
         // ============================================================
@@ -359,11 +356,8 @@ export async function createContainer(
 
         const mocMarkdown = mocContent({
             ...identity,
-            mocBasename,
-            projectFolderPath: containerFolderPath,
             // 预设带了小节就用预设的（书目信息已填好），否则用这一类容器的空骨架
             sections: preset?.sections ?? kind.sections,
-            baseViewName: kind.baseViewName,
         });
 
         // 光标落点只取决于 YAML 有多少行，故单独取一份 frontmatter 量行数；

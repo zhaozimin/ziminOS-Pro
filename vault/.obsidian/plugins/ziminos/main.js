@@ -20408,10 +20408,22 @@ var MOC_FIELDS = [
 ];
 var NAV_INTRO = "\u8FD9\u91CC\u662F\u4F60\u7684\u5BB6\u3002\u4E0B\u9762\u56DB\u5F20\u8868\u4F1A\u81EA\u52A8\u5217\u51FA\u5E93\u91CC\u6240\u6709\u9879\u76EE\u3001\u9886\u57DF\u548C\u4E66\u7C4D\uFF0C\u65B0\u5EFA\u4E4B\u540E\u81EA\u52A8\u51FA\u73B0\uFF0C\u4E0D\u7528\u624B\u52A8\u7EF4\u62A4\u3002";
 var NAV_VIEWS = [
-  { name: "\u6B63\u5728\u8FDB\u884C\u4E2D", filter: 'status == "active"' },
-  { name: "\u9879\u76EE", filter: 'type == "project"' },
-  { name: "\u9886\u57DF", filter: 'type == "area"' },
-  { name: "\u4E66\u7C4D", filter: 'type == "book"' }
+  {
+    name: "\u6B63\u5728\u8FDB\u884C\u4E2D",
+    filter: 'status == "active"',
+    columns: ["file.name", "description", "formula.status_icon"]
+  },
+  {
+    name: "\u9879\u76EE",
+    filter: 'type == "project"',
+    columns: ["file.name", "description", "formula.status_icon"]
+  },
+  { name: "\u9886\u57DF", filter: 'type == "area"', columns: ["file.name", "description"] },
+  {
+    name: "\u4E66\u7C4D",
+    filter: 'type == "book"',
+    columns: ["file.name", "description", "formula.status_icon"]
+  }
 ];
 function toYamlString2(value) {
   return JSON.stringify(String(value));
@@ -20465,12 +20477,13 @@ function bibliographyLines(bibliography) {
     ...cover ? [`cover: ${cover}`] : []
   ];
 }
-function mocBaseBlock(mocBasename, projectFolderPath, viewName = "\u9879\u76EE\u6587\u4EF6") {
+function mocBaseBlock() {
   return [
     "```base",
     "filters:",
     "  and:",
     "    - file.path != this.file.path",
+    `    - '!file.inFolder("90-system")'`,
     "properties:",
     "  note.description:",
     "    displayName: \u6982\u8FF0",
@@ -20478,13 +20491,11 @@ function mocBaseBlock(mocBasename, projectFolderPath, viewName = "\u9879\u76EE\u
     "    displayName: \u8BC4\u5206",
     "views:",
     "  - type: table",
-    `    name: ${viewName}`,
+    "    name: \u9879\u76EE\u6587\u4EF6",
     "    filters:",
     "      or:",
-    // 这一行必须是 MOC 自己的文件名，不是文件夹名：卡片的 up 指向的是这篇笔记。
-    // 两者一旦分叉，这张表会静默少收一半文件——它不报错，只是变短
-    `        - up == link(${JSON.stringify(mocBasename)})`,
-    `        - file.folder == ${JSON.stringify(projectFolderPath)}`,
+    "        - up.contains(this.file.asLink())",
+    "        - file.folder == this.file.folder",
     "    order:",
     "      - file.name",
     "      - description",
@@ -20495,6 +20506,33 @@ function mocBaseBlock(mocBasename, projectFolderPath, viewName = "\u9879\u76EE\u
     "    columnSize:",
     "      file.name: 170",
     "      note.description: 421",
+    "  - type: table",
+    "    name: \u9644\u4EF6",
+    "    filters:",
+    "      and:",
+    "        - file.inFolder(this.file.folder)",
+    '        - file.ext != "md"',
+    "    order:",
+    "      - file.name",
+    "      - file.ext",
+    "      - file.mtime",
+    "    sort:",
+    "      - property: file.mtime",
+    "        direction: DESC",
+    "  - type: table",
+    "    name: \u5168\u90E8",
+    "    filters:",
+    "      or:",
+    "        - up.contains(this.file.asLink())",
+    "        - file.inFolder(this.file.folder)",
+    "    order:",
+    "      - file.name",
+    "      - file.ext",
+    "      - description",
+    "      - file.mtime",
+    "    sort:",
+    "      - property: file.mtime",
+    "        direction: DESC",
     "",
     "```"
   ].join("\n");
@@ -20502,11 +20540,7 @@ function mocBaseBlock(mocBasename, projectFolderPath, viewName = "\u9879\u76EE\u
 function mocContent(options) {
   var _a;
   const frontmatter = mocFrontmatter(options);
-  const baseBlock = mocBaseBlock(
-    options.mocBasename,
-    options.projectFolderPath,
-    options.baseViewName
-  );
+  const baseBlock = mocBaseBlock();
   const sectionBlock = ((_a = options.sections) != null ? _a : []).map((section) => section.body ? `${section.heading}
 
 ${section.body}
@@ -20528,17 +20562,27 @@ function cardTemplateFile() {
   return emptyFrontmatter(CARD_FIELDS);
 }
 function mocTemplateFile() {
-  return emptyFrontmatter(MOC_FIELDS);
+  return `${emptyFrontmatter(MOC_FIELDS)}
+
+${mocBaseBlock()}
+`;
 }
 function navContent() {
   const lines = [
     NAV_INTRO,
     "",
     "```base",
+    "filters:",
+    "  and:",
+    `    - '!file.inFolder("90-system")'`,
+    "formulas:",
+    '  status_icon: if(status == "active", "\u{1F7E2} \u8FDB\u884C\u4E2D", if(status == "paused", "\u{1F7E1} \u6401\u7F6E", if(status == "done", "\u2705 \u5B8C\u6210", if(status == "dropped", "\u26AB\uFE0F \u5F03", if(status.isEmpty(), "", "\u26A0\uFE0F " + status)))))',
     "properties:",
     "  note.description:",
     "    displayName: \u6982\u8FF0",
     "  note.status:",
+    "    displayName: \u72B6\u6001",
+    "  formula.status_icon:",
     "    displayName: \u72B6\u6001",
     "views:"
   ];
@@ -20550,9 +20594,7 @@ function navContent() {
       "      and:",
       `        - ${view.filter}`,
       "    order:",
-      "      - file.name",
-      "      - description",
-      "      - status"
+      ...view.columns.map((column) => `      - ${column}`)
     );
   }
   lines.push("", "```", "");
@@ -20593,8 +20635,7 @@ var BOOK_KIND = {
   folderKey: "projectFolder",
   folderFallback: FOLDERS.projects,
   asksOwnership: false,
-  sections: [{ heading: BOOK_HEADINGS.highlights }],
-  baseViewName: "\u8BFB\u4E66\u5361\u7247"
+  sections: [{ heading: BOOK_HEADINGS.highlights }]
 };
 async function createContainer(ctx, kind, preset, pickPerson2) {
   var _a, _b;
@@ -20650,7 +20691,6 @@ async function createContainer(ctx, kind, preset, pickPerson2) {
     }
     const description = descriptionInput.trim();
     const containerFolderPath = (0, import_obsidian40.normalizePath)(`${baseFolder}/${containerName}`);
-    const mocBasename = mocBasenameOf(containerName);
     const mocFilePath = mocPathOf(containerFolderPath, containerName);
     await ensureFolderPath(app, baseFolder);
     await ensureFolderPath(app, containerFolderPath);
@@ -20677,11 +20717,8 @@ async function createContainer(ctx, kind, preset, pickPerson2) {
     };
     const mocMarkdown = mocContent({
       ...identity,
-      mocBasename,
-      projectFolderPath: containerFolderPath,
       // 预设带了小节就用预设的（书目信息已填好），否则用这一类容器的空骨架
-      sections: (_b = preset == null ? void 0 : preset.sections) != null ? _b : kind.sections,
-      baseViewName: kind.baseViewName
+      sections: (_b = preset == null ? void 0 : preset.sections) != null ? _b : kind.sections
     });
     const frontmatter = mocFrontmatter(identity);
     ctx.guard.mark(mocFilePath);
@@ -21083,13 +21120,8 @@ async function runProjectTransition(ctx, action, onArchived) {
     if (!plan) return;
     const confirmed = await showProjectTransitionConfirm(ctx.app, plan);
     if (!confirmed) return;
-    const basePathChanged = await applyTransition(ctx, plan);
+    await applyTransition(ctx, plan);
     await reopenMovedMoc(ctx, plan.targetMocPath);
-    if (!basePathChanged) {
-      new import_obsidian43.Notice(
-        "\u9879\u76EE\u6D41\u8F6C\u6210\u529F\uFF0C\u4F46 MOC\uFF08\u9879\u76EE\u5BFC\u822A\u7B14\u8BB0\uFF09\u4E2D\u6CA1\u6709\u627E\u5230\u9700\u8981\u66F4\u65B0\u7684 file.folder\uFF08\u6587\u4EF6\u5939\uFF09\u7B5B\u9009\u6761\u4EF6\u3002"
-      );
-    }
     new import_obsidian43.Notice(
       `\u9879\u76EE\u5DF2${transition.label}\uFF1A${plan.projectName} \u2192 ${formatStatusForDisplay(transition.status)}`
     );
@@ -21175,10 +21207,7 @@ async function applyTransition(ctx, plan) {
     status: plan.currentStatus,
     archived: plan.previousArchived
   };
-  const trace = {
-    frontmatterVisited: false,
-    basePathChanged: false
-  };
+  let frontmatterVisited = false;
   await ensureFolderPath(app, plan.targetRoot);
   try {
     markFolderTree(ctx, plan.projectFolder, plan.targetProjectPath);
@@ -21191,7 +21220,7 @@ async function applyTransition(ctx, plan) {
     await app.fileManager.processFrontMatter(movedMoc, (movedFrontmatter) => {
       original.status = normalizeText(movedFrontmatter.status);
       original.archived = movedFrontmatter[FIELDS.archived];
-      trace.frontmatterVisited = true;
+      frontmatterVisited = true;
       if (!MOVABLE_TYPES.includes(normalizeText(movedFrontmatter.type))) {
         throw new Error("\u79FB\u52A8\u540E\u7684 MOC \u7F3A\u5C11 type: project\uFF08\u9879\u76EE\uFF09\u6216 type: book\uFF08\u4E66\uFF09\u3002");
       }
@@ -21207,17 +21236,8 @@ async function applyTransition(ctx, plan) {
         delete movedFrontmatter[FIELDS.archived];
       }
     });
-    return await updateMocBaseFolderPath(
-      ctx,
-      movedMoc,
-      plan.sourceProjectPath,
-      plan.targetProjectPath,
-      () => {
-        trace.basePathChanged = true;
-      }
-    );
   } catch (operationError) {
-    const rollbackError = await rollbackTransition(ctx, plan, original, trace);
+    const rollbackError = await rollbackTransition(ctx, plan, original, frontmatterVisited);
     if (rollbackError) {
       throw new Error(
         `${getErrorMessage(operationError)}\uFF1B\u81EA\u52A8\u56DE\u6EDA\u4E5F\u5931\u8D25\uFF1A${getErrorMessage(rollbackError)}`
@@ -21246,20 +21266,7 @@ async function reopenMovedMoc(ctx, targetMocPath) {
   } catch (e) {
   }
 }
-async function updateMocBaseFolderPath(ctx, mocFile, oldProjectPath, newProjectPath, onChange) {
-  const oldFilter = `file.folder == ${JSON.stringify(oldProjectPath)}`;
-  const newFilter = `file.folder == ${JSON.stringify(newProjectPath)}`;
-  let changed = false;
-  await ctx.app.vault.process(mocFile, (content) => {
-    if (!content.includes(oldFilter)) return content;
-    changed = true;
-    onChange == null ? void 0 : onChange();
-    ctx.guard.mark(mocFile.path);
-    return content.split(oldFilter).join(newFilter);
-  });
-  return changed;
-}
-async function rollbackTransition(ctx, plan, original, trace) {
+async function rollbackTransition(ctx, plan, original, frontmatterVisited) {
   const { app, guard } = ctx;
   try {
     const sourceEntry = app.vault.getAbstractFileByPath(plan.sourceProjectPath);
@@ -21286,27 +21293,17 @@ async function rollbackTransition(ctx, plan, original, trace) {
         if (!(restored instanceof import_obsidian43.TFolder) || remains) throw renameError;
       }
     }
-    if (!trace.frontmatterVisited && !trace.basePathChanged) return null;
+    if (!frontmatterVisited) return null;
     const restoredMoc = app.vault.getAbstractFileByPath(plan.expectedMocPath);
     if (!(restoredMoc instanceof import_obsidian43.TFile)) {
       throw new Error(`\u56DE\u6EDA\u540E\u6CA1\u6709\u627E\u5230\u9879\u76EE MOC\uFF1A${plan.expectedMocPath}`);
     }
-    if (trace.frontmatterVisited) {
-      guard.mark(restoredMoc.path);
-      await app.fileManager.processFrontMatter(restoredMoc, (frontmatter) => {
-        frontmatter.status = original.status;
-        if (original.archived === void 0) delete frontmatter[FIELDS.archived];
-        else frontmatter[FIELDS.archived] = original.archived;
-      });
-    }
-    if (trace.basePathChanged) {
-      await updateMocBaseFolderPath(
-        ctx,
-        restoredMoc,
-        plan.targetProjectPath,
-        plan.sourceProjectPath
-      );
-    }
+    guard.mark(restoredMoc.path);
+    await app.fileManager.processFrontMatter(restoredMoc, (frontmatter) => {
+      frontmatter.status = original.status;
+      if (original.archived === void 0) delete frontmatter[FIELDS.archived];
+      else frontmatter[FIELDS.archived] = original.archived;
+    });
     return null;
   } catch (error) {
     return error;

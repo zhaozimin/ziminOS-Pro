@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译并载入 src 中的纯 TypeScript 模块
  * [OUTPUT]: 提供 npm test 的审计回归集，覆盖版本镜像、ISBN 校验、日期严格性、
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
- *           项目回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
+ *           项目状态回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
  *           片段出境口的桌面端闸门、本机绝对路径的唯一算处、状态栏路径的看拿分离、
  *           后台写入的分栏滚动保护、光标焦点切换、四类内容容器与日记附件路由，以及
  *           智能体路由完整性，并在专业版源码存在时额外覆盖出库单往返、《赛博永生》路径同构
@@ -572,8 +572,8 @@ test('项目流转异常后以源目标路径事实决定回滚', () => {
 
     assert.match(source, /const sourceEntry = .*sourceProjectPath/);
     assert.match(source, /const targetEntry = .*targetProjectPath/);
-    assert.match(source, /trace\.frontmatterVisited = true/);
-    assert.match(source, /trace\.basePathChanged = true/);
+    assert.match(source, /frontmatterVisited = true/);
+    assert.doesNotMatch(source, /basePathChanged|updateMocBaseFolderPath/);
     assert.doesNotMatch(source, /interface TransitionProgress/);
 });
 
