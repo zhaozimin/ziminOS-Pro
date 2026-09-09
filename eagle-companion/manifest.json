@@ -1,11 +1,11 @@
 {
   "id": "ZMEAGLEBRIDGE",
-  "version": "0.22.8",
+  "version": "0.22.9",
   "platform": "all",
   "arch": "all",
   "name": "ziminOS Obsidian Bridge",
   "logo": "/logo.png",
-  "description": "让 ziminOS 按 Obsidian 项目归档并以稳定 itemId 存取 Eagle 附件。",
+  "description": "让 ziminOS 按 Obsidian 容器归档，并从稳定链接打开 Eagle 附件当前文件夹。",
   "keywords": [
     "ziminOS",
     "Obsidian",

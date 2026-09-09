@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、内容容器/日记路由注入、Eagle 两级项目目录与单层日记目录归档、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、内容容器/日记路由注入、Eagle 两级项目目录与单层日记目录归档、当前文件夹打开与附件选中、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -199,7 +199,7 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
     assert.ok(guide.includes('⌘ + 单击'));
     assert.ok(guide.includes('Ctrl + 单击'));
     assert.ok(guide.includes('Eagle 4.0 Build 18'));
-    assert.ok(guide.includes('系统应自动启动 Eagle'));
+    assert.ok(guide.includes('系统应先启动 Eagle'));
     assert.ok(guide.includes('项目/以人为本系列课程'));
     assert.ok(guide.includes('02-areas/容器名'));
     assert.ok(guide.includes('03-resources/容器名'));
@@ -212,6 +212,8 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
     assert.ok(guide.includes('伴侣版本过旧'));
     assert.ok(guide.includes('覆盖安装同版 Eagle 伴侣'));
     assert.ok(guide.includes('同一 Eagle 库里换文件夹'));
+    assert.ok(guide.includes('打开附件当前所在的文件夹并选中该附件'));
+    assert.ok(guide.includes('只有未归类附件才会留在“全部”'));
     assert.ok(guide.includes('不要手动编辑或分享配对令牌'));
     assert.equal(/<script\b/i.test(guide), false);
 });
@@ -231,14 +233,20 @@ test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官�
     assert.ok(source.includes('eagle.folder.getAll'));
     assert.ok(source.includes('eagle.folder.create'));
     assert.ok(source.includes('eagle.folder.createSubfolder'));
+    assert.ok(source.includes('eagle.folder.open'));
     assert.ok(source.includes('eagle.item.getById'));
     assert.ok(source.includes('eagle.item.open'));
+    assert.ok(source.includes('eagle.item.select'));
     assert.ok(source.includes('eagle.app.show'));
     assert.ok(client.includes("require('electron')"));
     assert.ok(client.includes("? '/v1/projects/import'"));
     assert.ok(client.includes("? '/v1/diary/import'"));
     assert.ok(client.includes('Eagle 伴侣版本过旧'));
     assert.ok(client.includes('shell.openExternal(buildEagleNativeItemUri(reference))'));
+    assert.ok(client.includes('EAGLE_WAKE_RETRY_DELAYS_MS'));
+    assert.ok(client.includes('await this.retryOpenAfterNative(reference, error)'));
+    assert.ok(client.includes('暂时只能在“全部”中显示附件'));
+    assert.equal(client.includes('setInterval('), false);
     assert.equal(source.includes('Access-Control-Allow-Origin'), false);
     assert.equal(/writeFile[^\n]*metadata\.json/.test(source), false);
 });
@@ -318,11 +326,14 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
     const folder = mkdtempSync(path.join(tmpdir(), 'ziminos-eagle-test-'));
     const attachment = path.join(folder, 'sample.txt');
     const opened = [];
+    const openedFolders = [];
     const imported = [];
+    const selected = [];
     const shown = [];
     const nativeLinks = [];
     const eagleFolders = [];
     const createdFolders = [];
+    let itemFolders = ['PROJECT_COURSE'];
 
     writeFileSync(attachment, 'hello-eagle');
     context.document = { getElementById: () => ({ textContent: '' }) };
@@ -336,6 +347,7 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
         library: { path: folder, name: '测试资源库' },
         folder: {
             getAll: async () => eagleFolders,
+            open: async (folderId) => openedFolders.push(folderId),
             create: async (options) => {
                 const id = options.name === '日记' ? 'DIARY_ROOT' : 'PROJECT_ROOT';
                 const created = { id, parent: '', children: [], ...options };
@@ -360,9 +372,13 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
                 imported.push({ filePath, options });
                 return 'ITEM123';
             },
-            getById: async () => ({ filePath: attachment, isDeleted: false }),
+            getById: async () => ({ filePath: attachment, isDeleted: false, folders: itemFolders }),
             open: async (itemId) => {
                 opened.push(itemId);
+                return true;
+            },
+            select: async (itemIds) => {
+                selected.push(...itemIds);
                 return true;
             },
         },
@@ -539,9 +555,13 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
         }, headers);
 
         assert.equal(openedResponse.status, 200);
-        assert.deepEqual(opened, ['ITEM123']);
+        assert.equal(JSON.parse(openedResponse.body).openedIn, 'folder');
+        assert.deepEqual(opened, []);
+        assert.deepEqual(openedFolders, ['PROJECT_COURSE']);
+        assert.deepEqual(selected, ['ITEM123']);
         assert.deepEqual(shown, [true]);
 
+        itemFolders = ['MOVED_FOLDER'];
         context.eagle.app.show = async () => false;
         context.eagle.shell = { openExternal: async (url) => nativeLinks.push(url) };
 
@@ -551,6 +571,7 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
 
         assert.equal(fallbackOpen.status, 200);
         assert.deepEqual(nativeLinks, ['eagle://item/ITEM123']);
+        assert.deepEqual(openedFolders, ['PROJECT_COURSE', 'MOVED_FOLDER']);
 
         context.eagle.app.show = async () => { throw new Error('show failed'); };
 
@@ -560,6 +581,21 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
 
         assert.equal(rejectedShowFallback.status, 200);
         assert.deepEqual(nativeLinks, ['eagle://item/ITEM123', 'eagle://item/ITEM123']);
+        assert.deepEqual(openedFolders, ['PROJECT_COURSE', 'MOVED_FOLDER', 'MOVED_FOLDER']);
+
+        itemFolders = [];
+        context.eagle.app.show = async () => {
+            shown.push(true);
+            return true;
+        };
+        const unfiledOpen = await callBridge(port, 'POST', '/v1/items/ITEM123/open', {
+            libraryKey: 'primary',
+        }, headers);
+
+        assert.equal(unfiledOpen.status, 200);
+        assert.equal(JSON.parse(unfiledOpen.body).openedIn, 'all');
+        assert.deepEqual(opened, ['ITEM123']);
+        assert.deepEqual(shown, [true, true]);
 
         const disconnected = await callBridge(port, 'POST', '/v1/disconnect', {}, headers);
 

@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Eagle 官方 plugin API 的 app/library/item/folder/shell 与生命周期事件，依赖 Node 16 内建 http/fs/path/crypto
- * [OUTPUT]: 在 127.0.0.1 提供配对、按 Obsidian 容器建“项目/容器名”或单层“日记”目录并导入、内容读取与项目打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
+ * [OUTPUT]: 在 127.0.0.1 提供配对、按 Obsidian 容器建“项目/容器名”或单层“日记”目录并导入、内容读取与附件当前文件夹打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
  * [POS]: 两端架构的 Eagle 执行边界。它只调官方 item/folder API，不修改 metadata.json；服务只绑定回环，
  *        变更/读取端点全部验令牌与已配对资源库，令牌不写入响应以外的 DOM、URL 或日志
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -324,12 +324,37 @@ class BridgeService {
 
         if (!this.ensureLibrary(response, client, libraryKey)) return;
 
-        const result = await eagle.item.open(itemId);
-        if (result === false) throw new Error('Eagle 无法打开这个项目');
+        const item = await eagle.item.getById(itemId);
+        if (!item || item.isDeleted) {
+            this.json(response, 404, { ok: false, error: 'Eagle 中找不到这个附件' });
+            return;
+        }
 
+        const folderId = firstItemFolderId(item);
+
+        // 先恢复窗口，再切目录；原生 item 深链若作为旧版唤起兜底，也不会最后把界面改回“全部”。
         await showMainWindow(itemId);
 
-        this.json(response, 200, { ok: true });
+        if (folderId) {
+            if (typeof eagle.folder?.open !== 'function') {
+                throw new Error('当前 Eagle 版本不支持打开附件文件夹，请升级到 4.0 Build 18 或更高');
+            }
+
+            await eagle.folder.open(folderId);
+
+            if (typeof eagle.item?.select !== 'function') {
+                throw new Error('当前 Eagle 版本不支持选中附件，请升级到 4.0 Build 18 或更高');
+            }
+
+            const selected = await eagle.item.select([itemId]);
+            if (selected === false) throw new Error('Eagle 已打开附件文件夹，但无法选中这个附件');
+        } else {
+            // 未归类附件没有可打开的文件夹，只能沿用 Eagle 官方的“在全部中显示”。
+            const result = await eagle.item.open(itemId);
+            if (result === false) throw new Error('Eagle 无法打开这个附件');
+        }
+
+        this.json(response, 200, { ok: true, openedIn: folderId ? 'folder' : 'all' });
     }
 
     ensureLibrary(response, client, libraryKey) {
@@ -597,6 +622,13 @@ function assertFolder(folder, message) {
 
 function parentId(folder) {
     return typeof folder.parent === 'string' ? folder.parent : '';
+}
+
+/** Eagle 附件可属于多个文件夹；ziminOS 新导入时只有一个，手工多归属时按 Eagle 返回顺序取第一项。 */
+function firstItemFolderId(item) {
+    if (!Array.isArray(item.folders)) return '';
+
+    return item.folders.find((folderId) => typeof folderId === 'string' && IDENTITY.test(folderId)) || '';
 }
 
 function validFolderName(value) {

@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 obsidian/requestUrl 访问仅回环监听的 Eagle 伴侣，桌面端伴侣不在线时按需使用 Electron shell 打开 Eagle 原生深链，依赖 core/types 与本模块 platform/protocol
- * [OUTPUT]: 对外提供 EagleImportRoute/EagleBridgeClient，封装配对、项目/日记分类导入、内容读取、Eagle 精确打开/离线唤起与本机令牌生命周期
+ * [OUTPUT]: 对外提供 EagleImportRoute/EagleBridgeClient，封装配对、项目/日记分类导入、内容读取、当前文件夹精确打开、退出后有界唤起重连与本机令牌生命周期
  * [POS]: Obsidian 半边唯一的 HTTP 出境口。认证令牌只进 Obsidian SecretStorage，不进 data.json、笔记或日志；
  *        上层只看业务结果，不自行拼端口、请求头或错误语义
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -39,6 +39,9 @@ type JsonRecord = Record<string, unknown>;
 
 /** SecretStorage 要求小写字母、数字与连字符；它自身已按当前 vault 隔离，不把库名再拼进键。 */
 const EAGLE_TOKEN_SECRET_ID = 'ziminos-eagle-auth-primary';
+
+/** 只在用户点击且原生深链已唤起 Eagle 后等待伴侣；总时长不超过 10 秒。 */
+const EAGLE_WAKE_RETRY_DELAYS_MS = [250, 500, 1_000, 1_500, 2_500, 4_000] as const;
 
 export class EagleBridgeClient {
     private readonly ctx: ZiminosContext;
@@ -136,17 +139,13 @@ export class EagleBridgeClient {
 
     async open(reference: EagleReference): Promise<void> {
         try {
-            await this.requestJson({
-                url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/open`,
-                method: 'POST',
-                contentType: 'application/json',
-                body: JSON.stringify({ libraryKey: reference.libraryKey }),
-            });
+            await this.openThroughCompanion(reference);
         } catch (error) {
             // 401/409/500 是伴侣给出的真实业务结果，不能用深链绕过配对与资源库校验。
             if (!(error instanceof EagleBridgeUnavailableError)) throw error;
 
             await this.openNative(reference, error);
+            await this.retryOpenAfterNative(reference, error);
         }
     }
 
@@ -202,6 +201,20 @@ export class EagleBridgeClient {
         }
     }
 
+    private async openThroughCompanion(reference: EagleReference): Promise<void> {
+        const result = await this.requestJson({
+            url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/open`,
+            method: 'POST',
+            contentType: 'application/json',
+            body: JSON.stringify({ libraryKey: reference.libraryKey }),
+        });
+        const openedIn = stringField(result, 'openedIn');
+
+        if (openedIn !== 'folder' && openedIn !== 'all') {
+            throw new Error('Eagle 伴侣版本过旧，请覆盖安装 ziminOS v0.22.9 随附的伴侣');
+        }
+    }
+
     private async openNative(reference: EagleReference, unavailable: EagleBridgeUnavailableError): Promise<void> {
         if (!isSupportedEagleDesktop()) throw unavailable;
 
@@ -216,6 +229,25 @@ export class EagleBridgeClient {
         } catch (error) {
             throw new Error(`${unavailable.message}；自动唤起 Eagle 失败：${errorMessage(error)}`);
         }
+    }
+
+    /** 原生深链只负责启动 Eagle；伴侣就绪后再走官方 Folder API，才能从“全部”切到实际文件夹。 */
+    private async retryOpenAfterNative(
+        reference: EagleReference,
+        unavailable: EagleBridgeUnavailableError,
+    ): Promise<void> {
+        for (const delayMs of EAGLE_WAKE_RETRY_DELAYS_MS) {
+            await delay(delayMs);
+
+            try {
+                await this.openThroughCompanion(reference);
+                return;
+            } catch (error) {
+                if (!(error instanceof EagleBridgeUnavailableError)) throw error;
+            }
+        }
+
+        throw new Error(`${unavailable.message}；Eagle 已由系统唤起，但伴侣在 10 秒内未就绪，暂时只能在“全部”中显示附件`);
     }
 
     private baseUrl(): string {
@@ -283,4 +315,8 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function delay(milliseconds: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }

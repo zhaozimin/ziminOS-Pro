@@ -4998,6 +4998,7 @@ function assertIdentity(value, name) {
 
 // src/modules/eagle/client.ts
 var EAGLE_TOKEN_SECRET_ID = "ziminos-eagle-auth-primary";
+var EAGLE_WAKE_RETRY_DELAYS_MS = [250, 500, 1e3, 1500, 2500, 4e3];
 var EagleBridgeClient = class {
   constructor(ctx) {
     this.ctx = ctx;
@@ -5070,15 +5071,11 @@ var EagleBridgeClient = class {
   }
   async open(reference) {
     try {
-      await this.requestJson({
-        url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/open`,
-        method: "POST",
-        contentType: "application/json",
-        body: JSON.stringify({ libraryKey: reference.libraryKey })
-      });
+      await this.openThroughCompanion(reference);
     } catch (error) {
       if (!(error instanceof EagleBridgeUnavailableError)) throw error;
       await this.openNative(reference, error);
+      await this.retryOpenAfterNative(reference, error);
     }
   }
   /** 返回 Eagle 端是否也已撤销；离线时仍清本机凭据，但不能伪称远端授权已删除。 */
@@ -5121,6 +5118,18 @@ var EagleBridgeClient = class {
       throw new EagleBridgeUnavailableError(`\u8FDE\u4E0D\u4E0A Eagle \u4F34\u4FA3\uFF08\u672C\u673A\u7AEF\u53E3 ${normalizeEaglePort(this.ctx.settings.eaglePort)}\uFF09`);
     }
   }
+  async openThroughCompanion(reference) {
+    const result = await this.requestJson({
+      url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/open`,
+      method: "POST",
+      contentType: "application/json",
+      body: JSON.stringify({ libraryKey: reference.libraryKey })
+    });
+    const openedIn = stringField(result, "openedIn");
+    if (openedIn !== "folder" && openedIn !== "all") {
+      throw new Error("Eagle \u4F34\u4FA3\u7248\u672C\u8FC7\u65E7\uFF0C\u8BF7\u8986\u76D6\u5B89\u88C5 ziminOS v0.22.9 \u968F\u9644\u7684\u4F34\u4FA3");
+    }
+  }
   async openNative(reference, unavailable) {
     if (!isSupportedEagleDesktop()) throw unavailable;
     try {
@@ -5130,6 +5139,19 @@ var EagleBridgeClient = class {
     } catch (error) {
       throw new Error(`${unavailable.message}\uFF1B\u81EA\u52A8\u5524\u8D77 Eagle \u5931\u8D25\uFF1A${errorMessage(error)}`);
     }
+  }
+  /** 原生深链只负责启动 Eagle；伴侣就绪后再走官方 Folder API，才能从“全部”切到实际文件夹。 */
+  async retryOpenAfterNative(reference, unavailable) {
+    for (const delayMs of EAGLE_WAKE_RETRY_DELAYS_MS) {
+      await delay(delayMs);
+      try {
+        await this.openThroughCompanion(reference);
+        return;
+      } catch (error) {
+        if (!(error instanceof EagleBridgeUnavailableError)) throw error;
+      }
+    }
+    throw new Error(`${unavailable.message}\uFF1BEagle \u5DF2\u7531\u7CFB\u7EDF\u5524\u8D77\uFF0C\u4F46\u4F34\u4FA3\u5728 10 \u79D2\u5185\u672A\u5C31\u7EEA\uFF0C\u6682\u65F6\u53EA\u80FD\u5728\u201C\u5168\u90E8\u201D\u4E2D\u663E\u793A\u9644\u4EF6`);
   }
   baseUrl() {
     return `http://127.0.0.1:${normalizeEaglePort(this.ctx.settings.eaglePort)}`;
@@ -5183,6 +5205,9 @@ function isRecord2(value) {
 }
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
+}
+function delay(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 // src/modules/eagle/render.ts
