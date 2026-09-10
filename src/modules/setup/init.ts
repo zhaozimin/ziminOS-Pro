@@ -3,7 +3,7 @@
  *          core/folders 的 ensureFolderPath、core/time 的 nowStamp/nowStampAndUid、
  *          ./schemaNote 的 schemaNoteContent、
  *          core/types 的 ZiminosContext 与 VaultSeed
- * [OUTPUT]: 对外提供 initializeVault（开荒笔记库）与 applySeed（按需长出单个模块的产物）
+ * [OUTPUT]: 对外提供 initializeVault（开荒笔记库）与 applySeed（补齐单个模块的产物）
  * [POS]: 开荒编排者，由设置页「初始化」按钮与 init-vault 命令唯一触发（人主导，无定时器）。
  *        它只保证三件事属于笔记库本身：PARA 骨架目录、属性类型示例笔记，
  *        以及「开荒过没有」这个事实。属性示例归这里而不归任一模块，
@@ -123,8 +123,8 @@ export async function initializeVault(
 /**
  * 落一份开荒贡献：先建目录，再写缺失的笔记。
  *
- * 独立导出是为了客户模块——它不进默认开荒，由「初始化客户模块」命令按需执行同一段逻辑。
- * 「按需长出」与「开荒时长出」因此是同一件事的两个触发点，而不是两份各自演化的代码。
+ * 独立导出是为了客户模块——它已经进入默认开荒，但老库补齐与误删修复仍要执行同一段逻辑。
+ * 「补齐」与「开荒时长出」因此是同一件事的两个触发点，而不是两份各自演化的代码。
  */
 export async function applySeed(ctx: ZiminosContext, seed: VaultSeed): Promise<void> {
     for (const folder of seed.folders) {

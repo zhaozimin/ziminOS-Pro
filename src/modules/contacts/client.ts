@@ -7,10 +7,9 @@
  *          core/time 的 nowStampAndUid/today，core/types 的 ZiminosContext 与 VaultSeed；
  *          依赖 ./identity 的 liveNotesOfType/descriptionOf、./templates 的三个生成器
  * [OUTPUT]: 对外提供 SeedApplier 契约、clientSeed（客户模块的产物）与 registerClientCommands（四条命令）
- * [POS]: 客户与付费这条线。它刻意不进默认开荒——大多数学员不做生意，
- *        给空库预置六张永远空着的销售表只会增加认知负荷；要变现时命令面板跑一次「初始化客户模块」，
- *        MOC、模板与目录一次长齐。做成命令而不是设置开关，是因为开关会让
- *        「注不注册命令」变成需要重启才生效的分支，而命令跑完就一直在。
+ * [POS]: 客户与付费这条线。clientSeed 随默认开荒落下客户目录、模板与一张四列 MOC；
+ *        「初始化客户模块」命令继续调用同一份 seed，专门给旧库补齐或给误删后的库修复，
+ *        从而让首次生成与恢复只有一个事实源，而不是两套各自漂移的流程。
  *        一笔付费的本质是「我欠他一次交付」，那本来就是个待办，所以写入的是未勾选的任务行：
  *        交付完点一下勾即可，不用改文字、不用维护状态词，checkbox 直接充当交付状态
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -47,7 +46,7 @@ export type SeedApplier = (seed: VaultSeed) => Promise<void>;
 const ILLEGAL_NAME = /[\\/:*?"<>|#^[\]]/;
 
 const MESSAGES = {
-    setupDone: '客户模块已就绪 ✅',
+    setupDone: '客户模块已补齐 ✅',
     namePrompt: '怎么称呼他？（档案就用它命名）',
     namePlaceholder: '例如：王五',
     illegalName: '称呼里不能有 \\ / : * ? " < > | # ^ [ ] 这些字符。',
@@ -109,7 +108,7 @@ export function registerClientCommands(ctx: ZiminosContext, applySeed: SeedAppli
     });
 }
 
-/** 按需长出客户模块，并把学员送到那张 MOC 上 */
+/** 为旧库补齐或修复客户模块，并把学员送到那张 MOC 上 */
 async function setupClients(ctx: ZiminosContext, applySeed: SeedApplier): Promise<void> {
     try {
         const folder = normalizeFolderPath(ctx.settings.clientFolder, CLIENT_FOLDER);

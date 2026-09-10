@@ -143,7 +143,7 @@ export const TABS: readonly SettingsTab[] = [
         module: '人脉与客户 v1',
         status:
             '运行中 · 新建人脉、记人情，档案与 MOC 共八个视图；' +
-            '客户按需启用，运行「初始化客户模块」后长出 MOC 与另外八个视图',
+            '客户 MOC 默认随开荒生成，以人物、金额、交付和创建日期汇总客户',
     },
     {
         id: 'editing',
@@ -499,7 +499,7 @@ export const TEXT_FIELDS: readonly TextFieldSpec[] = [
     { key: 'clientSources', tab: 'contacts', section: '客户', name: '客户渠道', hint: '「新建客户」的渠道候选，用逗号分隔。走选择而非手打，统计才不会被同义写法打散。', advanced: false },
     { key: 'clientProducts', tab: 'contacts', section: '客户', name: '产品清单', hint: '「增加付费」的产品候选，用逗号分隔。写你自己在卖的东西。', advanced: false },
     { key: 'contactFolder', tab: 'contacts', section: '人脉', name: '人脉目录', hint: '人物档案平铺存放在这里；视图靠 type 认人，挪走也不影响。', advanced: true },
-    { key: 'clientFolder', tab: 'contacts', section: '客户', name: '客户目录', hint: '付费用户档案放在这里，运行「初始化客户模块」后才会用到。', advanced: true },
+    { key: 'clientFolder', tab: 'contacts', section: '客户', name: '客户目录', hint: '客户 MOC 与付费用户档案存放在这里；视图靠 type 识别客户。', advanced: true },
 
     { key: 'dateTimeFormat', tab: 'setup', name: '时间格式', hint: 'created 与 updated 字段的写法，moment 语法。', advanced: true },
 ];

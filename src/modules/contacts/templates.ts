@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 core/constants 的 FIELDS/NOTE_TYPES/CONTACT_MOC/CLIENT_MOC/LEDGER/PAYMENT_FIELDS，
+ * [INPUT]: 依赖 core/constants 的 FIELDS/NOTE_TYPES/CLIENT_MOC/LEDGER/PAYMENT_FIELDS，
  *          依赖 ../review/templates 的 viewBlock
  * [OUTPUT]: 对外提供 personTemplateFile/personNoteContent、clientTemplateFile/clientNoteContent、
  *           contactMocContent/clientMocContent 六个纯函数与 PersonValues/ClientValues 两个入参类型
@@ -15,7 +15,6 @@
 
 import {
     CLIENT_MOC,
-    CONTACT_MOC,
     FIELDS,
     LEDGER,
     NOTE_TYPES,
@@ -48,7 +47,6 @@ export interface ClientValues {
 }
 
 /** MOC 的链接写法，供 up 字段与说明正文共用 */
-const CONTACT_MOC_LINK = `[[${basenameOf(CONTACT_MOC)}]]`;
 const CLIENT_MOC_LINK = `[[${basenameOf(CLIENT_MOC)}]]`;
 
 /** 从笔记路径取出可用于双链的名字 */
@@ -197,7 +195,7 @@ export function contactMocContent(created: string, uid: number): string {
     return [
         areaFrontmatter('人脉领域总控台：按圈子分组的名录、投喂名单、本月生日、人情余额', created, uid),
         '',
-        `> 这里是全部人的经营视角。客户视角另见 ${CLIENT_MOC_LINK}（还没有的话，命令面板运行「初始化客户模块」）。`,
+        `> 这里是全部人的经营视角。付费与交付另见 ${CLIENT_MOC_LINK}。`,
         '> 一个人可以同时出现在两张地图上：他确实可以既是我的客户，又是我的朋友。',
         '',
         '## 📇 名录',
@@ -279,56 +277,35 @@ export function contactMocContent(created: string, uid: number): string {
 /** 客户领域总控台 */
 export function clientMocContent(created: string, uid: number): string {
     return [
-        areaFrontmatter(
-            '客户领域总控台：产品区（待交付/销售分析/付费用户）＋ 服务区（未结案/案例库/服务客户）',
-            created,
-            uid,
-        ),
+        areaFrontmatter('客户领域总控台：按人物汇总金额、交付状态与建档日期', created, uid),
         '',
-        '> 你有两条交易线，它们回答的问题不同，所以分两区看。',
-        '> **产品**：陌生人买你的东西，你只知道渠道和联系方式。要看的是钱从哪来、货给了没。',
-        '> **服务**：认识的人找你办事，有项目有过程。要看的是欠谁的活、哪类问题该做成课。',
+        '> 一张表看清钱从谁来、交付欠到哪、关系从何时开始。',
+        '> 待交付客户置顶，其余按累计金额排列。',
         '',
-        '# 🛒 产品',
+        '## 💰 客户名录',
         '',
-        '## 📦 待交付',
+        viewBlock('客户名录'),
         '',
-        viewBlock('待交付'),
+        '## 📖 使用说明',
         '',
-        '## 📊 销售分析',
+        '### 四列都从事实计算',
         '',
-        viewBlock('销售分析'),
+        '| 列 | 怎么来 |',
+        '|---|---|',
+        `| **人物** | 所有仍在经营、且 \`${FIELDS.type}: ${NOTE_TYPES.client}\` 的客户档案 |`,
+        `| **金额** | 这个人物名下全部 \`${PAYMENT_FIELDS.amount}\` 的累计，不另设汇总字段 |`,
+        '| **交付** | 未勾选的付费任务有几项；全部勾完即显示「已交付」 |',
+        `| **创建日期** | 客户档案的 \`${FIELDS.created}\`，只表示这段客户关系何时建档，不随付款更新 |`,
         '',
-        '## 👥 付费用户',
+        '客户刚建档、还没产生付费时，金额与交付都显示「—」，不拿 0 假装已经发生过一笔交易。',
         '',
-        viewBlock('付费用户'),
+        '### 日常三个动作',
         '',
-        '# 🔧 服务',
+        '- **建档**：命令面板运行「新建客户」，填写称呼、渠道和联系方式。',
+        '- **记一笔钱**：运行「增加付费」，选客户、产品并填写金额。',
+        '- **完成交付**：打开客户档案，在「付费与交付」小节勾掉对应任务；MOC 自动刷新。',
         '',
-        '## 📋 未结案',
-        '',
-        viewBlock('未结案'),
-        '',
-        '## 📚 案例库',
-        '',
-        viewBlock('案例库'),
-        '',
-        '## 👤 服务客户',
-        '',
-        viewBlock('服务客户'),
-        '',
-        '# 📖 使用说明',
-        '',
-        '## 两条交易线，两个物种',
-        '',
-        '| | 产品型 | 服务型 |',
-        '|---|---|---|',
-        '| **谁** | 平台上来的陌生人 | 你认识的人 |',
-        '| **你知道什么** | 渠道、联系方式、单号，**仅此而已** | 全套：生日、住址、脾气、人情往来 |',
-        `| **档案在哪** | \`${FIELDS.type}: ${NOTE_TYPES.client}\` | \`${FIELDS.type}: ${NOTE_TYPES.person}\`，见 ${CONTACT_MOC_LINK} |`,
-        `| **活儿在哪** | 没有项目，就是一笔买卖＋一次交付 | 一个项目，\`${FIELDS.client}\` 链接挂到他 |`,
-        '',
-        '## 付费怎么记：一笔一条任务',
+        '### 付费怎么记：一笔一条任务',
         '',
         '**一笔付费的本质，就是「我欠他一次交付」，那本来就是个待办。** 所以命令写入的是**未勾选**的任务行，交付完点一下勾：',
         '',
@@ -347,13 +324,9 @@ export function clientMocContent(created: string, uid: number): string {
         '',
         `渠道不写进流水行——它属于这个人不属于每一笔，写在 frontmatter 的 \`${FIELDS.source}\` 里就够了。也**不设「付费次数」「累计金额」字段**：数行数就是次数，求和就是累计，手工维护的计数迟早和流水对不上，而对不上的那天你不会发现。`,
         '',
-        '## 一条法，两类档案都守',
+        '### 一条法，两类档案都守',
         '',
         '**日常发生的事只写一处：当天日记，句子里带 `[[客户名]]`。** 客户档案的「关键事件」和「待办」会自己把它们检索过来，和人脉档案完全同一套机制。所以客户档案里没有手写的「他的问题」「交付记录」小节——**你不用维护任何一份档案的正文**。',
-        '',
-        `## \`${FIELDS.client}\` 与 \`${FIELDS.with}\` 不能互换`,
-        '',
-        `\`${FIELDS.client}\` 是**商业契约标记**，写下它等于宣告「我欠这个人一个交付」。三张服务区的表全靠它过滤，「服务客户」更是直接用它反推身份——**给谁干过活谁就是客户**。所以朋友一起做的事必须走 \`${FIELDS.with}\`，否则朋友会被无声注册成客户、项目会挂进「我还欠谁的交付」、结案后还会污染案例库的选题统计。`,
         '',
     ].join('\n');
 }

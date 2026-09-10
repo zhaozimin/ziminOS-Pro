@@ -3,7 +3,7 @@
  *          core/constants 的 FIELDS/NOTE_TYPES/PAYMENT_FIELDS，core/table 的渲染原语，
  *          core/time 的 dayText/dayOfMillis/daysBetween/today，core/vaultIndex 的 extractLinks/toStringList/toText；
  *          依赖 ./identity 的 archiveFolderOf/isLivePath/lastContactDayOf
- * [OUTPUT]: 对外提供 clientViews（客户 MOC 六视图 + 客户档案的付费与交付 + 项目 MOC 的项目收款）
+ * [OUTPUT]: 对外提供 clientViews（客户 MOC 七视图 + 客户档案的付费与交付 + 项目 MOC 的项目收款）
  * [POS]: 客户与付费这条线的全部读侧。两条交易线回答的问题不同，所以分两区：
  *        产品型（陌生人买东西，只知道渠道与联系方式）问的是钱从哪来、货给了没；
  *        服务型（认识的人找你办事，有项目有过程）问的是欠谁的活、哪类问题该做成课。
@@ -33,12 +33,78 @@ interface Payment {
     readonly delivered: boolean;
 }
 
+/** 客户总览的一行；金额与交付从流水计算，创建日期只读档案的稳定事实 */
+interface ClientRosterRow {
+    readonly note: TFile;
+    readonly amount: number;
+    readonly paymentCount: number;
+    readonly pendingCount: number;
+    readonly created: string;
+}
+
 /** 行内字段 `[键::值]`；键名一律中文，含大写的键会被补一份规范名而致求和双计数 */
 const INLINE_FIELD = /\[([^\]:]+)::([^\]]*)\]/g;
 
 // ============================================================
 // 产品区
 // ============================================================
+
+/**
+ * 一人一行的客户总览。
+ *
+ * 待交付优先不是视觉偏好，而是债务顺序：已经收钱却还没交付的人必须先被看见；
+ * 其余再按累计金额排序。金额、交付都从付费任务现算，禁止另设会漂移的汇总字段。
+ */
+const clientRoster: ViewDefinition = {
+    name: '客户名录',
+    render: async (view: ViewContext): Promise<void> => {
+        const archive = archiveFolderOf(view.ctx);
+        const rows: ClientRosterRow[] = [];
+
+        for (const client of view.index.notesOfType(NOTE_TYPES.client)) {
+            if (!isLivePath(archive, client.path)) continue;
+
+            const payments = await paymentsOf(view, client);
+
+            rows.push({
+                note: client,
+                amount: sum(payments),
+                paymentCount: payments.length,
+                pendingCount: payments.filter((payment) => !payment.delivered).length,
+                created:
+                    dayText(view.index.fieldOf(client, FIELDS.created)) ??
+                    dayOfMillis(client.stat.ctime),
+            });
+        }
+
+        if (!rows.length) {
+            renderEmpty(view.el, '还没有客户档案。命令面板运行「新建客户」建第一个。');
+
+            return;
+        }
+
+        rows.sort(
+            (left, right) =>
+                Number(right.pendingCount > 0) - Number(left.pendingCount > 0) ||
+                right.amount - left.amount ||
+                left.created.localeCompare(right.created),
+        );
+
+        renderSummary(view.el, clientRosterSummary(rows));
+        renderTable(
+            view.ctx.app,
+            view.el,
+            view.sourcePath,
+            ['人物', '金额', '交付', '创建日期'],
+            rows.map((row): Cell[] => [
+                noteLink(row.note),
+                row.paymentCount ? formatMoney(row.amount) : '—',
+                clientDeliveryText(row),
+                row.created,
+            ]),
+        );
+    },
+};
 
 /** 收了钱还没给货的：等最久的排最前，那是最该先做的 */
 const pending: ViewDefinition = {
@@ -487,13 +553,42 @@ function sum(payments: readonly Payment[]): number {
     return payments.reduce((total, payment) => total + payment.amount, 0);
 }
 
+/** 金额在所有客户视图中按人民币阅读习惯显示；原始数值仍只存在流水里 */
+function formatMoney(amount: number): string {
+    return `¥${amount.toLocaleString('zh-CN')}`;
+}
+
+/** 客户总览上方的一句话；无任何流水时不展示虚假的累计 0 */
+function clientRosterSummary(rows: readonly ClientRosterRow[]): string {
+    const paymentCount = rows.reduce((total, row) => total + row.paymentCount, 0);
+
+    if (!paymentCount) return `共 **${rows.length}** 位客户，还没有付费流水。`;
+
+    const amount = rows.reduce((total, row) => total + row.amount, 0);
+    const pendingClients = rows.filter((row) => row.pendingCount > 0).length;
+    const delivery = pendingClients
+        ? `其中 **${pendingClients} 位**仍有待交付。`
+        : '全部交付完成。';
+
+    return `共 **${rows.length}** 位客户，累计 **${formatMoney(amount)}**；${delivery}`;
+}
+
+/** 没发生交易时交付无从谈起；有交易才区分待交付与已交付 */
+function clientDeliveryText(row: ClientRosterRow): string {
+    if (!row.paymentCount) return '—';
+    if (row.pendingCount) return `⏳ 待交付 ${row.pendingCount} 项`;
+
+    return '✅ 已交付';
+}
+
 /** 算不出天数就说算不出，不写 0 天 */
 function formatDays(days: number | null): string {
     return days === null ? '—' : `${days} 天`;
 }
 
-/** 客户与付费的八个视图 */
+/** 客户与付费的九个视图；旧八个继续注册，保证已有代码块不失效 */
 export const clientViews: readonly ViewDefinition[] = [
+    clientRoster,
     pending,
     sales,
     paidUsers,

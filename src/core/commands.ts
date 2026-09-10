@@ -397,7 +397,7 @@ export const CONTACT_COMMANDS: Readonly<Record<'create' | 'favor', CommandSpec>>
     },
 };
 
-/** 客户模块的四条命令：一条按需开荒，三条日常 */
+/** 客户模块的四条命令：一条为旧库补齐或修复，三条日常 */
 export const CLIENT_COMMANDS: Readonly<
     Record<'setup' | 'create' | 'payment' | 'receipt', CommandSpec>
 > = {
@@ -507,7 +507,7 @@ export const LEGACY_COMMANDS: Readonly<Record<'vault' | 'help' | 'settings', Com
  * 全部命令都摆上去等于把选择的负担丢回给学员——那条边栏会长成一根谁也不看的图标柱。
  * 这七条的判据是「一天里可能按不止一次」：记灵感、开日记、写主题是每天的动作，
  * 新建项目与新建人脉是每周的动作，记人情发生在关系推进的当下，外观开关是刚上手时天天在调的。
- * 其余命令要么一辈子只按一次（初始化笔记库、初始化客户模块、升级存量 MOC 数据库），
+ * 其余命令要么一辈子只按一次（初始化笔记库、旧库补齐客户模块、升级存量 MOC 数据库），
  * 要么发生在某个具体场景里（新建领域、初始化当前卡片、四条流转、读书三条、
  * 三条客户流水、周月季年四级复盘）——
  * 那些场景里用户本来就停在对的笔记上，命令面板比一根图标柱更快。

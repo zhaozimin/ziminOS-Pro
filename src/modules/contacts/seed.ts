@@ -4,8 +4,8 @@
  *          core/types 的 ZiminosContext 与 VaultSeed；依赖 ./templates 的两个生成器
  * [OUTPUT]: 对外提供 contactsSeed（人脉模块对开荒的全部诉求）
  * [POS]: 人脉模块面向开荒的窗口：一个平铺存放档案的目录、一份 type 留空的模板、一张总控台 MOC。
- *        客户那一半刻意不在这里——它由 client.ts 的 clientSeed 提供，
- *        并且只在学员运行「初始化客户模块」时才落地。默认开荒不给他六张永远空着的销售表
+ *        客户保持独立模板与独立 seed，main 在同一次默认开荒中同时收齐两份贡献；
+ *        两个物种因此不揉进一份实现，又能保证两张地图同时出现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 

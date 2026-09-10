@@ -4,7 +4,7 @@
  * [OUTPUT]: 对外提供单元格类型 Cell/NoteLink/RichText 与 noteLink/richText 构造器，
  *           渲染原语 renderTable / renderTaskList / renderEmpty / renderNote / renderHeading /
  *           renderSummary / renderRichText，以及任务行类型 TaskLine
- * [POS]: 视图引擎的呈现层，二十二个视图的唯一出口。它不认识任何业务概念，只认识
+ * [POS]: 视图引擎的呈现层，二十三个视图的唯一出口。它不认识任何业务概念，只认识
  *        「表头 + 行 + 单元格」与「一组任务」。三条纪律都来自真机对比：
  *        其一，文本里的 `[[双链]]` 必须渲染成可点的链接。视图检索出来的是日记原文，
  *        原文里的人名、项目名都是双链——渲染成死文本，等于把一张关系网拍平成一段字符串；

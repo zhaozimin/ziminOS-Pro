@@ -16,7 +16,7 @@ import { FOLDERS } from './constants';
  * 路径是否在功能目录（90-system）内。
  * 功能目录里住的是导航、模板与属性示例——它们是系统的零件，没有知识属性，
  * 因此不参与任何检索：不进反向链接表、不进 type 名录、不进任何一张视图。
- * 判定收口在此一处，二十二个视图与两处直扫共用，不散写二十几遍前缀比较。
+ * 判定收口在此一处，二十三个视图与两处直扫共用，不散写二十几遍前缀比较。
  */
 export function isSystemPath(path: string): boolean {
     return path === FOLDERS.system || path.startsWith(`${FOLDERS.system}/`);

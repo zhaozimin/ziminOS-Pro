@@ -21,7 +21,7 @@
  *        把它连同 app/plugin/guard 装配成 ZiminosContext、把上下文分发给各模块去自行注册、
  *        再把彼此需要但不该互相认识的能力接上线。
  *        最后这件事是 V2 新增的，也是本文件最有分量的部分：
- *        记人情要往当天日记里写一行，客户模块要按需长出自己的产物，
+ *        记人情要往当天日记里写一行，客户模块的补齐命令要复用默认开荒能力，
  *        建一本书要走项目模块那套「文件夹 + MOC」的流程，
  *        设置页要能开出读书模块那个扫码登录窗口，
  *        还要能让状态栏那两块、左侧边栏那列图标与文件模块画出来的三样东西按新设置重画——
@@ -66,7 +66,7 @@ import { registerLegacyDock } from './modules/legacy/vaultDock';
 import { registerCalendar } from './modules/calendar/view';
 import { circleViews } from './modules/contacts/circleViews';
 import { clientViews } from './modules/contacts/clientViews';
-import { registerClientCommands } from './modules/contacts/client';
+import { clientSeed, registerClientCommands } from './modules/contacts/client';
 import { registerCreateContactCommand } from './modules/contacts/createContact';
 import { pickPerson } from './modules/contacts/identity';
 import { personViews } from './modules/contacts/personViews';
@@ -143,6 +143,7 @@ export default class ZiminosPlugin extends Plugin {
             projectsSeed(),
             reviewSeed(ctx),
             contactsSeed(ctx),
+            clientSeed(ctx),
         ];
 
         // 开荒内部已把全部异常转成中文 Notice，此处无需等待也无需接住
@@ -200,7 +201,8 @@ export default class ZiminosPlugin extends Plugin {
         // 记人情要往当天日记里写一行。它不认识复盘模块，只声明了一个「拿到今天的日记」的洞，
         // 由这里用复盘模块的能力填上；reveal 关掉，顺手记一笔不该顶掉学员正在读的笔记
         registerRecordFavorCommand(ctx, () => openPeriodNote(ctx, PERIODS.daily, { reveal: false }));
-        // 客户模块要按需长出自己的产物，同理只声明了一个「落一份开荒贡献」的洞
+        // 客户产物已进默认开荒；这条旧命令仍是老库补齐与误删修复入口，
+        // 复用同一份 seed 与同一段落盘能力，不另造一条恢复流程
         registerClientCommands(ctx, (seed) => applySeed(ctx, seed));
 
         // 排版整理横跨全库、不属于任何一套笔记，它注册的是一条命令与一个编辑监听，一篇笔记都不生产。
@@ -262,7 +264,7 @@ export default class ZiminosPlugin extends Plugin {
         const syncRibbon = registerRibbon(ctx);
 
         // ============================================================
-        // 代码块视图引擎：二十二个笔记内视图；日历是独立 ItemView，不在此处重复注册
+        // 代码块视图引擎：二十三个笔记内视图；日历是独立 ItemView，不在此处重复注册
         // ============================================================
 
         registerViewCodeBlock(ctx, [

@@ -68,7 +68,7 @@ export const INIT_FOLDERS: readonly string[] = [
 /** 人脉档案的家：平铺存放，不建子目录（分组靠 up 归属链接，不靠文件夹） */
 export const CONTACT_FOLDER = `${FOLDERS.areas}/人脉`;
 
-/** 客户档案的家；它不进开荒骨架，由「初始化客户模块」命令按需长出 */
+/** 客户档案的家；不进 PARA 固定骨架，由客户 seed 随默认开荒长出 */
 export const CLIENT_FOLDER = `${FOLDERS.areas}/客户`;
 
 // ============================================================
