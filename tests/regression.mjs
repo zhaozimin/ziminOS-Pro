@@ -4,6 +4,7 @@
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
  *           项目状态回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
  *           片段出境口的桌面端闸门、本机绝对路径的唯一算处、状态栏路径的看拿分离、
+ *           废弃内容在编辑/阅读与三本库的外观同构、
  *           后台写入的分栏滚动保护、光标焦点切换、四类内容容器与日记附件路由，以及
  *           智能体路由完整性，并在专业版源码存在时额外覆盖出库单往返、《赛博永生》路径同构
  *           与第二版安装入口
@@ -467,6 +468,48 @@ test('损坏的 appearance.json 被拒绝，不覆盖用户外观配置', async 
 
     await assert.rejects(setSnippetEnabled(app, '【测试】片段', true), /无法读取外观配置/);
     assert.equal(writes, 0);
+});
+
+test('废弃内容在编辑与阅读中都有非颜色单一信号，三本库默认同步开启', () => {
+    const snippetName = '【编辑-删除线】突出废弃内容';
+    const snippetDir = path.join(ROOT, 'vault/.obsidian/snippets');
+    const source = readFileSync(
+        path.join(snippetDir, `${snippetName}.css`),
+        'utf8',
+    );
+
+    assert.match(source, /\.markdown-rendered :is\(del, s\)/);
+    assert.match(source, /\.cm-strikethrough:not\(\.cm-formatting-strikethrough\)/);
+    assert.match(source, /background-color:/);
+    assert.match(source, /text-decoration-thickness:\s*2px/);
+    assert.match(source, /text-decoration-skip-ink:\s*none/);
+
+    assert.equal(
+        readdirSync(snippetDir).filter((name) => name.endsWith('.css')).length,
+        13,
+        '共享外观包应当恰好交付十三个 CSS 片段',
+    );
+
+    for (const relativePath of [
+        'vault/.obsidian/appearance.json',
+        'vault-pro/兼收并蓄/.obsidian/appearance.json',
+        'vault-pro/赛博永生/.obsidian/appearance.json',
+    ]) {
+        const appearance = JSON.parse(readFileSync(path.join(ROOT, relativePath), 'utf8'));
+
+        assert.ok(
+            appearance.enabledCssSnippets.includes(snippetName),
+            `${relativePath} 没有默认开启废弃内容样式`,
+        );
+        assert.equal(appearance.enabledCssSnippets.length, 11);
+    }
+
+    for (const relativePath of ['skill/SKILL.md', 'skill-pro/SKILL.md']) {
+        const contract = readFileSync(path.join(ROOT, relativePath), 'utf8');
+
+        assert.match(contract, new RegExp(snippetName));
+        assert.match(contract, /十三个实名片段/);
+    }
 });
 
 test('本机书源不在模块顶层静态引入 Node 内建模块', () => {

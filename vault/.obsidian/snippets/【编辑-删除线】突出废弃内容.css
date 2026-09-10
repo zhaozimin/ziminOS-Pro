@@ -1,0 +1,34 @@
+/* ============================================================
+ * [INPUT]: 依赖 Obsidian 阅读视图的 del/s 元素、CM6 编辑视图的
+ *          cm-strikethrough 语义类，依赖主题提供的警示色与正文弱化色变量
+ * [OUTPUT]: 对外提供「已废弃」内容的三重视觉信号：弱化文字、淡警示色背景、
+ *           2px 警示色删除线；同时覆盖编辑态、阅读态与明暗主题
+ * [POS]: ziminOS 外观包的废弃语义层；只改 Markdown 正文中的删除线，
+ *        不插入「已废弃」文字、不改动原文，也不触碰插件界面
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ * ============================================================ */
+
+/* 正文降一档，再用背景与粗删除线表达「不再使用」；不只靠颜色传意。 */
+.markdown-rendered :is(del, s),
+.markdown-source-view.mod-cm6 .cm-strikethrough:not(.cm-formatting-strikethrough) {
+  color: var(--text-muted);
+  background-color: rgba(var(--color-red-rgb, 208, 66, 85), 0.14);
+  text-decoration-line: line-through;
+  text-decoration-style: solid;
+  text-decoration-color: var(--text-error);
+  text-decoration-thickness: 2px;
+  text-decoration-skip-ink: none;
+}
+
+/* 阅读态是一枚完整元素，可以给它留一点呼吸空间；换行时每行都保留背景边界。 */
+.markdown-rendered :is(del, s) {
+  padding-inline: 0.12em;
+  border-radius: 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* 源码态与实时预览中把 ~~ 也染成警示色，但不给标记本身铺背景。 */
+.markdown-source-view.mod-cm6 .cm-formatting-strikethrough {
+  color: var(--text-error);
+}

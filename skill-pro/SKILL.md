@@ -101,7 +101,7 @@ $src/skill-pro/scripts/notectl.py              口述捕获的确定性脚本
 $src/fonts/                                    四款正文字体
 ```
 
-`vault/` 与 `vault-pro/` 的分工是硬的，别搞混：**`vault/` 是三本库共享的那一份程序与外观资产的唯一出处**（ziminOS 插件、Dataview、Style Settings、Minimal 主题、十二个 CSS 片段），仓库里只存在这一份；`vault-pro/` 只装第二版特有的内容与配置。这样第一版与第二版永远不会在主题或插件版本上分叉。
+`vault/` 与 `vault-pro/` 的分工是硬的，别搞混：**`vault/` 是三本库共享的那一份程序与外观资产的唯一出处**（ziminOS 插件、Dataview、Style Settings、Minimal 主题、十三个 CSS 片段），仓库里只存在这一份；`vault-pro/` 只装第二版特有的内容与配置。这样第一版与第二版永远不会在主题或插件版本上分叉。
 
 不要运行 `npm install` / `npm run build`，不要安装 Node.js，不要去 Obsidian 商店另行下载任何东西。Eagle 伴侣包只随 ziminOS 程序分发，**不得替用户静默安装或启动**；用户启用附件桥接时，再从 ziminOS 设置页主动打开它。
 
@@ -285,9 +285,9 @@ mkdir -p "$human/.obsidian/plugins/ziminos"
 
 同样要改 `$eternal/.obsidian/plugins/ziminos/edition.json` 里的 `vaults.human`。**三份标记里的 `vaults` 必须完全一致**，它是系统布局的唯一事实源，不一致会让出库单指向一个不存在的地方。
 
-5. 现有库的 `main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin` 更新到施工源的版本（第二版的功能就在这些产物里）。
+5. 现有库的 `main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin`、Minimal 主题与十三个实名片段更新到施工源的版本。片段复制前先记下目标中不存在的文件名，复制后按 C 模式第 2 步的规则，只把这批「本次新增」里默认启用的片段追加进 `appearance.json`；已有片段的开关一个都不动。
 6. 按 A 的第 4、5、6 步装字体、留说明书、铺系统根的认路文件。
-7. **现有库的一切「选择」一律不动**：`data.json`、`holiday-cache.json`、`types.json` 已调过的键、`appearance.json` 里用户选过的主题/字体/片段、`app.json`、`templates.json`、用户自己的片段与全部笔记。规则与第一版 `skill/SKILL.md` 第三节的所有权表逐条相同。
+7. **现有库的一切「选择」一律不动**：`data.json`、`holiday-cache.json`、`types.json` 已调过的键、`appearance.json` 里用户选过的主题/字体/已有片段、`app.json`、`templates.json`、用户自己的片段与全部笔记。唯一例外是第 5 步那批复制前根本不存在的新片段——用户此前不可能关掉一个还没有的开关。
 
 升级后**不要**让用户重新点「初始化」——他的库早就开过荒了。
 
@@ -329,13 +329,17 @@ for v in "$human" "$eternal"; do
     done
 done
 
-# 主题与十二个实名片段：三本库都要。只覆盖施工源里那十二个文件，
+# 主题与十三个实名片段：三本库都要。只覆盖施工源里那十三个文件，
 # 用户自己放进 snippets/ 的其他 .css 一个都不动、不删、不改名
 for v in "$human" "$capture" "$eternal"; do
     mkdir -p "$v/.obsidian/themes/Minimal" "$v/.obsidian/snippets"
     cp -R "$src/vault/.obsidian/themes/Minimal/." "$v/.obsidian/themes/Minimal/"
+    new_snippets="$install_staging_dir/new-snippets-$(basename "$v").txt"
+    : > "$new_snippets"
     for snippet in "$src/vault/.obsidian/snippets/"*.css; do
-        cp "$snippet" "$v/.obsidian/snippets/$(basename "$snippet")"
+        target="$v/.obsidian/snippets/$(basename "$snippet")"
+        [ -e "$target" ] || printf '%s\n' "$(basename "${snippet%.css}")" >> "$new_snippets"
+        cp "$snippet" "$target"
     done
 done
 
@@ -357,6 +361,8 @@ cp "$src/skill-pro/system-root/CLAUDE.md" "$system_root/CLAUDE.md"
 cp "$src/skill-pro/system-root/AGENTS.md" "$system_root/AGENTS.md"
 ```
 
+复制完成后，用结构化 JSON 能力逐本合并 `appearance.json`：只检查对应的 `new-snippets-{库名}.txt`，并只把其中属于以下默认启用清单的名字追加到 `enabledCssSnippets`——`ziminos-quote-semantic-colors`、`【文件】文件图标前缀`、`【文件】二级文件夹前缀LOGO`、`【文件】彩虹文件夹（引导线版）`、`【笔记属性】自动伸缩`、`【编辑】当前行高亮（阴影）`、`【编辑-删除线】突出废弃内容`、`【编辑-图片】居中显示`、`【编辑-代码块】增加行号`、`【编辑-Baes】隐藏新建按钮`、`【PDF】列表参考线`。不要重写已有数组，不要追加清单外的名字。一个片段若复制前不存在，用户此前不可能关掉它，所以可以按新版默认启用一次；从它存在后的下一次升级起，它的开关就归用户，永远不再代开。
+
 ### 3. 自证：版本必须真的前进
 
 ```bash
@@ -371,11 +377,11 @@ echo "升级后：$after"
 
 
 - `main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin`：整份更新（只有装了插件的「以人为本」与「赛博永生」有）。
-- Dataview / Style Settings 的运行文件、Minimal 主题、十二个实名片段：整份更新。
+- Dataview / Style Settings 的运行文件、Minimal 主题、十三个实名片段：整份更新。
 - `.ziminos/skills/`：整份更新。
 - **系统根的 `CLAUDE.md` / `AGENTS.md`：缺就补，在就按第三节第 6 步整份更新。** 这两份是 v0.19.0 新增的，此前装好的系统里没有——不补上，用户每开一个新会话仍要从头解释一遍这是什么地方。它们是程序说明不是用户内容；他如果改过，先把差异摆给他看再决定。
 - **`edition.json`：存在就一个字节都不许碰。** 它里面的 `vaults.human` 可能是用户升级时的真实库名，覆盖成模板里的「以人为本」会让出库单指向一个不存在的目录。
-- **`data.json` / `holiday-cache.json` / `types.json` 已有的键 / `appearance.json` 的用户选择 / `app.json` / `templates.json` / 用户自带片段 / 全部笔记：一律不动。**
+- **`data.json` / `holiday-cache.json` / `types.json` 已有的键 / `appearance.json` 里已有片段的用户选择 / `app.json` / `templates.json` / 用户自带片段 / 全部笔记：一律不动。** 唯一例外是复制前不存在的新片段可按上一段规则默认启用一次。
 
 - **《赛博永生》的 `CLAUDE.md` 与 `README.md`：改过就先问，没改过才整份更新。** 这两篇是本轮唯一需要判断的东西——它们既是随版本更新的说明书（讲三层结构怎么用），又是我们**明说过用户可以改**的文件（那份 Schema 就是他调整机器干活方式的地方）。判据用 diff 而不是猜：与上一版模板逐字节相同就直接换新；不同就把差异摆给用户看，问他是要保留自己的版本、还是换新版并把他改的段落搬过去。**不问就覆盖，等于把他对这本库立的规矩悄悄删掉，而他不会立刻发现。**
 - 其余全部 Markdown（三本库里的每一篇笔记，含《兼收并蓄》的 `灵感集.md`、`剪藏/`，《赛博永生》的 `10-原料/`、`20-知识/`、`90-系统/账本.md`）：**一个字节都不动。**
@@ -420,7 +426,7 @@ AGENTS.md
 
 逐条确认：
 
-- 三本库各自有 `.obsidian/`，各自有 `.obsidian/themes/Minimal/theme.css` 与 12 个 `.css` 片段（`ls .obsidian/snippets/*.css | wc -l` ≥ 12）。
+- 三本库各自有 `.obsidian/`，各自有 `.obsidian/themes/Minimal/theme.css` 与 13 个 `.css` 片段（`ls .obsidian/snippets/*.css | wc -l` ≥ 13）；三份 `appearance.json` 的 `enabledCssSnippets` 都含 `【编辑-删除线】突出废弃内容`。
 - `以人为本/.obsidian/plugins/ziminos/{main.js,manifest.json,styles.css,ziminOS-Eagle-Bridge.eagleplugin,edition.json}` 齐全，伴侣包 `unzip -t` 校验通过；`edition.json` 是合法 JSON 且 `role` 为 `human`。
 - `赛博永生/.obsidian/plugins/ziminos/edition.json` 的 `role` 为 `eternal`；`10-原料/`、`20-知识/索引.md`、`90-系统/账本.md`、`CLAUDE.md`、`README.md` 齐全（这本库的三层目录名是中文的，不是 `10-raw` / `20-wiki` / `90-system`）。
 - `兼收并蓄/灵感集.md` 与 `兼收并蓄/剪藏/` 存在；`.obsidian/plugins/dataview/main.js` 存在。
@@ -433,7 +439,7 @@ AGENTS.md
 
 升级模式（B / C）**先确认程序真的前进了**：`以人为本` 与 `赛博永生` 的 `manifest.json` 版本号等于施工源的版本号；两本库的 `main.js` 与施工源的 `main.js` SHA-256 相同；两本库的 `ziminOS-Eagle-Bridge.eagleplugin` 与施工源 SHA-256 相同且 `unzip -t` 校验通过；`.ziminos/skills/` 下三个目录齐全；系统根的 `CLAUDE.md` 与 `AGENTS.md` 存在。**这些条目缺一条，这次升级就是没做成**——而它不会自己报错，用户只会在重启 Obsidian 后发现插件还是旧的。
 
-然后额外确认：升级前已存在的 `data.json` 的 SHA-256 全部不变；`types.json` 里用户原有的属性类型一个都没被改写；用户原有插件、非空自选主题、自选正文字体、自己放进 `snippets/` 的片段与全部 Markdown 笔记一个不少；`enabledCssSnippets` 里升级前已有的名字一个没少，被用户关掉的片段一个都没被重新打开。
+然后额外确认：升级前已存在的 `data.json` 的 SHA-256 全部不变；`types.json` 里用户原有的属性类型一个都没被改写；用户原有插件、非空自选主题、自选正文字体、自己放进 `snippets/` 的片段与全部 Markdown 笔记一个不少；`enabledCssSnippets` 里升级前已有的名字一个没少，被用户关掉的既有片段一个都没被重新打开；v0.22.10 的「突出废弃内容」只在复制前缺失的库中默认追加一次。
 
 ---
 

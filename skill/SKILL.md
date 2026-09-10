@@ -91,6 +91,7 @@ git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_stag
 施工源/vault/.obsidian/snippets/【文件】文件图标前缀.css
 施工源/vault/.obsidian/snippets/【笔记属性】自动伸缩.css
 施工源/vault/.obsidian/snippets/【编辑】当前行高亮（阴影）.css
+施工源/vault/.obsidian/snippets/【编辑-删除线】突出废弃内容.css
 施工源/vault/.obsidian/snippets/【编辑-Baes】隐藏新建按钮.css
 施工源/vault/.obsidian/snippets/【编辑-代码块】增加行号.css
 施工源/vault/.obsidian/snippets/【编辑-代码块】水平滑轮.css
@@ -114,9 +115,9 @@ git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_stag
 施工源/fonts/lxgw-neo-xihei-plus/LICENSE_CHS.md
 ```
 
-这十二个片段的文件名带【】与中文，复制时一律用引号包住路径；扩展名必须是小写 `.css`，大写的 `.CSS` Obsidian 的片段加载器认不出来。
+这十三个片段的文件名带【】与中文，复制时一律用引号包住路径；扩展名必须是小写 `.css`，大写的 `.CSS` Obsidian 的片段加载器认不出来。
 
-`.obsidian/.gitignore` 是随库落地的隐私护栏：即使学员以后在笔记库里初始化 Git，也不会把微信读书 Cookie、工作区状态和本机运行缓存提交出去。最后四份则是笔记库的开箱设置，别当成可有可无的杂项：`app.json` 定下附件落在 `./附件`、粘链接用 wiki 语法并自动跟着改名；`templates.json` 把模板目录指向 `90-system/Template`，缺了它学员打开核心「模板」插件后得自己去翻路径；`community-plugins.json` 决定三个系统插件是否启用；`appearance.json` 决定主题与十个默认启用的片段。
+`.obsidian/.gitignore` 是随库落地的隐私护栏：即使学员以后在笔记库里初始化 Git，也不会把微信读书 Cookie、工作区状态和本机运行缓存提交出去。最后四份则是笔记库的开箱设置，别当成可有可无的杂项：`app.json` 定下附件落在 `./附件`、粘链接用 wiki 语法并自动跟着改名；`templates.json` 把模板目录指向 `90-system/Template`，缺了它学员打开核心「模板」插件后得自己去翻路径；`community-plugins.json` 决定三个系统插件是否启用；`appearance.json` 决定主题与十一个默认启用的片段。
 
 任一缺失就停止并说明仓库不完整。ziminOS（含左侧边栏命令坞、三十六枚命令图标与三枚设置页专用图标，图标 SVG 已编进 `main.js`）、Dataview、Outliner、Quiet Outline、Minimal 与 Style Settings 的运行产物已全部在 `vault/` 中，四款正文字体已全部锁定在 `fonts/` 中；可选的第一方 Eagle 伴侣包也已经随 ziminOS 插件交付，安装器只复制它，**不得替用户静默安装或启动 Eagle 插件**。不要运行 `npm install` / `npm run build`，不要安装 Node.js，也不要去 Obsidian 商店或网络另行下载主题/插件、图标包或字体。禁止额外安装 QuickAdd、Linter 等非系统组件。
 
@@ -193,7 +194,7 @@ for snippet in "$install_staging_dir/repo/vault/.obsidian/snippets/"*.css; do
 done
 ```
 
-只覆盖施工源里的这十二个实名文件；用户自己放进 `snippets/` 的其他 `.css` 一个都不动、不删、不改名。
+只覆盖施工源里的这十三个实名文件；用户自己放进 `snippets/` 的其他 `.css` 一个都不动、不删、不改名。
 
 然后按下列所有权规则处理用户配置：
 
@@ -205,13 +206,13 @@ done
 2. Style Settings `data.json`：目标不存在时才从施工源复制；已存在则一个字节都不得改。
 3. `community-plugins.json`：解析现有 JSON 数组，仅追加缺失的 `ziminos`、`dataview` 与 `obsidian-style-settings`；保留原顺序、原插件和用户状态。文件不存在时才复制施工源默认文件。
 4. `appearance.json`：解析现有 JSON 对象。`cssTheme` 缺失或为空时设为 `Minimal`；若用户已选其他非空主题则保留。`textFontFamily` 同一条规矩：缺失或为空时设为 `LXGW WenKai GB Screen`，用户已设其他非空值则一字不动——他在「设置 → 外观」里挑过正文字体，那就是他的字体。文件不存在时才复制施工源默认文件。
-   `enabledCssSnippets` 只追加**上一步记下的本次新增片段**中默认启用的那些，此前已经交付过的片段一律不动，用户自己启用的其他片段也一律保留。这条是硬规矩：ziminOS 在右下角给了用户一个逐个开关 CSS 片段的按钮，他关掉某个片段就是一次明确表态，升级替他重新打开等于把他的决定抹掉。默认启用的十个是——`ziminos-quote-semantic-colors`、`【文件】文件图标前缀`、`【文件】二级文件夹前缀LOGO`、`【文件】彩虹文件夹（引导线版）`、`【笔记属性】自动伸缩`、`【编辑】当前行高亮（阴影）`、`【编辑-图片】居中显示`、`【编辑-代码块】增加行号`、`【编辑-Baes】隐藏新建按钮`、`【PDF】列表参考线`；`【编辑-代码块】水平滑轮` 与 `【编辑-水平线】中间图标` 照常交付但默认关闭。
+   `enabledCssSnippets` 只追加**上一步记下的本次新增片段**中默认启用的那些，此前已经交付过的片段一律不动，用户自己启用的其他片段也一律保留。这条是硬规矩：ziminOS 在右下角给了用户一个逐个开关 CSS 片段的按钮，他关掉某个片段就是一次明确表态，升级替他重新打开等于把他的决定抹掉。复制前根本不存在的新片段不属于这种选择，因为用户此前不可能关掉一个还没有的开关。默认启用的十一个是——`ziminos-quote-semantic-colors`、`【文件】文件图标前缀`、`【文件】二级文件夹前缀LOGO`、`【文件】彩虹文件夹（引导线版）`、`【笔记属性】自动伸缩`、`【编辑】当前行高亮（阴影）`、`【编辑-删除线】突出废弃内容`、`【编辑-图片】居中显示`、`【编辑-代码块】增加行号`、`【编辑-Baes】隐藏新建按钮`、`【PDF】列表参考线`；`【编辑-代码块】水平滑轮` 与 `【编辑-水平线】中间图标` 照常交付但默认关闭。
 
 5. `app.json` 与 `templates.json`：目标不存在时才从施工源复制；已存在则原样保留。它们是 Obsidian 自己的库设置（附件目录、链接写法、模板目录），学员照着课程调过之后就归他所有。
 
 使用 Agent 自身的 JSON 读写能力做结构化合并；禁止用字符串替换破坏 JSON，禁止整份覆盖用户已有配置。不得改动 Markdown 笔记、其他 CSS、其他主题或其他插件。
 
-一句话记住升级的边界：**受管的是「程序」，不受管的是「选择」与「状态」。** 程序（`main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin` / 四个第三方插件的运行文件 / 十二个实名片段 / 主题）整份更新；选择（五份 `data.json`、`types.json` 已调过的键、非空自选主题、已启用片段清单、`app.json`、`templates.json`、用户自带的片段与笔记）与状态（ziminOS 那三份运行时 JSON）一律不动。
+一句话记住升级的边界：**受管的是「程序」，不受管的是「选择」与「状态」。** 程序（`main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin` / 四个第三方插件的运行文件 / 十三个实名片段 / 主题）整份更新；选择（五份 `data.json`、`types.json` 已调过的键、非空自选主题、已启用片段清单、`app.json`、`templates.json`、用户自带的片段与笔记）与状态（ziminOS 那三份运行时 JSON）一律不动；唯一例外是本次首次出现的新片段可按新版默认追加启用。
 
 ### 安装字体到用户系统（全新安装与升级都执行）
 
@@ -275,11 +276,11 @@ README.md
 - `$vault_root/.obsidian/plugins/obsidian-quiet-outline/main.js` 存在，版本为 0.5.18；`LICENSE` 与 `SOURCE.md` 都在。
 - `$vault_root/.obsidian/plugins/obsidian-style-settings/main.js` 存在，`data.json` 是合法 JSON 对象。
 - `$vault_root/.obsidian/themes/Minimal/theme.css` 存在，版本为 9.0.2。
-- `$vault_root/.obsidian/snippets/` 下十二个片段全部存在，扩展名一律小写 `.css`（`ls .obsidian/snippets/*.css | wc -l` 至少为 12）。
+- `$vault_root/.obsidian/snippets/` 下十三个片段全部存在，扩展名一律小写 `.css`（`ls .obsidian/snippets/*.css | wc -l` 至少为 13）。
 - `$vault_root/.obsidian/types.json` 存在且是合法 JSON，`types` 下至少含 `created: datetime`、`UID: number`、`up: multitext`。
 - `$vault_root/.obsidian/.gitignore` 存在，并包含 `workspace*.json`、`plugins/ziminos/data.json`、`plugins/ziminos/holiday-cache.json`、`plugins/ziminos/recent-files.json`、`plugins/ziminos/cursor-positions.json`、`plugins/dataview/data.json`、`plugins/obsidian-outliner/data.json` 与 `plugins/obsidian-quiet-outline/data.json` 八条隐私规则。
 - `$vault_root/.obsidian/community-plugins.json` 包含 `ziminos`、`dataview`、`obsidian-style-settings`、`obsidian-outliner` 与 `obsidian-quiet-outline` 五个 id。
-- `$vault_root/.obsidian/appearance.json` 的全新安装默认主题为 `Minimal`，`textFontFamily` 为 `LXGW WenKai GB Screen`，`enabledCssSnippets` 恰好是上面列出的十个默认启用片段。
+- `$vault_root/.obsidian/appearance.json` 的全新安装默认主题为 `Minimal`，`textFontFamily` 为 `LXGW WenKai GB Screen`，`enabledCssSnippets` 恰好是上面列出的十一个默认启用片段。
 - 用户字体目录里五个字体文件齐全（macOS `~/Library/Fonts`、Linux `~/.local/share/fonts`、Windows `%LOCALAPPDATA%\Microsoft\Windows\Fonts`）：`LXGWWenKaiGBScreen.ttf`、`SourceHanSerifCN-Regular.otf`、`SourceHanSerifCN-Bold.otf`、`ZhuqueFangsong-Regular.ttf`、`LXGWNeoXiHeiPlus.ttf`；Windows 还要确认 HKCU 字体注册表键下五个值名齐全且各自指向存在的文件。
 - `$vault_root/.obsidian/app.json` 的 `attachmentFolderPath` 为 `./附件`，`templates.json` 的 `folder` 为 `90-system/Template`。
 - `$vault_root/.obsidian/plugins/ziminos/data.json` **不存在**。全新安装不该生成它——它由插件在用户第一次改设置时自己写出来。
@@ -313,7 +314,7 @@ esac
 > 2. 打开设置，在左边找到 ziminOS，顶上第一张标签「开荒」里点「初始化」。设置按系统模块分成八张标签页，「记录灵感」那一套在「灵感」页。
 > 3. 看到「开荒完成 ✅」后，跟着笔记库里的 README 使用。
 > 4. 看**最左边一条竖栏**，七个常用命令已经摆好了：新建项目、记录灵感、今天的日记、写复盘主题、新建人脉、记人情、外观开关。点一下就走，不用背快捷键。还有二十六条命令在设置 → ziminOS → 左侧边栏里勾一下就能摆出来，摆出来之后顺序可以直接拖。
-> 5. 看**右下角**，有个 🎨 按钮，点开就能逐个开关十二个外观片段——文件夹图标、彩虹引导线、代码块行号这些，看着不顺眼随手关掉，立刻生效不用重启。
+> 5. 看**右下角**，有个 🎨 按钮，点开就能逐个开关十三个外观片段——文件夹图标、彩虹引导线、代码块行号、废弃内容突出这些，看着不顺眼随手关掉，立刻生效不用重启。
 > 6. 笔记正文已经是**霞鹜文楷**（屏幕阅读版，四款阅读字体已一并装进你的系统）。想换口味：设置 → 外观 → 正文字体，下拉里还备着思源宋体 CN（书卷衬线）、朱雀仿宋（民国铅字）、霞鹜新晰黑＋（清爽黑体）。
 
 不要再给用户一个新的文件夹路径，不要提临时源码位置，不要让他寻找 `vault/` 子目录。

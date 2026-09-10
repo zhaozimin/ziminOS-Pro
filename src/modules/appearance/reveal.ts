@@ -29,7 +29,7 @@ import { localPath, vaultBasePath } from '../../core/localPath';
  * 「把这个文件夹交给访达 / 资源管理器打开」「用系统默认程序打开这个 .css」
  * 在 `obsidian.d.ts`（1.13.1，8482 行）里没有任何入口——全文搜不到 shell、
  * 搜不到 openPath、搜不到 showInFolder，App 的十个公开成员里也没有一个沾边。
- * 不碰它，这两个按钮就不成为功能：面板能列出十二个片段，却没有任何办法把其中一个
+ * 不碰它，这两个按钮就不成为功能：面板能列出十三个片段，却没有任何办法把其中一个
  * 交到用户的编辑器手上，而「快速直接改 CSS」正是这两个按钮存在的全部理由。
  *
  * **路径本身不在借用范围内**：绝对路径走的是公开的 `FileSystemAdapter.getBasePath()`
