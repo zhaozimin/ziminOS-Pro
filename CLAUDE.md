@@ -31,7 +31,7 @@ vault-pro/ - 第二版特有的笔记库成品 (3子目录: 兼收并蓄 进料�
 **客户 MOC v0.22.11 起进入默认开荒。** 旧设计把客户目录、模板与六张销售/服务表藏在「初始化客户模块」命令后面，结果是客户命令已经可用、主地图却不在库里。新开荒同时收 `contactsSeed` 与 `clientSeed`，直接生成客户目录、客户模板和客户 MOC；MOC 收敛成一张四列名录（人物 / 累计金额 / 交付 / 创建日期），待交付者置顶，其余按金额排序。金额与交付从客户档案里的付费任务实时计算，没付费显示「—」而非伪造 0，创建日期只读档案事实。旧六视图继续注册，已有 MOC 不失效；原初始化客户命令保留为旧库补齐与误删修复入口，所有写入仍是存在即跳过。
 
 vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，Obsidian/Eagle 两份 manifest 都由构建链同步，main.js 是刻意入库的构建产物（三十六枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 服务二十三个笔记内视图、中国日历与最近文件两个 ItemView、Eagle 附件呈现、外观开关浮层、文件夹计数、状态栏当前路径、八张设置页与作者名片（手工维护，不经 esbuild），ziminOS-Eagle-Bridge.eagleplugin 是同版伴侣的可安装 ZIP 产物；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
-vault/.obsidian/snippets/ - 十三个 CSS 片段，外观包的可拆装部分；十一个默认启用，全部由右下角外观开关逐个开关。第十三个「突出废弃内容」把 Markdown 删除线收成系统语义：编辑/阅读两态同时弱化文字、铺淡警示色背景、画 2px 警示色线，不插标签打断原句。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源
+vault/.obsidian/snippets/ - 十三个 CSS 片段，外观包的可拆装部分；十一个默认启用，全部由右下角外观开关逐个开关。第十三个「突出废弃内容」把 Markdown 删除线收成系统语义：编辑/阅读两态同时弱化文字、铺淡警示色背景、画 2px 警示色线；段内双链另加风险底色、边界与下划线，已断双链升为红色双边界，不插标签打断原句。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源
 tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，覆盖数据合并、划线身份、日期、换行符、ISBN、设置验形、外观拒写、数据库选择、项目回滚、版本同构、Outliner 默认启用/手册/致谢同构、Eagle 稳定身份/安全边界/伴侣包完整性、灵感行与灵感集版式两侧同源、公开源码隐私边界与移动端 Node 边界
 src/ - 插件源码 (2子目录: core 无业务的基础设施、命令注册台、视图引擎与版次闸门 edition.ts、modules 含 setup 开荒、projects 项目领域与容器流程、books 读书笔记与划线导入、inspiration 灵感收集、calendar 中国日历与节假日缓存、review 五级复盘、contacts 人脉与客户、appearance 外观开关与片段出境口、format 排版整理、editing 粘贴成链接与光标记忆、eagle 附件桥接的 Obsidian 半边、explorer 文件夹计数与最近文件与当前路径、legacy 旧版三入口、ribbon 左侧边栏命令、about 作者名片)
 </directory>
@@ -79,7 +79,7 @@ esbuild.config.mjs - Obsidian 构建出口；打包前把 package.json 版本同
 .gitignore - 忽略依赖、系统杂项、历史发布压缩包、常见凭据、开发库私有状态与发布/Eagle 打包暂存；main.js、`.eagleplugin` 与公共 vault 资产不忽略，学员浅克隆即可用
 .gitattributes - 锁定 Dataview、Minimal、Style Settings、fonts/ 字体及 Eagle 图标/安装包等二进制发布资产的原始字节，防止 Git 换行/格式化破坏 SHA-256
 docs/第三方组件.md - lunar-typescript / holiday-cn / Dataview / Outliner / Quiet Outline / Minimal / Style Settings / Pikaicons / Simple Icons / Eagle 官方 API 与两款桥接参考插件 / 四款正文字体的版本、上游、许可与升级边界
-docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26 中国农历日历、§27 审计加固、§28 Gitee 部署、§29 文件夹计数、§30 社区功能取舍、§33 片段出境口、§34 状态栏路径、§35 手机窗口口令、§36 Eagle 附件桥接（v0.22.0 建立稳定 itemId/双运行时/回环鉴权/fail-closed，v0.22.1–v0.22.9 依次补编辑器跳转、应用唤起、按项目自动归档、图片分流、四类内容容器/日记分流与附件当前文件夹定位），§37 定义分栏后台写入契约，§38 定义导航 Emoji 与 MOC 相对上下文 Bases，§39 定义存量 Bases 的差异预览、确认、并发校验与失败回滚，§40 定义删除线的废弃语义与升级所有权边界。与 V1 规格并存，交集处以 V2 为准
+docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26 中国农历日历、§27 审计加固、§28 Gitee 部署、§29 文件夹计数、§30 社区功能取舍、§33 片段出境口、§34 状态栏路径、§35 手机窗口口令、§36 Eagle 附件桥接（v0.22.0 建立稳定 itemId/双运行时/回环鉴权/fail-closed，v0.22.1–v0.22.9 依次补编辑器跳转、应用唤起、按项目自动归档、图片分流、四类内容容器/日记分流与附件当前文件夹定位），§37 定义分栏后台写入契约，§38 定义导航 Emoji 与 MOC 相对上下文 Bases，§39 定义存量 Bases 的差异预览、确认、并发校验与失败回滚，§40 定义删除线的废弃语义与升级所有权边界，§41 定义客户 MOC 默认开荒，§42 定义废弃段双链的风险与断链分级。与 V1 规格并存，交集处以 V2 为准
 docs/Eagle附件桥接安装与使用指南.html - 面向学员的单文件安装说明；把三库升级口令、Eagle 伴侣安装/配对、无本地副本验收、四类内容容器/日记分流、移动附件语义与端口/换库/图床冲突排障收成一份 macOS/Windows 可转发手册
 </delivery>
 

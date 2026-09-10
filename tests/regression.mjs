@@ -4,7 +4,7 @@
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
  *           项目状态回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
  *           片段出境口的桌面端闸门、本机绝对路径的唯一算处、状态栏路径的看拿分离、
- *           废弃内容在编辑/阅读与三本库的外观同构、
+ *           废弃正文/双链在编辑阅读两态的分层示警与三本库外观同构、
  *           后台写入的分栏滚动保护、光标焦点切换、四类内容容器与日记附件路由，以及
  *           智能体路由完整性，并在专业版源码存在时额外覆盖出库单往返、《赛博永生》路径同构
  *           与第二版安装入口
@@ -470,7 +470,7 @@ test('损坏的 appearance.json 被拒绝，不覆盖用户外观配置', async 
     assert.equal(writes, 0);
 });
 
-test('废弃内容在编辑与阅读中都有非颜色单一信号，三本库默认同步开启', () => {
+test('废弃内容与其中双链在编辑阅读两态分层示警，三本库默认同步开启', () => {
     const snippetName = '【编辑-删除线】突出废弃内容';
     const snippetDir = path.join(ROOT, 'vault/.obsidian/snippets');
     const source = readFileSync(
@@ -483,6 +483,13 @@ test('废弃内容在编辑与阅读中都有非颜色单一信号，三本库�
     assert.match(source, /background-color:/);
     assert.match(source, /text-decoration-thickness:\s*2px/);
     assert.match(source, /text-decoration-skip-ink:\s*none/);
+    assert.match(source, /:is\(del, s\) a\.internal-link/);
+    assert.match(source, /\.cm-strikethrough\.cm-hmd-internal-link/);
+    assert.match(source, /\.cm-strikethrough \.cm-hmd-internal-link/);
+    assert.match(source, /a\.internal-link\.is-unresolved/);
+    assert.match(source, /text-decoration-line:\s*line-through underline/);
+    assert.match(source, /box-shadow:\s*inset 0 0 0 1px var\(--color-orange\)/);
+    assert.match(source, /outline:\s*1px dashed var\(--text-error\)/);
 
     assert.equal(
         readdirSync(snippetDir).filter((name) => name.endsWith('.css')).length,

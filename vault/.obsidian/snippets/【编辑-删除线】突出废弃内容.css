@@ -1,8 +1,9 @@
 /* ============================================================
- * [INPUT]: 依赖 Obsidian 阅读视图的 del/s 元素、CM6 编辑视图的
- *          cm-strikethrough 语义类，依赖主题提供的警示色与正文弱化色变量
+ * [INPUT]: 依赖 Obsidian 阅读视图的 del/s 与 internal-link、CM6 编辑视图的
+ *          cm-strikethrough 与 cm-hmd-internal-link 语义类，依赖主题语义色变量
  * [OUTPUT]: 对外提供「已废弃」内容的三重视觉信号：弱化文字、淡警示色背景、
- *           2px 警示色删除线；同时覆盖编辑态、阅读态与明暗主题
+ *           2px 警示色删除线；其中双链额外显示风险底色、边界与双重线型，
+ *           已解析不到目标的双链再升为红色双边界，覆盖编辑/阅读与明暗主题
  * [POS]: ziminOS 外观包的废弃语义层；只改 Markdown 正文中的删除线，
  *        不插入「已废弃」文字、不改动原文，也不触碰插件界面
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -31,4 +32,33 @@
 /* 源码态与实时预览中把 ~~ 也染成警示色，但不给标记本身铺背景。 */
 .markdown-source-view.mod-cm6 .cm-formatting-strikethrough {
   color: var(--text-error);
+}
+
+/* 废弃段里的双链不是普通旧文字，而是可能失效的知识入口：单独抬回视觉前景。 */
+.markdown-rendered :is(del, s) a.internal-link,
+.markdown-source-view.mod-cm6 .cm-strikethrough.cm-hmd-internal-link,
+.markdown-source-view.mod-cm6 .cm-strikethrough .cm-hmd-internal-link {
+  color: var(--text-normal);
+  background-color: rgba(var(--color-orange-rgb, 213, 118, 63), 0.32);
+  font-weight: 700;
+  text-decoration-line: line-through underline;
+  text-decoration-style: solid;
+  text-decoration-color: var(--text-error);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+  box-shadow: inset 0 0 0 1px var(--color-orange);
+  border-radius: 3px;
+  opacity: 1;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* Obsidian 已确认找不到目标时，红色双边界表达“不是可能失效，而是当前已断”。 */
+.markdown-rendered :is(del, s) a.internal-link.is-unresolved,
+.markdown-source-view.mod-cm6 .cm-strikethrough.cm-hmd-internal-link.is-unresolved,
+.markdown-source-view.mod-cm6 .cm-strikethrough .cm-hmd-internal-link.is-unresolved {
+  background-color: rgba(var(--color-red-rgb, 208, 66, 85), 0.28);
+  box-shadow: inset 0 0 0 2px var(--text-error);
+  outline: 1px dashed var(--text-error);
+  outline-offset: 1px;
 }
