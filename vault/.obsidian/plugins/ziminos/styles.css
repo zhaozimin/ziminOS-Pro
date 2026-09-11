@@ -1347,11 +1347,33 @@ a[href^="ziminos-eagle://"] {
     gap: 6px;
 }
 
+/*
+ * 读数是可以直接改的数字框，不是一块只读标签——拖得到的值受 step 限制，
+ * 而「就要这个数」是真实诉求（纸宽要的是 800，不是「800 附近」）。
+ * 它长得尽量不像输入框：没有边框、贴着标题、跟着强调色，
+ * 因为它首先是那根滑块此刻的读数，其次才是一个可以改的地方。
+ */
 .ziminos-export-value {
+    width: 5.5em;
     margin-left: 8px;
+    padding: 0 2px;
+    font: inherit;
     font-weight: normal;
     color: var(--text-accent);
     font-variant-numeric: tabular-nums;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-s);
+}
+
+.ziminos-export-value:hover {
+    border-color: var(--background-modifier-border);
+}
+
+.ziminos-export-value:focus {
+    background: var(--background-modifier-form-field);
+    border-color: var(--interactive-accent);
+    outline: none;
 }
 
 /* 位置这件事用位置来问：一排互斥按钮，而不是一个把空间压成一列文字的下拉框 */

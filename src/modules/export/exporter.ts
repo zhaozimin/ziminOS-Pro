@@ -20,7 +20,7 @@ import type { ExportFormat, ExportStyle } from '../../core/exportStyle';
 import type { ZiminosContext } from '../../core/types';
 import { applyDecorations, linkRegions } from './decorate';
 import type { LinkRegion } from './decorate';
-import { captureScale, pdfPageSize, safeExportName } from './layout';
+import { captureScale, pageMinHeightOf, pageWidthOf, pdfPageSize, safeExportName } from './layout';
 import type { ExportTemplateContext } from './layout';
 import { resolveLogo } from './logo';
 import { ExportPreviewModal } from './modal';
@@ -131,6 +131,9 @@ async function capture(
     context: ExportTemplateContext,
     target: ExportTarget,
 ): Promise<string> {
+    // 与弹窗的 redraw 同样的三步，同样的先后：先定尺寸、再施装饰、最后量。
+    // 重放一次的代价是零（两者都幂等），而不重放的代价是拿到的与看见的不是同一张。
+    paper.resize(pageWidthOf(style), pageMinHeightOf(style));
     // 标志在这里重解一次而不是信弹窗那一份：读盘是异步的，用户完全可能在它读完之前就点了导出。
     // resolveLogo 自带按路径与修改时间的缓存，重解一次通常连一次读盘都不会发生。
     applyDecorations(paper.article, style, context, await resolveLogo(ctx.app, style.logo));

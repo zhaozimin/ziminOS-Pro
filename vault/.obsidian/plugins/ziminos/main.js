@@ -22220,6 +22220,10 @@ var EAGLE_PORT_RANGE = {
 };
 
 // src/core/exportStyle.ts
+var PAGE_SIZE_MODE_LABELS = {
+  auto: "\u81EA\u9002\u5E94",
+  fixed: "\u81EA\u5B9A"
+};
 var EXPORT_FORMAT_LABELS = {
   png: "PNG \u957F\u56FE",
   pdf: "PDF \u5355\u9875"
@@ -22251,6 +22255,11 @@ var WATERMARK_ANCHOR_LABELS = {
 };
 var DEFAULT_EXPORT_STYLE = {
   format: "png",
+  // 两边都默认跟着走：升级之后不选任何东西的人，导出的那张图与升级前逐像素相同
+  pageWidthMode: "auto",
+  pageWidth: 800,
+  pageHeightMode: "auto",
+  pageHeight: 1200,
   header: "",
   headerAlign: "center",
   headerGap: 24,
@@ -22280,6 +22289,28 @@ var DEFAULT_EXPORT_STYLE = {
   listGuides: true
 };
 var EXPORT_SLIDERS = [
+  {
+    key: "pageWidth",
+    section: "page",
+    name: "\u7EB8\u5BBD",
+    desc: "\u6574\u5F20\u7EB8\u591A\u5BBD\uFF08\u542B\u5DE6\u53F3\u9875\u8FB9\uFF09\u3002\u6B63\u6587\u680F\uFF1D\u7EB8\u5BBD\u51CF\u53BB\u4E24\u4FA7\u9875\u8FB9\u3002",
+    min: 320,
+    max: 2400,
+    step: 10,
+    unit: "px",
+    requires: "switch"
+  },
+  {
+    key: "pageHeight",
+    section: "page",
+    name: "\u7EB8\u9AD8\uFF08\u6700\u5C11\uFF09",
+    desc: "\u5185\u5BB9\u4E0D\u8DB3\u65F6\u8865\u5230\u8FD9\u4E48\u9AD8\uFF1B\u5185\u5BB9\u66F4\u9AD8\u65F6\u7167\u6837\u5F80\u4E0B\u957F\uFF0C\u7EDD\u4E0D\u88C1\u6389\u3002",
+    min: 200,
+    max: 4e3,
+    step: 10,
+    unit: "px",
+    requires: "switch"
+  },
   {
     key: "headerLogoSize",
     section: "header",
@@ -22401,6 +22432,8 @@ function normalizeExportStyle(input) {
     watermarkGapY: DEFAULT_EXPORT_STYLE.watermarkGapY,
     watermarkAngle: DEFAULT_EXPORT_STYLE.watermarkAngle,
     watermarkOpacity: DEFAULT_EXPORT_STYLE.watermarkOpacity,
+    pageWidth: DEFAULT_EXPORT_STYLE.pageWidth,
+    pageHeight: DEFAULT_EXPORT_STYLE.pageHeight,
     headerLogoSize: DEFAULT_EXPORT_STYLE.headerLogoSize,
     footerLogoSize: DEFAULT_EXPORT_STYLE.footerLogoSize,
     watermarkLogoSize: DEFAULT_EXPORT_STYLE.watermarkLogoSize
@@ -22410,6 +22443,10 @@ function normalizeExportStyle(input) {
   }
   return {
     format: isFormat(stored.format) ? stored.format : DEFAULT_EXPORT_STYLE.format,
+    pageWidthMode: isPageSizeMode(stored.pageWidthMode) ? stored.pageWidthMode : DEFAULT_EXPORT_STYLE.pageWidthMode,
+    pageWidth: numbers.pageWidth,
+    pageHeightMode: isPageSizeMode(stored.pageHeightMode) ? stored.pageHeightMode : DEFAULT_EXPORT_STYLE.pageHeightMode,
+    pageHeight: numbers.pageHeight,
     header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
     headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
     headerGap: numbers.headerGap,
@@ -22448,6 +22485,9 @@ function color(value) {
 }
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isPageSizeMode(value) {
+  return value === "auto" || value === "fixed";
 }
 function isFormat(value) {
   return value === "png" || value === "pdf";
@@ -40761,6 +40801,12 @@ function exportLinkUrl(raw) {
     return "";
   }
 }
+function pageWidthOf(style) {
+  return style.pageWidthMode === "fixed" ? Math.max(1, Math.round(style.pageWidth)) : null;
+}
+function pageMinHeightOf(style) {
+  return style.pageHeightMode === "fixed" ? Math.max(1, Math.round(style.pageHeight)) : null;
+}
 function escapeXml(text5) {
   return text5.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
@@ -41182,8 +41228,15 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
     this.observer = new ResizeObserver(() => this.fitPreview());
     this.observer.observe(this.viewportEl);
   }
-  /** 只重放装饰，不碰内容。这是整个预览能做到实时的全部原因 */
+  /**
+   * 先定纸的尺寸，再施装饰，最后重算预览缩放——三步的先后不能换。
+   *
+   * 改纸宽会让正文重新折行、纸变高，而水印层要盖满**此刻**这张纸；
+   * 装饰跑在尺寸前面的话，水印量到的是上一张纸的高度。内容一帧都不重渲：
+   * Markdown 早已是 DOM，改宽度只是让浏览器重排一次。
+   */
   redraw() {
+    this.paper.resize(pageWidthOf(this.value), pageMinHeightOf(this.value));
     applyDecorations(this.paper.article, this.value, this.context, this.logo);
     this.fitPreview();
   }
@@ -41220,6 +41273,7 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
       dropdown.onChange((format) => this.update({ format }));
       this.refreshers.push(() => dropdown.setValue(this.value.format));
     });
+    this.buildPage(host);
     new import_obsidian30.Setting(host).setName("\u6B63\u6587").setHeading();
     new import_obsidian30.Setting(host).setName("\u5217\u8868\u53C2\u8003\u7EBF").setDesc("\u7ED9\u5217\u8868\u753B\u4E0A\u7F29\u8FDB\u53C2\u8003\u7EBF\uFF0C\u4E00\u773C\u770B\u5F97\u51FA\u54EA\u51E0\u6761\u662F\u540C\u4E00\u5C42\u3002").setClass("ziminos-export-field").addToggle((toggle) => {
       toggle.onChange((on) => this.update({ listGuides: on }));
@@ -41229,6 +41283,30 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
     this.buildLine(host, "header", "\u9875\u7709", "\u663E\u793A\u5728\u6587\u7AE0\u6807\u9898\u4E0A\u65B9\u3002");
     this.buildLine(host, "footer", "\u9875\u811A", "\u663E\u793A\u5728\u6587\u7AE0\u6B63\u6587\u4E0B\u65B9\u3002");
     this.buildWatermark(host);
+  }
+  /**
+   * 纸张两边各自的定法。
+   *
+   * 宽与高分成两个开关而不是一个「自定尺寸」总开关：它们是两个独立的问题。
+   * 只想把宽度钉成 800 让手机上读着舒服、高度仍随内容长的人，是最常见的那一种；
+   * 合成一个开关，他就得连高度一起替自己决定一次。
+   */
+  buildPage(host) {
+    new import_obsidian30.Setting(host).setName("\u7EB8\u5F20").setHeading();
+    const rows = this.buildSliders(host, "page");
+    for (const row of rows) {
+      const modeKey = row.spec.key === "pageWidth" ? "pageWidthMode" : "pageHeightMode";
+      const picker = new import_obsidian30.Setting(host).setName(row.spec.key === "pageWidth" ? "\u5BBD\u5EA6" : "\u9AD8\u5EA6").setDesc(row.spec.key === "pageWidth" ? "\u81EA\u9002\u5E94\uFF1D\u8DDF\u7740\u7F16\u8F91\u533A\u7684\u6B63\u6587\u680F\u8D70\uFF1B\u81EA\u5B9A\uFF1D\u9489\u6B7B\u4E00\u4E2A\u6570\uFF0C\u6362\u53F0\u7535\u8111\u4E5F\u4E00\u6837\u3002" : "\u81EA\u9002\u5E94\uFF1D\u8DDF\u7740\u5185\u5BB9\u957F\uFF1B\u81EA\u5B9A\uFF1D\u81F3\u5C11\u8FD9\u4E48\u9AD8\uFF0C\u5185\u5BB9\u66F4\u591A\u65F6\u7167\u6837\u5F80\u4E0B\u957F\u3002").setClass("ziminos-export-field");
+      this.addPicker(
+        picker,
+        ["auto", "fixed"],
+        PAGE_SIZE_MODE_LABELS,
+        () => this.value[modeKey],
+        (mode) => this.update({ [modeKey]: mode })
+      );
+      row.setting.settingEl.before(picker.settingEl);
+      this.refreshers.push(() => row.setting.setDisabled(this.value[modeKey] !== "fixed"));
+    }
   }
   /**
    * 选标志。两条路，各答一个不同的问题。
@@ -41406,12 +41484,21 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
   buildSliders(host, section) {
     return EXPORT_SLIDERS.filter((spec) => spec.section === section).map((spec) => {
       const setting = new import_obsidian30.Setting(host).setName(spec.name).setDesc(spec.desc).setClass("ziminos-export-field");
-      const readout = setting.nameEl.createSpan({ cls: "ziminos-export-value" });
+      const readout = setting.nameEl.createEl("input", {
+        cls: "ziminos-export-value",
+        attr: { type: "number", min: spec.min, max: spec.max, step: spec.step }
+      });
+      readout.addEventListener("input", () => {
+        const typed = Number.parseFloat(readout.value);
+        if (!Number.isFinite(typed)) return;
+        this.update({ [spec.key]: Math.min(spec.max, Math.max(spec.min, Math.round(typed))) });
+      });
       setting.addSlider((slider) => {
         slider.setLimits(spec.min, spec.max, spec.step).setInstant(true).onChange((input) => this.update({ [spec.key]: input }));
         this.refreshers.push(() => {
-          if (slider.getValue() !== this.value[spec.key]) slider.setValue(this.value[spec.key]);
-          readout.setText(`${this.value[spec.key]}${spec.unit}`);
+          const current = this.value[spec.key];
+          if (slider.getValue() !== current) slider.setValue(current);
+          if (Number.parseFloat(readout.value) !== current) readout.value = String(current);
         });
       });
       return { spec, setting };
@@ -41500,7 +41587,10 @@ function hexOf(color2) {
   return `#${[match[1], match[2], match[3]].map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`;
 }
 function applySliderState(rows, state) {
-  for (const row of rows) row.setting.setDisabled(!state[row.spec.requires]);
+  for (const row of rows) {
+    if (row.spec.requires === "switch") continue;
+    row.setting.setDisabled(!state[row.spec.requires]);
+  }
 }
 
 // src/modules/export/paper.ts
@@ -41544,6 +41634,12 @@ async function renderPaper(ctx, file) {
   await waitForStableLayout(article);
   return {
     article,
+    resize: (width, minHeight) => {
+      const paperWidth = width != null ? width : metrics.width;
+      article.style.width = `${paperWidth}px`;
+      content.style.width = `${paperWidth}px`;
+      article.style.minHeight = `${minHeight != null ? minHeight : 1}px`;
+    },
     mount: (host, scale) => {
       host.appendChild(stage);
       Object.assign(stage.style, {
@@ -41753,6 +41849,7 @@ async function rememberStyle(ctx, style) {
   await ctx.saveSettings();
 }
 async function capture(ctx, file, paper, style, context, target) {
+  paper.resize(pageWidthOf(style), pageMinHeightOf(style));
   applyDecorations(paper.article, style, context, await resolveLogo(ctx.app, style.logo));
   const { width, height } = paper.measure();
   const blob = await import_dom_to_image_more.default.toBlob(paper.article, {

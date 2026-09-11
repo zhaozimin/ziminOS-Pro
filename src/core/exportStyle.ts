@@ -32,6 +32,21 @@ export type WatermarkAnchor =
     | 'middle-left' | 'middle-center' | 'middle-right'
     | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
+/**
+ * 纸张某一边的定法：跟着走，还是钉死。
+ *
+ * 「自适应」是这一版之前唯一的行为——宽度跟编辑区、高度跟内容。它够用，却有一个说不出口的毛病：
+ * **跟的是这台电脑此刻那扇窗户有多宽**，是屏幕的偶然，不是笔记的属性。
+ * 同一篇笔记在笔记本与外接显示器上导出，得到两种宽度；而「品牌每次都一样」正是这个模块的立身之本。
+ * 钉死一个值，补的是这个洞。
+ */
+export type PageSizeMode = 'auto' | 'fixed';
+
+export const PAGE_SIZE_MODE_LABELS: Readonly<Record<PageSizeMode, string>> = {
+    auto: '自适应',
+    fixed: '自定',
+};
+
 export const EXPORT_FORMAT_LABELS: Readonly<Record<ExportFormat, string>> = {
     png: 'PNG 长图',
     pdf: 'PDF 单页',
@@ -79,6 +94,18 @@ export const WATERMARK_ANCHOR_LABELS: Readonly<Record<WatermarkAnchor, string>> 
  */
 export interface ExportStyle {
     readonly format: ExportFormat;
+    /** auto＝纸宽跟随编辑区正文栏；fixed＝钉死成 pageWidth */
+    readonly pageWidthMode: PageSizeMode;
+    readonly pageWidth: number;
+    /**
+     * auto＝纸高跟随内容；fixed＝**至少** pageHeight 那么高。
+     *
+     * 只能是「至少」而不是「就是」：内容比它高时若按定高裁掉，用户会拿到一张少了半篇的图，
+     * 而且没有任何提示。这个模块从第一版起守着同一条——宁可一张完整、稍不好看的图，
+     * 也不在不告诉他的情况下截掉后半篇。
+     */
+    readonly pageHeightMode: PageSizeMode;
+    readonly pageHeight: number;
     readonly header: string;
     readonly headerAlign: ExportAlign;
     /** 页眉与正文标题之间的留白 */
@@ -145,6 +172,11 @@ export interface ExportStyle {
  */
 export const DEFAULT_EXPORT_STYLE: ExportStyle = {
     format: 'png',
+    // 两边都默认跟着走：升级之后不选任何东西的人，导出的那张图与升级前逐像素相同
+    pageWidthMode: 'auto',
+    pageWidth: 800,
+    pageHeightMode: 'auto',
+    pageHeight: 1_200,
     header: '',
     headerAlign: 'center',
     headerGap: 24,
@@ -189,7 +221,7 @@ export type ExportSliderKey = {
 export interface ExportSliderSpec {
     readonly key: ExportSliderKey;
     /** 归哪一段：决定它出现在面板的哪一组下面 */
-    readonly section: 'header' | 'footer' | 'watermark';
+    readonly section: 'page' | 'header' | 'footer' | 'watermark';
     readonly name: string;
     readonly desc: string;
     readonly min: number;
@@ -198,16 +230,41 @@ export interface ExportSliderSpec {
     readonly unit: string;
     /**
      * 这根滑块得先有什么，才谈得上有意义：
-     * text 只作用于文字（字号），logo 只作用于标志（标志大小），mark 作用于整个标记（间距、角度…）。
+     * text 只作用于文字（字号），logo 只作用于标志（标志大小），mark 作用于整个标记（间距、角度…），
+     * switch 表示「归它自己那个开关管」——纸宽与纸高各有各的自适应/自定开关，
+     * 通用的那套判断（这一段有没有字、有没有图）对它们一句都不适用，因此明写成第四种取值，
+     * 而不是硬塞进前三种里的某一个。
      *
      * 它不是装饰性的元数据——界面照它决定谁该变灰。没有它的话，
      * 「文字留空时把标志大小也一起禁掉」这种 bug 会让用户永远打不开标志：
      * 要开标志得先拖那根滑块，而那根滑块恰恰被关着。
      */
-    readonly requires: 'text' | 'logo' | 'mark';
+    readonly requires: 'text' | 'logo' | 'mark' | 'switch';
 }
 
 export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
+    {
+        key: 'pageWidth',
+        section: 'page',
+        name: '纸宽',
+        desc: '整张纸多宽（含左右页边）。正文栏＝纸宽减去两侧页边。',
+        min: 320,
+        max: 2_400,
+        step: 10,
+        unit: 'px',
+        requires: 'switch',
+    },
+    {
+        key: 'pageHeight',
+        section: 'page',
+        name: '纸高（最少）',
+        desc: '内容不足时补到这么高；内容更高时照样往下长，绝不裁掉。',
+        min: 200,
+        max: 4_000,
+        step: 10,
+        unit: 'px',
+        requires: 'switch',
+    },
     {
         key: 'headerLogoSize',
         section: 'header',
@@ -337,6 +394,8 @@ export function normalizeExportStyle(input: unknown): ExportStyle {
         watermarkGapY: DEFAULT_EXPORT_STYLE.watermarkGapY,
         watermarkAngle: DEFAULT_EXPORT_STYLE.watermarkAngle,
         watermarkOpacity: DEFAULT_EXPORT_STYLE.watermarkOpacity,
+        pageWidth: DEFAULT_EXPORT_STYLE.pageWidth,
+        pageHeight: DEFAULT_EXPORT_STYLE.pageHeight,
         headerLogoSize: DEFAULT_EXPORT_STYLE.headerLogoSize,
         footerLogoSize: DEFAULT_EXPORT_STYLE.footerLogoSize,
         watermarkLogoSize: DEFAULT_EXPORT_STYLE.watermarkLogoSize,
@@ -348,6 +407,14 @@ export function normalizeExportStyle(input: unknown): ExportStyle {
 
     return {
         format: isFormat(stored.format) ? stored.format : DEFAULT_EXPORT_STYLE.format,
+        pageWidthMode: isPageSizeMode(stored.pageWidthMode)
+            ? stored.pageWidthMode
+            : DEFAULT_EXPORT_STYLE.pageWidthMode,
+        pageWidth: numbers.pageWidth,
+        pageHeightMode: isPageSizeMode(stored.pageHeightMode)
+            ? stored.pageHeightMode
+            : DEFAULT_EXPORT_STYLE.pageHeightMode,
+        pageHeight: numbers.pageHeight,
         header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
         headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
         headerGap: numbers.headerGap,
@@ -409,6 +476,10 @@ function color(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isPageSizeMode(value: unknown): value is PageSizeMode {
+    return value === 'auto' || value === 'fixed';
 }
 
 function isFormat(value: unknown): value is ExportFormat {

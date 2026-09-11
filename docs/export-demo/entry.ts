@@ -15,10 +15,17 @@ export {
     EXPORT_ALIGN_LABELS,
     EXPORT_FORMAT_LABELS,
     EXPORT_SLIDERS,
+    PAGE_SIZE_MODE_LABELS,
     WATERMARK_ANCHOR_GRID,
     WATERMARK_ANCHOR_LABELS,
     WATERMARK_MODE_LABELS,
     normalizeExportStyle,
 } from '../../src/core/exportStyle';
-export { captureScale, pdfPageSize, resolveExportText } from '../../src/modules/export/layout';
+export {
+    captureScale,
+    pageMinHeightOf,
+    pageWidthOf,
+    pdfPageSize,
+    resolveExportText,
+} from '../../src/modules/export/layout';
 export { applyDecorations } from '../../src/modules/export/decorate';

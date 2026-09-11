@@ -106,6 +106,7 @@
     var toastEl = document.getElementById('toast');
 
     var stage = document.createElement('div');
+    var column = null;              // 正文栏，改纸宽时要跟着改
     var article = buildPaper(stage);
 
     // ══════════════════════════════════════════════════════════
@@ -121,6 +122,8 @@
         });
 
         var content = el.createDiv({ cls: 'markdown-preview-sizer' });
+
+        column = content;
 
         Object.assign(content.style, {
             boxSizing: 'border-box', position: 'relative', width: '760px',
@@ -155,7 +158,15 @@
     // 预览
     // ══════════════════════════════════════════════════════════
 
+    /** 与 modal.ts 的 redraw 同样的三步、同样的先后：定尺寸 → 施装饰 → 重算缩放 */
     function redraw() {
+        var width = Z.pageWidthOf(style) || 760;
+        var minHeight = Z.pageMinHeightOf(style) || 1;
+
+        article.style.width = width + 'px';
+        if (column) column.style.width = width + 'px';
+        article.style.minHeight = minHeight + 'px';
+
         Z.applyDecorations(article, style, CONTEXT, logo);
         fit();
     }
@@ -304,8 +315,23 @@
         return Z.EXPORT_SLIDERS.filter(function (spec) { return spec.section === section; })
             .map(function (spec) {
                 var cell = row('ziminos-export-field', spec.name, spec.desc);
-                var readout = cell.name.createSpan({ cls: 'ziminos-export-value' });
+                // 读数是可以直接改的：拖得到的值受 step 限制，而「就要这个数」是真实诉求
+                var readout = cell.name.createEl('input', {
+                    cls: 'ziminos-export-value',
+                    attr: { type: 'number', min: spec.min, max: spec.max, step: spec.step },
+                });
                 var input = cell.control.createEl('input', { attr: { type: 'range' } });
+
+                readout.addEventListener('input', function () {
+                    var typed = parseFloat(readout.value);
+
+                    if (!isFinite(typed)) return;
+
+                    var patch = {};
+
+                    patch[spec.key] = Math.min(spec.max, Math.max(spec.min, Math.round(typed)));
+                    update(patch);
+                });
 
                 input.min = spec.min;
                 input.max = spec.max;
@@ -318,7 +344,7 @@
                 });
                 refreshers.push(function () {
                     if (Number(input.value) !== style[spec.key]) input.value = style[spec.key];
-                    readout.textContent = style[spec.key] + spec.unit;
+                    if (parseFloat(readout.value) !== style[spec.key]) readout.value = style[spec.key];
                 });
 
                 return { spec: spec, cell: cell };
@@ -344,6 +370,29 @@
         });
         select.addEventListener('change', function () { update({ format: select.value }); });
         refreshers.push(function () { select.value = style.format; });
+    })();
+
+    // 纸张：宽与高各有各的开关，因为它们是两个独立的问题
+    (function () {
+        heading('纸张');
+
+        sliders('page').forEach(function (entry) {
+            var isWidth = entry.spec.key === 'pageWidth';
+            var modeKey = isWidth ? 'pageWidthMode' : 'pageHeightMode';
+            var cell = row('ziminos-export-field', isWidth ? '宽度' : '高度', isWidth
+                ? '自适应＝跟着编辑区的正文栏走；自定＝钉死一个数，换台电脑也一样。'
+                : '自适应＝跟着内容长；自定＝至少这么高，内容更多时照样往下长。');
+
+            picker3(cell.control, ['auto', 'fixed'], Z.PAGE_SIZE_MODE_LABELS,
+                function () { return style[modeKey]; },
+                function (value) { var p = {}; p[modeKey] = value; update(p); });
+
+            // 开关画在滑块之前：先问「要不要自己定」，再问「定成多少」
+            entry.cell.item.before(cell.item);
+            refreshers.push(function () {
+                entry.cell.item.classList.toggle('is-disabled', style[modeKey] !== 'fixed');
+            });
+        });
     })();
 
     // 正文

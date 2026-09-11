@@ -3,14 +3,14 @@
   真源在 docs/export-demo/ —— 外壳 shell.html、驱动 driver.js、与 src/ 的接缝 entry.ts。
   页内的导出样式逐字来自 vault/.obsidian/plugins/ziminos/styles.css，
   几何与装饰逻辑由 esbuild 从 src/ 直接打包，因此它与插件里跑的是同一份判断。
-  ziminOS v0.26.0
+  ziminOS v0.27.0
 -->
 <!doctype html>
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ziminOS 导出预览｜交互演示 v0.26.0</title>
+<title>ziminOS 导出预览｜交互演示 v0.27.0</title>
 <style>
 /* ── 外壳：近似 Obsidian app.css 与 Minimal 主题的那几条变量与控件样式 ── */
 :root[data-theme="light"] {
@@ -1449,11 +1449,33 @@ a[href^="ziminos-eagle://"] {
     gap: 6px;
 }
 
+/*
+ * 读数是可以直接改的数字框，不是一块只读标签——拖得到的值受 step 限制，
+ * 而「就要这个数」是真实诉求（纸宽要的是 800，不是「800 附近」）。
+ * 它长得尽量不像输入框：没有边框、贴着标题、跟着强调色，
+ * 因为它首先是那根滑块此刻的读数，其次才是一个可以改的地方。
+ */
 .ziminos-export-value {
+    width: 5.5em;
     margin-left: 8px;
+    padding: 0 2px;
+    font: inherit;
     font-weight: normal;
     color: var(--text-accent);
     font-variant-numeric: tabular-nums;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-s);
+}
+
+.ziminos-export-value:hover {
+    border-color: var(--background-modifier-border);
+}
+
+.ziminos-export-value:focus {
+    background: var(--background-modifier-form-field);
+    border-color: var(--interactive-accent);
+    outline: none;
 }
 
 /* 位置这件事用位置来问：一排互斥按钮，而不是一个把空间压成一列文字的下拉框 */
@@ -1622,7 +1644,7 @@ a[href^="ziminos-eagle://"] {
     <button type="button" data-demo="preset-brand">试一套：品牌落款</button>
     <button type="button" data-demo="preset-guard">试一套：防转发平铺</button>
     <button type="button" data-demo="reset">恢复默认</button>
-    <span class="hint">v0.26.0 · 单文件，可离线打开、可转发</span>
+    <span class="hint">v0.27.0 · 单文件，可离线打开、可转发</span>
   </div>
 </div>
 
@@ -1677,17 +1699,24 @@ var ZExport = (() => {
     EXPORT_ALIGN_LABELS: () => EXPORT_ALIGN_LABELS,
     EXPORT_FORMAT_LABELS: () => EXPORT_FORMAT_LABELS,
     EXPORT_SLIDERS: () => EXPORT_SLIDERS,
+    PAGE_SIZE_MODE_LABELS: () => PAGE_SIZE_MODE_LABELS,
     WATERMARK_ANCHOR_GRID: () => WATERMARK_ANCHOR_GRID,
     WATERMARK_ANCHOR_LABELS: () => WATERMARK_ANCHOR_LABELS,
     WATERMARK_MODE_LABELS: () => WATERMARK_MODE_LABELS,
     applyDecorations: () => applyDecorations,
     captureScale: () => captureScale,
     normalizeExportStyle: () => normalizeExportStyle,
+    pageMinHeightOf: () => pageMinHeightOf,
+    pageWidthOf: () => pageWidthOf,
     pdfPageSize: () => pdfPageSize,
     resolveExportText: () => resolveExportText
   });
 
   // src/core/exportStyle.ts
+  var PAGE_SIZE_MODE_LABELS = {
+    auto: "\u81EA\u9002\u5E94",
+    fixed: "\u81EA\u5B9A"
+  };
   var EXPORT_FORMAT_LABELS = {
     png: "PNG \u957F\u56FE",
     pdf: "PDF \u5355\u9875"
@@ -1719,6 +1748,11 @@ var ZExport = (() => {
   };
   var DEFAULT_EXPORT_STYLE = {
     format: "png",
+    // 两边都默认跟着走：升级之后不选任何东西的人，导出的那张图与升级前逐像素相同
+    pageWidthMode: "auto",
+    pageWidth: 800,
+    pageHeightMode: "auto",
+    pageHeight: 1200,
     header: "",
     headerAlign: "center",
     headerGap: 24,
@@ -1748,6 +1782,28 @@ var ZExport = (() => {
     listGuides: true
   };
   var EXPORT_SLIDERS = [
+    {
+      key: "pageWidth",
+      section: "page",
+      name: "\u7EB8\u5BBD",
+      desc: "\u6574\u5F20\u7EB8\u591A\u5BBD\uFF08\u542B\u5DE6\u53F3\u9875\u8FB9\uFF09\u3002\u6B63\u6587\u680F\uFF1D\u7EB8\u5BBD\u51CF\u53BB\u4E24\u4FA7\u9875\u8FB9\u3002",
+      min: 320,
+      max: 2400,
+      step: 10,
+      unit: "px",
+      requires: "switch"
+    },
+    {
+      key: "pageHeight",
+      section: "page",
+      name: "\u7EB8\u9AD8\uFF08\u6700\u5C11\uFF09",
+      desc: "\u5185\u5BB9\u4E0D\u8DB3\u65F6\u8865\u5230\u8FD9\u4E48\u9AD8\uFF1B\u5185\u5BB9\u66F4\u9AD8\u65F6\u7167\u6837\u5F80\u4E0B\u957F\uFF0C\u7EDD\u4E0D\u88C1\u6389\u3002",
+      min: 200,
+      max: 4e3,
+      step: 10,
+      unit: "px",
+      requires: "switch"
+    },
     {
       key: "headerLogoSize",
       section: "header",
@@ -1869,6 +1925,8 @@ var ZExport = (() => {
       watermarkGapY: DEFAULT_EXPORT_STYLE.watermarkGapY,
       watermarkAngle: DEFAULT_EXPORT_STYLE.watermarkAngle,
       watermarkOpacity: DEFAULT_EXPORT_STYLE.watermarkOpacity,
+      pageWidth: DEFAULT_EXPORT_STYLE.pageWidth,
+      pageHeight: DEFAULT_EXPORT_STYLE.pageHeight,
       headerLogoSize: DEFAULT_EXPORT_STYLE.headerLogoSize,
       footerLogoSize: DEFAULT_EXPORT_STYLE.footerLogoSize,
       watermarkLogoSize: DEFAULT_EXPORT_STYLE.watermarkLogoSize
@@ -1878,6 +1936,10 @@ var ZExport = (() => {
     }
     return {
       format: isFormat(stored.format) ? stored.format : DEFAULT_EXPORT_STYLE.format,
+      pageWidthMode: isPageSizeMode(stored.pageWidthMode) ? stored.pageWidthMode : DEFAULT_EXPORT_STYLE.pageWidthMode,
+      pageWidth: numbers.pageWidth,
+      pageHeightMode: isPageSizeMode(stored.pageHeightMode) ? stored.pageHeightMode : DEFAULT_EXPORT_STYLE.pageHeightMode,
+      pageHeight: numbers.pageHeight,
       header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
       headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
       headerGap: numbers.headerGap,
@@ -1916,6 +1978,9 @@ var ZExport = (() => {
   }
   function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isPageSizeMode(value) {
+    return value === "auto" || value === "fixed";
   }
   function isFormat(value) {
     return value === "png" || value === "pdf";
@@ -2008,6 +2073,12 @@ var ZExport = (() => {
     const x = horizontal === "left" ? `${Math.max(0, gapX)}px` : horizontal === "right" ? `calc(100% - ${Math.max(0, gapX)}px)` : "50%";
     const y = vertical === "top" ? `${Math.max(0, gapY)}px` : vertical === "bottom" ? `calc(100% - ${Math.max(0, gapY)}px)` : "50%";
     return `${x} ${y}`;
+  }
+  function pageWidthOf(style) {
+    return style.pageWidthMode === "fixed" ? Math.max(1, Math.round(style.pageWidth)) : null;
+  }
+  function pageMinHeightOf(style) {
+    return style.pageHeightMode === "fixed" ? Math.max(1, Math.round(style.pageHeight)) : null;
   }
   function escapeXml(text2) {
     return text2.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
@@ -2242,6 +2313,7 @@ var ZExport = (() => {
     var toastEl = document.getElementById('toast');
 
     var stage = document.createElement('div');
+    var column = null;              // 正文栏，改纸宽时要跟着改
     var article = buildPaper(stage);
 
     // ══════════════════════════════════════════════════════════
@@ -2257,6 +2329,8 @@ var ZExport = (() => {
         });
 
         var content = el.createDiv({ cls: 'markdown-preview-sizer' });
+
+        column = content;
 
         Object.assign(content.style, {
             boxSizing: 'border-box', position: 'relative', width: '760px',
@@ -2291,7 +2365,15 @@ var ZExport = (() => {
     // 预览
     // ══════════════════════════════════════════════════════════
 
+    /** 与 modal.ts 的 redraw 同样的三步、同样的先后：定尺寸 → 施装饰 → 重算缩放 */
     function redraw() {
+        var width = Z.pageWidthOf(style) || 760;
+        var minHeight = Z.pageMinHeightOf(style) || 1;
+
+        article.style.width = width + 'px';
+        if (column) column.style.width = width + 'px';
+        article.style.minHeight = minHeight + 'px';
+
         Z.applyDecorations(article, style, CONTEXT, logo);
         fit();
     }
@@ -2440,8 +2522,23 @@ var ZExport = (() => {
         return Z.EXPORT_SLIDERS.filter(function (spec) { return spec.section === section; })
             .map(function (spec) {
                 var cell = row('ziminos-export-field', spec.name, spec.desc);
-                var readout = cell.name.createSpan({ cls: 'ziminos-export-value' });
+                // 读数是可以直接改的：拖得到的值受 step 限制，而「就要这个数」是真实诉求
+                var readout = cell.name.createEl('input', {
+                    cls: 'ziminos-export-value',
+                    attr: { type: 'number', min: spec.min, max: spec.max, step: spec.step },
+                });
                 var input = cell.control.createEl('input', { attr: { type: 'range' } });
+
+                readout.addEventListener('input', function () {
+                    var typed = parseFloat(readout.value);
+
+                    if (!isFinite(typed)) return;
+
+                    var patch = {};
+
+                    patch[spec.key] = Math.min(spec.max, Math.max(spec.min, Math.round(typed)));
+                    update(patch);
+                });
 
                 input.min = spec.min;
                 input.max = spec.max;
@@ -2454,7 +2551,7 @@ var ZExport = (() => {
                 });
                 refreshers.push(function () {
                     if (Number(input.value) !== style[spec.key]) input.value = style[spec.key];
-                    readout.textContent = style[spec.key] + spec.unit;
+                    if (parseFloat(readout.value) !== style[spec.key]) readout.value = style[spec.key];
                 });
 
                 return { spec: spec, cell: cell };
@@ -2480,6 +2577,29 @@ var ZExport = (() => {
         });
         select.addEventListener('change', function () { update({ format: select.value }); });
         refreshers.push(function () { select.value = style.format; });
+    })();
+
+    // 纸张：宽与高各有各的开关，因为它们是两个独立的问题
+    (function () {
+        heading('纸张');
+
+        sliders('page').forEach(function (entry) {
+            var isWidth = entry.spec.key === 'pageWidth';
+            var modeKey = isWidth ? 'pageWidthMode' : 'pageHeightMode';
+            var cell = row('ziminos-export-field', isWidth ? '宽度' : '高度', isWidth
+                ? '自适应＝跟着编辑区的正文栏走；自定＝钉死一个数，换台电脑也一样。'
+                : '自适应＝跟着内容长；自定＝至少这么高，内容更多时照样往下长。');
+
+            picker3(cell.control, ['auto', 'fixed'], Z.PAGE_SIZE_MODE_LABELS,
+                function () { return style[modeKey]; },
+                function (value) { var p = {}; p[modeKey] = value; update(p); });
+
+            // 开关画在滑块之前：先问「要不要自己定」，再问「定成多少」
+            entry.cell.item.before(cell.item);
+            refreshers.push(function () {
+                entry.cell.item.classList.toggle('is-disabled', style[modeKey] !== 'fixed');
+            });
+        });
     })();
 
     // 正文

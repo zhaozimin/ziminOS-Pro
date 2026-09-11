@@ -21,6 +21,7 @@ import {
     EXPORT_ALIGN_LABELS,
     EXPORT_FORMAT_LABELS,
     EXPORT_SLIDERS,
+    PAGE_SIZE_MODE_LABELS,
     WATERMARK_ANCHOR_GRID,
     WATERMARK_ANCHOR_LABELS,
     WATERMARK_MODE_LABELS,
@@ -30,12 +31,13 @@ import type {
     ExportFormat,
     ExportSliderSpec,
     ExportStyle,
+    PageSizeMode,
     WatermarkAnchor,
     WatermarkMode,
 } from '../../core/exportStyle';
 import { ChoiceModal } from '../../core/modals';
 import { applyDecorations } from './decorate';
-import { captureScale } from './layout';
+import { captureScale, pageMinHeightOf, pageWidthOf } from './layout';
 import type { ExportTemplateContext } from './layout';
 import { isLogoFile, resolveLogo } from './logo';
 import type { ResolvedLogo } from './logo';
@@ -176,8 +178,15 @@ export class ExportPreviewModal extends Modal {
         this.observer.observe(this.viewportEl);
     }
 
-    /** 只重放装饰，不碰内容。这是整个预览能做到实时的全部原因 */
+    /**
+     * 先定纸的尺寸，再施装饰，最后重算预览缩放——三步的先后不能换。
+     *
+     * 改纸宽会让正文重新折行、纸变高，而水印层要盖满**此刻**这张纸；
+     * 装饰跑在尺寸前面的话，水印量到的是上一张纸的高度。内容一帧都不重渲：
+     * Markdown 早已是 DOM，改宽度只是让浏览器重排一次。
+     */
     private redraw(): void {
+        this.paper.resize(pageWidthOf(this.value), pageMinHeightOf(this.value));
         applyDecorations(this.paper.article, this.value, this.context, this.logo);
         this.fitPreview();
     }
@@ -234,6 +243,8 @@ export class ExportPreviewModal extends Modal {
                 this.refreshers.push(() => dropdown.setValue(this.value.format));
             });
 
+        this.buildPage(host);
+
         new Setting(host).setName('正文').setHeading();
 
         new Setting(host)
@@ -249,6 +260,42 @@ export class ExportPreviewModal extends Modal {
         this.buildLine(host, 'header', '页眉', '显示在文章标题上方。');
         this.buildLine(host, 'footer', '页脚', '显示在文章正文下方。');
         this.buildWatermark(host);
+    }
+
+    /**
+     * 纸张两边各自的定法。
+     *
+     * 宽与高分成两个开关而不是一个「自定尺寸」总开关：它们是两个独立的问题。
+     * 只想把宽度钉成 800 让手机上读着舒服、高度仍随内容长的人，是最常见的那一种；
+     * 合成一个开关，他就得连高度一起替自己决定一次。
+     */
+    private buildPage(host: HTMLElement): void {
+        new Setting(host).setName('纸张').setHeading();
+
+        const rows = this.buildSliders(host, 'page');
+
+        for (const row of rows) {
+            const modeKey = row.spec.key === 'pageWidth' ? 'pageWidthMode' : 'pageHeightMode';
+            const picker = new Setting(host)
+                .setName(row.spec.key === 'pageWidth' ? '宽度' : '高度')
+                .setDesc(row.spec.key === 'pageWidth'
+                    ? '自适应＝跟着编辑区的正文栏走；自定＝钉死一个数，换台电脑也一样。'
+                    : '自适应＝跟着内容长；自定＝至少这么高，内容更多时照样往下长。')
+                .setClass('ziminos-export-field');
+
+            this.addPicker(
+                picker,
+                ['auto', 'fixed'],
+                PAGE_SIZE_MODE_LABELS,
+                () => this.value[modeKey],
+                (mode: PageSizeMode) => this.update({ [modeKey]: mode }),
+            );
+
+            // 开关画在滑块之前：先问「要不要自己定」，再问「定成多少」。
+            // buildSliders 已经把滑块追加在后面了，所以这里把开关那一行挪到它前面去。
+            row.setting.settingEl.before(picker.settingEl);
+            this.refreshers.push(() => row.setting.setDisabled(this.value[modeKey] !== 'fixed'));
+        }
     }
 
     /**
@@ -524,7 +571,23 @@ export class ExportPreviewModal extends Modal {
                 .setName(spec.name)
                 .setDesc(spec.desc)
                 .setClass('ziminos-export-field');
-            const readout = setting.nameEl.createSpan({ cls: 'ziminos-export-value' });
+            // 读数是**可以直接改的**，不是一块只读的标签。
+            // 拖得到的值受 step 限制（间距一档 4px，你永远拖不出 150），而「就要这个数」
+            // 是个真实的诉求——尤其纸宽：用户想要的是 800，不是「800 附近」。
+            const readout = setting.nameEl.createEl('input', {
+                cls: 'ziminos-export-value',
+                attr: { type: 'number', min: spec.min, max: spec.max, step: spec.step },
+            });
+
+            readout.addEventListener('input', () => {
+                const typed = Number.parseFloat(readout.value);
+
+                // 打到一半的「-」「」「1e」都不是回答，放过去会让预览闪成 NaN。
+                // 夹在区间里而不是拒绝：越界说明他想要更大/更小，给他边界比什么都不做诚实。
+                if (!Number.isFinite(typed)) return;
+
+                this.update({ [spec.key]: Math.min(spec.max, Math.max(spec.min, Math.round(typed))) });
+            });
 
             setting.addSlider((slider) => {
                 slider
@@ -532,8 +595,11 @@ export class ExportPreviewModal extends Modal {
                     .setInstant(true)
                     .onChange((input) => this.update({ [spec.key]: input }));
                 this.refreshers.push(() => {
-                    if (slider.getValue() !== this.value[spec.key]) slider.setValue(this.value[spec.key]);
-                    readout.setText(`${this.value[spec.key]}${spec.unit}`);
+                    const current = this.value[spec.key];
+
+                    if (slider.getValue() !== current) slider.setValue(current);
+                    // 与文本框同一条守卫：正在打字的那个框不该被自己触发的这一轮同步改写
+                    if (Number.parseFloat(readout.value) !== current) readout.value = String(current);
                 });
             });
 
@@ -672,7 +738,16 @@ function hexOf(color: string): string {
         .join('')}`;
 }
 
-/** 谁该变灰由规格里的 requires 决定，不在调用处逐根写死 */
+/**
+ * 谁该变灰由规格里的 requires 决定，不在调用处逐根写死。
+ *
+ * `switch` 是唯一的例外，而且是明写出来的例外：纸宽与纸高各有各的自适应开关，
+ * 「这一段有没有字、有没有图」那套判断对它们一句都不适用，因此由 buildPage 自己接线。
+ */
 function applySliderState(rows: readonly SliderRow[], state: SectionState): void {
-    for (const row of rows) row.setting.setDisabled(!state[row.spec.requires]);
+    for (const row of rows) {
+        if (row.spec.requires === 'switch') continue;
+
+        row.setting.setDisabled(!state[row.spec.requires]);
+    }
 }

@@ -285,7 +285,7 @@ test('三处标志尺寸默认为 0：老库升级之后导出的那张图与升
 });
 
 test('每根滑块都说得出自己得先有什么，否则界面无从判断谁该变灰', () => {
-    const allowed = new Set(['text', 'logo', 'mark']);
+    const allowed = new Set(['text', 'logo', 'mark', 'switch']);
 
     for (const spec of style.EXPORT_SLIDERS) {
         assert.ok(allowed.has(spec.requires), `${spec.key} 的 requires 不在闭合集合里`);
@@ -293,6 +293,15 @@ test('每根滑块都说得出自己得先有什么，否则界面无从判断�
 
     // 标志尺寸只认 logo：认成 text 或 mark，文字一空它就跟着变灰——
     // 而那时用户正想靠它把标志打开，于是被锁在外面。
+    // 纸宽纸高归它们自己那个自适应开关管，通用判断（有没有字/有没有图）对它们不适用
+    for (const key of ['pageWidth', 'pageHeight']) {
+        const spec = style.EXPORT_SLIDERS.find((item) => item.key === key);
+
+        assert.ok(spec, `${key} 没有对应的滑块`);
+        assert.equal(spec.requires, 'switch');
+        assert.equal(spec.section, 'page');
+    }
+
     for (const key of ['headerLogoSize', 'footerLogoSize', 'watermarkLogoSize']) {
         const spec = style.EXPORT_SLIDERS.find((item) => item.key === key);
 
@@ -537,3 +546,53 @@ test('演示页的接缝进了类型检查，但缺了它的第一版仓库同�
     );
 });
 
+test('纸张两边各有各的开关，默认都跟着走；高度只是下限，绝不裁内容', () => {
+    assert.equal(style.DEFAULT_EXPORT_STYLE.pageWidthMode, 'auto');
+    assert.equal(style.DEFAULT_EXPORT_STYLE.pageHeightMode, 'auto');
+
+    // 自适应时给纸的是 null＝「别管」，而不是某个具体的数
+    assert.equal(layout.pageWidthOf(style.DEFAULT_EXPORT_STYLE), null);
+    assert.equal(layout.pageMinHeightOf(style.DEFAULT_EXPORT_STYLE), null);
+
+    const fixed = style.normalizeExportStyle({
+        pageWidthMode: 'fixed', pageWidth: 800,
+        pageHeightMode: 'fixed', pageHeight: 1_600,
+    });
+
+    assert.equal(layout.pageWidthOf(fixed), 800);
+    assert.equal(layout.pageMinHeightOf(fixed), 1_600);
+
+    // 宽与高是两个独立的问题：只钉宽度、高度仍随内容长，是最常见的那一种
+    const halfFixed = style.normalizeExportStyle({ pageWidthMode: 'fixed', pageWidth: 800 });
+
+    assert.equal(layout.pageWidthOf(halfFixed), 800);
+    assert.equal(layout.pageMinHeightOf(halfFixed), null);
+
+    // 坏模式回落自适应；越界数值夹回区间（滑块表就是验形区间）
+    assert.equal(style.normalizeExportStyle({ pageWidthMode: 'A4' }).pageWidthMode, 'auto');
+    assert.equal(style.normalizeExportStyle({ pageWidth: 99_999 }).pageWidth, 2_400);
+    assert.equal(style.normalizeExportStyle({ pageHeight: 1 }).pageHeight, 200);
+
+    // 最小高度落在纸上、由 CSS 的 min-height 承担，因此内容更高时只会往下长，不会被裁
+    const paper = code('src/modules/export/paper.ts');
+
+    assert.match(paper, /article\.style\.minHeight/);
+    assert.doesNotMatch(paper, /style\.height = /);
+});
+
+test('改纸宽只让浏览器重排，不重新解释一遍 Markdown', () => {
+    const paper = code('src/modules/export/paper.ts');
+    const modal = code('src/modules/export/modal.ts');
+    const exporter = code('src/modules/export/exporter.ts');
+
+    assert.match(paper, /resize: \(width, minHeight\)/);
+
+    // 先定尺寸、再施装饰：水印层要盖满**此刻**这张纸，
+    // 装饰跑在尺寸前面的话，它量到的是上一张纸的高度
+    for (const source of [modal, exporter]) {
+        const sized = source.indexOf('resize(pageWidthOf(');
+        const decorated = source.indexOf('applyDecorations(');
+
+        assert.ok(sized > 0 && decorated > sized, 'resize 必须排在 applyDecorations 之前');
+    }
+});

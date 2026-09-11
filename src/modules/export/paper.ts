@@ -20,6 +20,14 @@ import type { ZiminosContext } from '../../core/types';
 export interface ExportPaper {
     /** 真正被 dom-to-image 拍下来的那一个元素 */
     readonly article: HTMLElement;
+    /**
+     * 改纸的尺寸。null＝回到量来的那个宽 / 回到跟随内容。
+     *
+     * 它**不重新渲染任何内容**：Markdown 早已是 DOM，改一下容器宽度，浏览器自己会重排、
+     * 重新折行、算出新的高度。这也是「内容渲一次、装饰重放无数次」那条边界还站得住的原因——
+     * 纸宽虽然会改变版面，却与「解释一遍 Markdown」完全是两件事。
+     */
+    resize(width: number | null, minHeight: number | null): void;
     /** 交给预览：把舞台挪进宿主并按 scale 缩放 */
     mount(host: HTMLElement, scale: number): void;
     /** 收回离屏。预览关掉、或准备截图之前调用——祖先带 transform 的元素不该被拍 */
@@ -123,6 +131,15 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
 
     return {
         article,
+        resize: (width, minHeight) => {
+            const paperWidth = width ?? metrics.width;
+
+            article.style.width = `${paperWidth}px`;
+            content.style.width = `${paperWidth}px`;
+            // 最小高度落在纸上而不是正文栏上：正文栏撑高会把页脚一起往下推，
+            // 而「纸至少这么高」要的是纸的下缘，不是把正文中间拉开一段空白。
+            article.style.minHeight = `${minHeight ?? 1}px`;
+        },
         mount: (host, scale) => {
             host.appendChild(stage);
             Object.assign(stage.style, {

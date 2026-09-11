@@ -1,8 +1,8 @@
 /**
  * [INPUT]: 依赖 core/exportStyle 的 WatermarkAnchor 类型；其余只认调用方给出的数字与文本
- * [OUTPUT]: 对外提供 ExportTemplateContext 契约与八个纯函数——resolveExportText / safeExportName /
- *           captureScale / pdfPageSize / exportLinkUrl / watermarkMark / watermarkTile / watermarkSvg /
- *           watermarkPosition
+ * [OUTPUT]: 对外提供 ExportTemplateContext 契约与十个纯函数——resolveExportText / safeExportName /
+ *           captureScale / pdfPageSize / exportLinkUrl / pageWidthOf / pageMinHeightOf /
+ *           watermarkMark / watermarkTile / watermarkSvg / watermarkPosition
  * [POS]: 导出模块的无 DOM 口径层。浏览器画布上限、PDF 单页上限、占位符、文件名规则与水印几何
  *        都在这里收口，使渲染器只负责拿事实，不再夹带一套难以单测的尺寸算法。
  *        水印几何刻意不在这里量文字宽度——测宽要 canvas，而 canvas 一进来整层就不再可单测；
@@ -10,7 +10,7 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import type { WatermarkAnchor } from '../../core/exportStyle';
+import type { ExportStyle, WatermarkAnchor } from '../../core/exportStyle';
 
 /** 装饰文本允许引用的三个稳定事实 */
 export interface ExportTemplateContext {
@@ -266,6 +266,21 @@ export function exportLinkUrl(raw: string): string {
     } catch {
         return '';
     }
+}
+
+/**
+ * 纸该有多宽——null 表示「别管，跟编辑区」。
+ *
+ * 翻译放在这里而不是各自在弹窗与导出器里写一次三元：那两处必须给出同一个答案，
+ * 否则预览里看见的宽度与拍下来的宽度会差一点，而那一点没有任何东西会提示。
+ */
+export function pageWidthOf(style: ExportStyle): number | null {
+    return style.pageWidthMode === 'fixed' ? Math.max(1, Math.round(style.pageWidth)) : null;
+}
+
+/** 纸至少该有多高——null 表示「别管，跟内容」。内容更高时照样往下长 */
+export function pageMinHeightOf(style: ExportStyle): number | null {
+    return style.pageHeightMode === 'fixed' ? Math.max(1, Math.round(style.pageHeight)) : null;
 }
 
 function escapeXml(text: string): string {
