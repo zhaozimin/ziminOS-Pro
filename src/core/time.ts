@@ -1,11 +1,11 @@
 /**
  * [INPUT]: 依赖 obsidian 导出的 moment，依赖 ./constants 的 UID_FORMAT、DEFAULT_DATETIME_FORMAT、
- *          DAY_FORMAT 与 PeriodDefinition 类型
+ *          DAY_FORMAT、五级周期表 PERIODS 与 PeriodDefinition 类型
  * [OUTPUT]: 对外提供 nowStamp（按设置格式取当前时间）、nowUid（14 位本地时间数字 UID）、
  *           nowStampAndUid（同一时刻派生时间戳与 UID）、nowLocalDateTimeParts（同一时刻派生
  *           日期/分钟/自定义时间）；日粒度口径 today/dayText/dayOfMillis/dayOfTitle/shiftDay/daysBetween；
- *           五级复盘周期算术 currentPeriodTitle/periodStartOf/periodEndOf/periodNeighbours/titleOfDay
- *           及对应返回类型
+ *           五级复盘周期算术 currentPeriodTitle/periodOfTitle/periodStartOf/periodEndOf/
+ *           periodNeighbours/titleOfDay 及对应返回类型
  * [POS]: core 的时间口径统一处，同时是 dateTimeFormat 设置项的守门人——
  *        设置页刻意不做校验，空值回落在此收敛为唯一一处，调用方传原值即可，无从遗漏。
  *        原始脚本里存在手写 padStart 与 moment 两套实现，此处统一为 moment 一种
@@ -17,7 +17,7 @@
  */
 
 import { moment } from 'obsidian';
-import { DAY_FORMAT, DEFAULT_DATETIME_FORMAT, UID_FORMAT } from './constants';
+import { DAY_FORMAT, DEFAULT_DATETIME_FORMAT, PERIODS, UID_FORMAT } from './constants';
 import type { PeriodDefinition } from './constants';
 
 /**
@@ -216,6 +216,24 @@ export interface PeriodNeighbours {
 /** 当下所属周期的标题，也就是「今天/本周/本月/本季/本年」那篇笔记的文件名 */
 export function currentPeriodTitle(period: PeriodDefinition): string {
     return momentFactory().format(period.titleFormat);
+}
+
+/**
+ * 从一个文件名反解出它是哪一级周期笔记，认不出来返回 null。
+ *
+ * 它是 currentPeriodTitle 的逆函数：那边由「哪一级 + 此刻」推出文件名，
+ * 这边由文件名推回「哪一级」。五种格式在严格解析下互不相容
+ * （2026-09 不是年、2026-09-10 不是月、2026-W37 不是月），
+ * 因此按 PERIODS 的顺序取第一个解得通的，结果唯一且与遍历次序无关。
+ * 严格二字是全部的分量所在：「未命名」「会议纪要 2026-09-10」「2026-13-45」
+ * 都必须认不出来——认错一次，插件就会往一篇不是日记的笔记里写日记骨架。
+ */
+export function periodOfTitle(title: string): PeriodDefinition | null {
+    for (const period of Object.values(PERIODS)) {
+        if (periodStartOf(period, title) !== null) return period;
+    }
+
+    return null;
 }
 
 /**

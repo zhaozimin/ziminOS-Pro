@@ -2569,6 +2569,12 @@ function daysBetween(from, to) {
 function currentPeriodTitle(period) {
   return momentFactory().format(period.titleFormat);
 }
+function periodOfTitle(title) {
+  for (const period of Object.values(PERIODS)) {
+    if (periodStartOf(period, title) !== null) return period;
+  }
+  return null;
+}
 function periodStartOf(period, title) {
   const parsed = momentFactory(title, period.titleFormat, true);
   if (!parsed.isValid()) return null;
@@ -22122,10 +22128,7 @@ function periodOfFile(app, file) {
   for (const period of Object.values(PERIODS)) {
     if (period.type === declaredType) return period;
   }
-  for (const period of Object.values(PERIODS)) {
-    if (periodStartOf(period, file.basename) !== null) return period;
-  }
-  return null;
+  return periodOfTitle(file.basename);
 }
 function periodStartOfNote(app, file, period) {
   var _a, _b;
@@ -22147,6 +22150,14 @@ function resolveScope(app, host, params) {
   if (!start) return null;
   return { period, start, end: shiftDay(start, 1, period.stepUnit) };
 }
+async function fillSkeletonIfEmpty(ctx, file, period, title) {
+  if (file.stat.size !== 0) return;
+  ctx.guard.mark(file.path);
+  await ctx.app.vault.process(
+    file,
+    () => periodNoteContent(period, title, ctx.settings.dateTimeFormat)
+  );
+}
 async function openPeriodNote(ctx, period, options) {
   var _a;
   try {
@@ -22162,15 +22173,16 @@ async function openPeriodNote(ctx, period, options) {
       new import_obsidian46.Notice(`\u540C\u540D\u7684\u4E0D\u662F\u7B14\u8BB0\u800C\u662F\u6587\u4EF6\u5939\uFF1A${path}`);
       return null;
     }
-    const content = periodNoteContent(period, title, ctx.settings.dateTimeFormat);
     let file = existing;
     if (!file) {
       await ensureFolderPath(ctx.app, folder);
       ctx.guard.mark(path);
-      file = await ctx.app.vault.create(path, content);
-    } else if (file.stat.size === 0) {
-      ctx.guard.mark(path);
-      await ctx.app.vault.process(file, () => content);
+      file = await ctx.app.vault.create(
+        path,
+        periodNoteContent(period, title, ctx.settings.dateTimeFormat)
+      );
+    } else {
+      await fillSkeletonIfEmpty(ctx, file, period, title);
     }
     if ((options == null ? void 0 : options.reveal) !== false) await ctx.app.workspace.getLeaf(false).openFile(file);
     return file;
@@ -22189,6 +22201,49 @@ function registerPeriodicCommands(ctx, onDailyOpened) {
       })();
     });
   }
+}
+function adoptionOf(ctx, file) {
+  if (file.extension !== "md") return null;
+  const root = normalizeFolderPath(ctx.settings.diaryFolder, FOLDERS.diary);
+  if (!isInFolder(file.path, root)) return null;
+  const period = periodOfTitle(file.basename);
+  if (!period) return null;
+  return {
+    period,
+    title: file.basename,
+    path: `${periodFolderOf(ctx, period)}/${file.basename}.md`
+  };
+}
+async function adoptPeriodNote(ctx, file) {
+  const adoption = adoptionOf(ctx, file);
+  if (!adoption) return;
+  const { period, title, path } = adoption;
+  if (file.path !== path) {
+    const occupant = ctx.app.vault.getAbstractFileByPath(path);
+    if (occupant) {
+      new import_obsidian46.Notice(`${period.label} ${title} \u5DF2\u7ECF\u5728 ${path}\uFF0C\u8FD9\u4E00\u7BC7\u6CA1\u6709\u642C\u8FC7\u53BB`);
+      return;
+    }
+    await ensureFolderPath(ctx.app, path.slice(0, path.lastIndexOf("/")));
+    ctx.guard.mark(file.path);
+    ctx.guard.mark(path);
+    await ctx.app.fileManager.renameFile(file, path);
+  }
+  await fillSkeletonIfEmpty(ctx, file, period, title);
+}
+function registerPeriodAutoInit(ctx) {
+  const handle = (file) => {
+    if (!(file instanceof import_obsidian46.TFile) || ctx.guard.isRecent(file.path)) return;
+    if (file.stat.size !== 0) return;
+    void adoptPeriodNote(ctx, file).catch((error) => {
+      const message2 = error instanceof Error ? error.message : String(error);
+      new import_obsidian46.Notice(`\u5957\u7528\u590D\u76D8\u6A21\u677F\u5931\u8D25\uFF1A${message2}`);
+    });
+  };
+  ctx.app.workspace.onLayoutReady(() => {
+    ctx.plugin.registerEvent(ctx.app.vault.on("create", handle));
+    ctx.plugin.registerEvent(ctx.app.vault.on("rename", handle));
+  });
 }
 
 // src/modules/review/projectViews.ts
@@ -24196,6 +24251,7 @@ var ZiminosPlugin = class extends import_obsidian53.Plugin {
       if (file && periodKey === "daily") await promptThemeIfMissing(ctx, file);
     });
     registerPeriodicCommands(ctx, (file) => promptThemeIfMissing(ctx, file));
+    registerPeriodAutoInit(ctx);
     registerThemeCommand(ctx);
     registerCreateContactCommand(ctx);
     registerRecordFavorCommand(ctx, () => openPeriodNote(ctx, PERIODS.daily, { reveal: false }));

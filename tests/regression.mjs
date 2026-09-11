@@ -4,7 +4,7 @@
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
  *           项目状态回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
  *           片段出境口的桌面端闸门、本机绝对路径的唯一算处、状态栏路径的看拿分离、
- *           废弃正文/双链在编辑阅读两态的分层示警与三本库外观同构、
+ *           废弃正文/双链在编辑阅读两态的分层示警与三本库外观同构、五级周期的文件名反解、
  *           后台写入的分栏滚动保护、光标焦点切换、四类内容容器与日记附件路由，以及
  *           智能体路由完整性，并在专业版源码存在时额外覆盖出库单往返、《赛博永生》路径同构
  *           与第二版安装入口
@@ -63,7 +63,9 @@ const { insertIntoSection, toggleTaskLine } = await loadTypeScript('src/core/mar
 const { coalesceHighlights, normalizedHighlightKey } = await loadTypeScript(
     'src/modules/books/highlightIdentity.ts',
 );
-const { dayText } = await loadTypeScript('src/core/time.ts', { stubObsidian: true });
+const { dayText, periodOfTitle } = await loadTypeScript('src/core/time.ts', {
+    stubObsidian: true,
+});
 const { DEFAULT_SETTINGS, normalizeSettings } = await loadTypeScript('src/core/types.ts');
 const { attachmentRouteOfNotePath } = await loadTypeScript('src/modules/projects/location.ts', {
     obsidianStub: 'export class TFolder {} export const normalizePath = (value) => String(value);',
@@ -226,6 +228,24 @@ test('日期前缀只接受真实存在的日期', () => {
     assert.equal(dayText('2026-13-01'), null);
     assert.equal(dayText(new Date(Number.NaN)), null);
     assert.equal(dayText(Number.POSITIVE_INFINITY), null);
+});
+
+test('五级周期由文件名唯一反解，不是复盘笔记的名字一个都认不出来', () => {
+    // 五种标题格式在严格解析下互不相容，因此反解结果与遍历次序无关
+    assert.equal(periodOfTitle('2026-09-10')?.key, 'daily');
+    assert.equal(periodOfTitle('2026-W37')?.key, 'weekly');
+    assert.equal(periodOfTitle('2026-09')?.key, 'monthly');
+    assert.equal(periodOfTitle('2026-Q3')?.key, 'quarterly');
+    assert.equal(periodOfTitle('2026')?.key, 'yearly');
+
+    // 认错一次，插件就会往一篇不是日记的笔记里写日记骨架
+    assert.equal(periodOfTitle('未命名'), null);
+    assert.equal(periodOfTitle('Untitled'), null);
+    assert.equal(periodOfTitle('2026-13-45'), null);
+    assert.equal(periodOfTitle('2026-02-29'), null);
+    assert.equal(periodOfTitle('会议纪要 2026-09-10'), null);
+    assert.equal(periodOfTitle('2026-09-10 复盘'), null);
+    assert.equal(periodOfTitle(''), null);
 });
 
 test('全部规则关闭时逐字节原样返回', () => {

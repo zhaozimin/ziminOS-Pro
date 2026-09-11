@@ -7,7 +7,8 @@
  *          其中读书笔记那三条命令还要 modules/projects/createContainer 的 createContainer/BOOK_KIND
  *          来填「建一个书籍容器」那个洞，设置页那颗「扫码连接」还要 modules/books/sourceWeread
  *          的 loginWeread/disconnectWeread/disposeWereadSession 来管理登录窗口、断开与卸载清理；
- *          复盘的打开命令还要 theme 的 promptThemeIfMissing 来填「日记已打开」那个洞；
+ *          复盘的打开命令还要 theme 的 promptThemeIfMissing 来填「日记已打开」那个洞，
+ *          registerPeriodAutoInit 则不需要任何注入——它只认名字与位置；
  *          再加 modules/format 的 registerFormatter、modules/appearance 的 registerAppearanceSwitch、
  *          modules/ribbon 的 registerRibbon、
  *          modules/eagle 的 registerEagleBridge（附件粘贴/呈现与 Eagle 配对），并由
@@ -84,7 +85,11 @@ import { registerBaseMigrationCommand } from './modules/projects/migrateBases';
 import { projectsSeed } from './modules/projects/seed';
 import { registerTransitionCommands } from './modules/projects/transitions';
 import { registerUpdatedMaintainer } from './modules/projects/updatedMaintainer';
-import { openPeriodNote, registerPeriodicCommands } from './modules/review/periodic';
+import {
+    openPeriodNote,
+    registerPeriodAutoInit,
+    registerPeriodicCommands,
+} from './modules/review/periodic';
 import { reviewProjectViews } from './modules/review/projectViews';
 import { reviewSeed } from './modules/review/seed';
 import { promptThemeIfMissing, registerThemeCommand } from './modules/review/theme';
@@ -195,6 +200,10 @@ export default class ZiminosPlugin extends Plugin {
         // 打开命令只管「打开」，主题模块只管「有没有主题」；
         // 这里把两者接上，于是首次打开会问，已有主题再打开就安静
         registerPeriodicCommands(ctx, (file) => promptThemeIfMissing(ctx, file));
+        // 命令与日历之外，一篇复盘笔记还有第三种诞生方式：学员在文件夹里新建、
+        // 或点开导航行里那条还没有目标的双链。这一行让那条路也套上模板并归到该去的目录，
+        // 于是「这是不是一篇日记」由名字与位置回答，而不是由谁把它建出来回答
+        registerPeriodAutoInit(ctx);
         registerThemeCommand(ctx);
 
         registerCreateContactCommand(ctx);
