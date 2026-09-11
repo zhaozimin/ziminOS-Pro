@@ -29,6 +29,8 @@ const banner = `/*
 其中若干图形由 ziminOS 照同一套画法补画，同样以 MIT 授权分发。
 农历换算来自 lunar-typescript（https://github.com/6tail/lunar-typescript），MIT License，Copyright (c) 2020 6tail。
 内置节假日快照沿用 holiday-cn（https://github.com/NateScarlet/holiday-cn）数据格式，MIT License，Copyright (c) 2019 NateScarlet。
+长图渲染来自 dom-to-image-more（https://github.com/1904labs/dom-to-image-more），MIT License，Copyright 2018 Marc Brooks、2015 Anatolii Saienko、2012 Paul Bakaus。
+单页 PDF 生成来自 jsPDF（https://github.com/parallax/jsPDF），MIT License，Copyright (c) 2010-2025 James Hall、2015-2025 yWorks GmbH。
 详见 docs/第三方组件.md。
 */
 `;

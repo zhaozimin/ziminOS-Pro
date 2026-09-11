@@ -5,12 +5,13 @@
  *           以及 applyMigrationBatch / MigrationBatchError 批次回滚契约
  * [POS]: projects 的纯文本迁移内核；只判断一段 Markdown 能否被确定性升级并产出新全文，
  *        不认识 Obsidian、文件路径、弹窗或磁盘。旧模板、当前模板与冲突三种身份在此唯一判定，
- *        编排层因此没有机会用模糊替换覆盖用户自定义的 Base
+ *        编排层因此没有机会用模糊替换覆盖用户自定义的 Base；两张内建领域总控台即使
+ *        名称与 type 符合普通容器，也在身份层明确排除
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import { lineEndingOf } from '../../core/lineEndings';
-import { MOC_PREFIX, NOTE_TYPES } from '../../core/constants';
+import { CLIENT_MOC, CONTACT_MOC, MOC_PREFIX, NOTE_TYPES } from '../../core/constants';
 import { mocBaseBlock, navContent } from './templates';
 
 export type BaseUpgradeAction = '替换旧 Base' | '补上缺失 Base' | '升级导航 Base';
@@ -68,6 +69,15 @@ const MIGRATABLE_MOC_TYPES = new Set<string>([
     NOTE_TYPES.project,
     NOTE_TYPES.area,
     NOTE_TYPES.book,
+]);
+
+/**
+ * 两张内建领域总控台虽然服从 `MOC-目录名` 的统一命名，却不是“文件夹 + 卡片”的容器 MOC。
+ * 不在身份层排除，存量 Base 迁移会因为名字与 type 都吻合而给它们错误补上一块项目数据库。
+ */
+const NON_CONTAINER_MOC_BASENAMES = new Set<string>([
+    basenameWithoutExtension(CONTACT_MOC),
+    basenameWithoutExtension(CLIENT_MOC),
 ]);
 
 /** v0.22.7 之前导航页由 templates.ts 生成的唯一 Base 形态 */
@@ -229,7 +239,7 @@ export function planMocBaseUpgrade(content: string): BaseContentUpgrade {
 }
 
 /**
- * 只认项目/领域/书籍三类“文件夹 + MOC”；人脉 MOC 即使 type: area 也因命名不同而被排除。
+ * 只认项目/领域/书籍三类“文件夹 + MOC”；两张内建总控台由明确名单排除。
  * 新名 `MOC-文件夹名` 与 V3 前旧名 `文件夹名` 同时保留，迁移不会逼旧库先改名。
  */
 export function isContainerMocIdentity(
@@ -240,7 +250,16 @@ export function isContainerMocIdentity(
     const normalizedType = typeof type === 'string' ? type.trim() : '';
     const nameMatches = basename === parentName || basename === `${MOC_PREFIX}${parentName}`;
 
-    return nameMatches && MIGRATABLE_MOC_TYPES.has(normalizedType);
+    return (
+        nameMatches &&
+        !NON_CONTAINER_MOC_BASENAMES.has(basename) &&
+        MIGRATABLE_MOC_TYPES.has(normalizedType)
+    );
+}
+
+/** 从库内路径取 Markdown 文件名，不让 projects 反向依赖 contacts 的模板工具。 */
+function basenameWithoutExtension(path: string): string {
+    return path.replace(/\.md$/, '').split('/').pop() ?? path;
 }
 
 /** 为系统导航页规划升级；导航缺块或被自定义时宁可冲突，也不把整页猜成系统模板 */

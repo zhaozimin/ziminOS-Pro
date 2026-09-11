@@ -344,6 +344,8 @@ test('存量扫描只认项目领域书籍容器，不把人脉 MOC 当成缺 Ba
     assert.equal(isContainerMocIdentity('老项目', '老项目', 'project'), true);
     assert.equal(isContainerMocIdentity('MOC-原则', '原则', 'area'), true);
     assert.equal(isContainerMocIdentity('MOC-穷查理宝典', '穷查理宝典', 'book'), true);
+    assert.equal(isContainerMocIdentity('MOC-人脉', '人脉', 'area'), false);
+    assert.equal(isContainerMocIdentity('MOC-客户', '客户', 'area'), false);
     assert.equal(isContainerMocIdentity('人脉MOC', '人脉', 'area'), false);
     assert.equal(isContainerMocIdentity('客户MOC', '客户', 'area'), false);
     assert.equal(isContainerMocIdentity('MOC-普通卡片', '普通卡片', 'note'), false);
