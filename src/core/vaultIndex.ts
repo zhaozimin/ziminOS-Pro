@@ -1,9 +1,10 @@
 /**
  * [INPUT]: 依赖 obsidian 的 App/TFile 与其公开索引 metadataCache.resolvedLinks、
  *          metadataCache.getFileCache、metadataCache.getFirstLinkpathDest、vault.cachedRead
- * [OUTPUT]: 对外提供 VaultIndex 类（backlinksOf / resolve / frontmatterOf / notesOfType /
- *           listLinesOf / invalidate）与 ListLine 类型
- * [POS]: 视图引擎的事实层，全部二十个视图的唯一数据来源。它只回答关于文件的客观问题——
+ * [OUTPUT]: 对外提供 VaultIndex 类（backlinksOf / frontmatterLinksTo / resolve / frontmatterOf /
+ *           notesOfType / listLinesOf / invalidate）与 ListLine 类型
+ * [POS]: 视图引擎的事实层，二十四个笔记内视图的唯一数据来源（关于作者除外）。
+ *        它只回答关于文件的客观问题——
  *        谁链到了我、这个链接指向哪个文件、这篇笔记有哪些列表行——不认识「人脉」「复盘」
  *        任何一个业务概念，业务口径一律由 modules 侧解释。
  *        它取代的是 Dataview 的索引层，因此必须补上 Dataview 两个已知的坑：
@@ -164,6 +165,19 @@ export class VaultIndex {
         }
 
         return this.backlinks.get(file.path) ?? [];
+    }
+
+    /**
+     * 一篇来源笔记是否在 frontmatter 的任意属性里链到了指定目标。
+     *
+     * `resolvedLinks` 只能回答“这篇里出现过链接”，不能回答链接写在属性还是正文。
+     * 客户答疑的归属是属性事实，正文里举例提到另一个客户不该把整篇答疑挂到他名下，
+     * 因此再用官方 frontmatterLinks 缩一次范围，并仍经 resolve 比对真实路径。
+     */
+    frontmatterLinksTo(source: TFile, target: TFile): boolean {
+        const links = this.app.metadataCache.getFileCache(source)?.frontmatterLinks ?? [];
+
+        return links.some((link) => this.resolve(link.link, source.path)?.path === target.path);
     }
 
     /**

@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 无。本文件不 import 任何模块，是 core 层依赖图的最底层叶子
  * [OUTPUT]: 对外提供 PARA 目录常量 FOLDERS/INIT_FOLDERS/CONTACT_FOLDER/CLIENT_FOLDER、
- *           笔记路径常量 NAV_FILE/TEMPLATE_FILES/CONTACT_MOC/CLIENT_MOC、
+ *           笔记路径常量 NAV_FILE/TEMPLATE_FILES/CONTACT_MOC/CLIENT_MOC 与两张 MOC 的存量旧路径、
  *           卡片字段序 CARD_FIELDS 与其字段类型 CardField、统一字段名 FIELDS 与身份取值 NOTE_TYPES、
  *           时间格式 DEFAULT_DATETIME_FORMAT/UID_FORMAT/DAY_FORMAT、
  *           灵感收集默认值 INSPIRATION_DEFAULTS/LEGACY_INSPIRATION_FORMATS 与插入位置，
@@ -104,11 +104,15 @@ export const TEMPLATE_FILES = {
     client: `${FOLDERS.template}/客户模板.md`,
 } as const;
 
-/** 人脉领域总控台，也是新建档案时 up 的默认指向 */
-export const CONTACT_MOC = `${CONTACT_FOLDER}/人脉MOC.md`;
+/** 人脉领域总控台，也是新建档案时 up 的默认指向；MOC 统一前缀置顶 */
+export const CONTACT_MOC = `${CONTACT_FOLDER}/MOC-人脉.md`;
 
-/** 客户领域总控台，随客户模块一起长出 */
-export const CLIENT_MOC = `${CLIENT_FOLDER}/客户MOC.md`;
+/** 客户领域总控台，随客户模块一起长出；MOC 统一前缀置顶 */
+export const CLIENT_MOC = `${CLIENT_FOLDER}/MOC-客户.md`;
+
+/** 仅供已安装库继续寻址；新初始化不得再生成这两个旧名 */
+export const LEGACY_CONTACT_MOC = `${CONTACT_FOLDER}/人脉MOC.md`;
+export const LEGACY_CLIENT_MOC = `${CLIENT_FOLDER}/客户MOC.md`;
 
 // ============================================================
 // 灵感收集

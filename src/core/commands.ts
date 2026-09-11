@@ -1,10 +1,10 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Plugin 类型；依赖 ./constants 的 PeriodKey 与 TransitionAction 两个类型
  * [OUTPUT]: 对外提供命令身份契约 CommandSpec、分组名 COMMAND_GROUPS、图标名 COMMAND_ICONS，
- *           三十六条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
+ *           三十八条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
  *           TransitionCommand）/BOOK_COMMANDS/INSPIRATION_COMMAND/PERIOD_COMMANDS/THEME_COMMAND/
  *           OPEN_CALENDAR_COMMAND/CONTACT_COMMANDS/CLIENT_COMMANDS/APPEARANCE_COMMAND/FORMAT_COMMAND/
- *           RECENT_FILES_COMMAND/COPY_PATH_COMMAND/LEGACY_COMMANDS，
+ *           RECENT_FILES_COMMAND/COPY_PATH_COMMAND/EXPORT_COMMAND/LEGACY_COMMANDS，
  *           左侧边栏默认摆件 DEFAULT_RIBBON_COMMANDS
  *           与它的读取侧兜底 normalizeRibbonCommands，
  *           以及注册台 CommandRegistry 与它交出的 RegisteredCommand
@@ -108,7 +108,7 @@ export const GROUP_COLORS: Readonly<Record<CommandGroup, string>> = {
 };
 
 /**
- * 三十九个图标名：三十六条命令各一枚，加设置页那三张没有命令与之对应的标签页（边栏、文件、编辑）。
+ * 四十一个图标名：三十八条命令各一枚，加设置页那三张没有命令与之对应的标签页（边栏、文件、编辑）。
  *
  * 一律带 `ziminos-` 前缀：图标名是 Obsidian 全局共享的命名空间，
  * 不加前缀就可能盖掉 lucide 里的同名图标，或者被后装的插件盖掉。
@@ -146,6 +146,7 @@ export const COMMAND_ICONS = {
     client: 'ziminos-client',
     payment: 'ziminos-payment',
     receipt: 'ziminos-receipt',
+    qa: 'ziminos-qa',
     appearance: 'ziminos-appearance',
     format: 'ziminos-format',
     /**
@@ -160,6 +161,7 @@ export const COMMAND_ICONS = {
      */
     recent: 'ziminos-recent',
     filePath: 'ziminos-file-path',
+    export: 'ziminos-export',
     vaultSwitch: 'ziminos-vault-switch',
     help: 'ziminos-help',
     appSettings: 'ziminos-app-settings',
@@ -169,7 +171,7 @@ export const COMMAND_ICONS = {
 } as const;
 
 // ============================================================
-// 三十六条命令：顺序即它们在左侧边栏里的先后
+// 三十八条命令：顺序即它们在左侧边栏里的先后
 // ============================================================
 
 /**
@@ -397,14 +399,20 @@ export const CONTACT_COMMANDS: Readonly<Record<'create' | 'favor', CommandSpec>>
     },
 };
 
-/** 客户模块的四条命令：一条为旧库补齐或修复，三条日常 */
+/** 客户模块的五条命令：两条为旧库补齐或修复，三条日常 */
 export const CLIENT_COMMANDS: Readonly<
-    Record<'setup' | 'create' | 'payment' | 'receipt', CommandSpec>
+    Record<'setup' | 'answers' | 'create' | 'payment' | 'receipt', CommandSpec>
 > = {
     setup: {
         id: 'setup-clients',
         name: '初始化客户模块',
         icon: COMMAND_ICONS.clients,
+        group: COMMAND_GROUPS.clients,
+    },
+    answers: {
+        id: 'backfill-client-answer-views',
+        name: '补齐客户答疑检索',
+        icon: COMMAND_ICONS.qa,
         group: COMMAND_GROUPS.clients,
     },
     create: {
@@ -469,6 +477,17 @@ export const COPY_PATH_COMMAND: CommandSpec = {
 };
 
 /**
+ * 把当前 Markdown 笔记导成一整张 PNG 或单页 PDF。
+ * 它不进默认边栏：导出发生在分享或交付的明确时刻，不是一天会反复按的记录动作。
+ */
+export const EXPORT_COMMAND: CommandSpec = {
+    id: 'export-current-note',
+    name: '导出当前笔记',
+    icon: COMMAND_ICONS.export,
+    group: COMMAND_GROUPS.explorer,
+};
+
+/**
  * Obsidian 1.6 挪走的那三个入口。
  *
  * 它们是全部命令里唯一一组**不属于 ziminOS 自己**的——做的是 Obsidian 的事，
@@ -507,12 +526,12 @@ export const LEGACY_COMMANDS: Readonly<Record<'vault' | 'help' | 'settings', Com
  * 全部命令都摆上去等于把选择的负担丢回给学员——那条边栏会长成一根谁也不看的图标柱。
  * 这七条的判据是「一天里可能按不止一次」：记灵感、开日记、写主题是每天的动作，
  * 新建项目与新建人脉是每周的动作，记人情发生在关系推进的当下，外观开关是刚上手时天天在调的。
- * 其余命令要么一辈子只按一次（初始化笔记库、旧库补齐客户模块、升级存量 MOC 数据库），
+ * 其余命令要么一辈子只按一次（初始化笔记库、旧库补齐客户模块、补齐客户答疑检索、升级存量 MOC 数据库），
  * 要么发生在某个具体场景里（新建领域、初始化当前卡片、四条流转、读书三条、
- * 三条客户流水、周月季年四级复盘）——
+ * 客户建档与流水、导出当前笔记、周月季年四级复盘）——
  * 那些场景里用户本来就停在对的笔记上，命令面板比一根图标柱更快。
  * 新建领域不在默认清单里，是因为一个人的领域屈指可数：健康、手艺、人脉，建完就是好几年；
- * 第十五条是「整理当前笔记格式」：默认开着自动整理，它是那条留给例外情况的手动路，
+ * 「整理当前笔记格式」默认开着自动整理，它是那条留给例外情况的手动路，
  * 常按不上它反而说明自动那条跑得好。
  *
  * 老库升级正是它生效的场景：0.4.0 升上来的库 data.json 里没有 ribbonCommands 这个键，

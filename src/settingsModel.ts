@@ -166,7 +166,7 @@ export const TABS: readonly SettingsTab[] = [
         label: '边栏',
         icon: COMMAND_ICONS.dock,
         module: '左侧边栏 v1',
-        status: '运行中 · 三十六条命令配 Pikaicons 图标，默认摆出十条',
+        status: '运行中 · 三十八条命令配 Pikaicons 图标，默认摆出十条',
     },
 ];
 

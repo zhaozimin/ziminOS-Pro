@@ -5,8 +5,10 @@
          内容经 --content 或 --content-file 传入，不走管道也不走 heredoc。
 [OUTPUT]: status / people / inspiration / diary / clip 五条命令；
          写入失败按「明确未写入（退出码 2）」与「结果未知（退出码 3）」两级分离。
-[POS]: 第二版口述入口的**脚本侧**，与 capture/SKILL.md 是一件事的两半：
-       那边只回答「这句话是灵感还是日记」，这边负责其余全部——
+[POS]: 第二版口述入口的**脚本侧**；capture/SKILL.md 只获准调用 status 与 inspiration，
+       微信要求保存的内容因此只有灵感集一个落点。diary/clip 是兼容旧调用的低层能力，
+       不属于微信 Skill 的授权面；其中剪藏目录只归浏览器插件，Skill 不得调用 clip。
+       people 的名单扫描同时排除新旧两代人脉 MOC 文件名，插件改名不会把总控台当成人。
        目标路径、清洗、链接搬运、人名双链、插入位置、日记骨架，一律不问 LLM。
        分工的判据是第二条红线：写入用户原话的路径上零 AI。
        链接怎么排、人名连不连得上，是同输入同结果的活儿，交给模型每次都可能不一样，
@@ -48,6 +50,7 @@ PRODUCTION_HEADING = "## 今日产出（自动）"
 VIEW_BLOCK_LANG = "ziminos"              # 对侧 VIEW_BLOCK_LANG
 PLACEHOLDER = "-"                        # 对侧 markdown.ts 的 PLACEHOLDER
 CONTACT_FOLDER = "02-areas/人脉"          # 对侧 CONTACT_FOLDER
+CONTACT_MOC_FILES = {"MOC-人脉.md", "人脉MOC.md"}  # 新名 + 存量兼容
 
 # 导航行里父级链接前的那个字符是全角空格 U+3000，不是普通空格。
 # 它在对侧模板里是字面量，改成半角肉眼无差别，但生成出来的日记就不再逐字节相同了。
@@ -346,8 +349,8 @@ def roster(layout: Layout) -> List[str]:
     for path in folder.glob("*.md"):
         stem = path.stem
 
-        # MOC 是总控台不是人
-        if stem.endswith("MOC"):
+        # MOC 是总控台不是人；旧库与新初始化的命名都要排除
+        if path.name in CONTACT_MOC_FILES:
             continue
 
         names.append(stem)

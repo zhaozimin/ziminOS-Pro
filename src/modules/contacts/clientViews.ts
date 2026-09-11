@@ -3,7 +3,7 @@
  *          core/constants 的 FIELDS/NOTE_TYPES/PAYMENT_FIELDS，core/table 的渲染原语，
  *          core/time 的 dayText/dayOfMillis/daysBetween/today，core/vaultIndex 的 extractLinks/toStringList/toText；
  *          依赖 ./identity 的 archiveFolderOf/isLivePath/lastContactDayOf
- * [OUTPUT]: 对外提供 clientViews（客户 MOC 七视图 + 客户档案的付费与交付 + 项目 MOC 的项目收款）
+ * [OUTPUT]: 对外提供 clientViews（客户 MOC 七视图 + 客户档案的付费与交付/客户答疑 + 项目 MOC 的项目收款）
  * [POS]: 客户与付费这条线的全部读侧。两条交易线回答的问题不同，所以分两区：
  *        产品型（陌生人买东西，只知道渠道与联系方式）问的是钱从哪来、货给了没；
  *        服务型（认识的人找你办事，有项目有过程）问的是欠谁的活、哪类问题该做成课。
@@ -44,6 +44,9 @@ interface ClientRosterRow {
 
 /** 行内字段 `[键::值]`；键名一律中文，含大写的键会被补一份规范名而致求和双计数 */
 const INLINE_FIELD = /\[([^\]:]+)::([^\]]*)\]/g;
+
+/** 答疑身份只认这一枚标签；大小写与用户在属性面板里的输入无关 */
+const CLIENT_ANSWER_TAG = 'obsidian/qa';
 
 // ============================================================
 // 产品区
@@ -391,7 +394,7 @@ const serviceClients: ViewDefinition = {
 };
 
 // ============================================================
-// 长在档案与项目上的两个视图
+// 长在档案与项目上的三个视图
 // ============================================================
 
 /** 这个客户的全部流水 */
@@ -429,6 +432,61 @@ const clientPayments: ViewDefinition = {
                     payment.date || '—',
                     payment.delivered ? '✅ 已交付' : '⏳ 待交付',
                 ]),
+        );
+    },
+};
+
+/**
+ * 这个客户的全部答疑。
+ *
+ * 两道条件必须同时成立：标签说明“这是一篇答疑”，frontmatter 双链说明“它属于这个客户”。
+ * 只看反链会把正文示例里偶然提到的人也算进来；只看标签则无法回答这篇是谁的。
+ */
+const clientAnswers: ViewDefinition = {
+    name: '客户答疑',
+    render: async (view: ViewContext): Promise<void> => {
+        if (!view.host) {
+            renderEmpty(view.el, '这个视图要长在客户档案上才有内容。');
+
+            return;
+        }
+
+        const client = view.host;
+        const answers = view.index
+            .backlinksOf(client)
+            .filter((file) => hasTag(view, file, CLIENT_ANSWER_TAG))
+            .filter((file) => view.index.frontmatterLinksTo(file, client))
+            .map((file) => ({
+                file,
+                domain: answerDomainOf(view, file, client),
+                updated:
+                    dayText(view.index.fieldOf(file, FIELDS.updated)) ??
+                    dayText(view.index.fieldOf(file, FIELDS.created)) ??
+                    dayOfMillis(file.stat.mtime),
+            }))
+            .sort((left, right) => right.updated.localeCompare(left.updated));
+
+        if (!answers.length) {
+            renderEmpty(
+                view.el,
+                `还没有答疑。答疑笔记加标签 \`#${CLIENT_ANSWER_TAG}\`，并在任一属性里写入这个客户的双链后会自动出现。`,
+            );
+
+            return;
+        }
+
+        renderSummary(view.el, `共 **${answers.length}** 篇答疑，新的排在前面。`);
+        renderTable(
+            view.ctx.app,
+            view.el,
+            view.sourcePath,
+            ['答疑', '领域', '更新日期'],
+            answers.map((answer): Cell[] => [
+                noteLink(answer.file),
+                answer.domain ? noteLink(answer.domain) : '—',
+                answer.updated,
+            ]),
+            0,
         );
     },
 };
@@ -549,6 +607,23 @@ function clientProjects(view: ViewContext): { project: TFile; client: TFile | nu
     return found;
 }
 
+function hasTag(view: ViewContext, file: TFile, expected: string): boolean {
+    return toStringList(view.index.fieldOf(file, FIELDS.tags))
+        .map((tag) => tag.replace(/^#/, '').toLowerCase())
+        .includes(expected);
+}
+
+/** up 里除客户本人之外的第一条链接就是答疑所属领域；没有则如实留空 */
+function answerDomainOf(view: ViewContext, answer: TFile, client: TFile): TFile | null {
+    for (const link of extractLinks(String(view.index.fieldOf(answer, FIELDS.up) ?? ''))) {
+        const target = view.index.resolve(link, answer.path);
+
+        if (target && target.path !== client.path) return target;
+    }
+
+    return null;
+}
+
 function sum(payments: readonly Payment[]): number {
     return payments.reduce((total, payment) => total + payment.amount, 0);
 }
@@ -586,7 +661,7 @@ function formatDays(days: number | null): string {
     return days === null ? '—' : `${days} 天`;
 }
 
-/** 客户与付费的九个视图；旧八个继续注册，保证已有代码块不失效 */
+/** 客户与付费的十个视图；旧九个继续注册，保证已有代码块不失效 */
 export const clientViews: readonly ViewDefinition[] = [
     clientRoster,
     pending,
@@ -596,5 +671,6 @@ export const clientViews: readonly ViewDefinition[] = [
     caseLibrary,
     serviceClients,
     clientPayments,
+    clientAnswers,
     projectPayments,
 ];

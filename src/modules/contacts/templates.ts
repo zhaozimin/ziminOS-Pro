@@ -1,8 +1,9 @@
 /**
  * [INPUT]: 依赖 core/constants 的 FIELDS/NOTE_TYPES/CLIENT_MOC/LEDGER/PAYMENT_FIELDS，
- *          依赖 ../review/templates 的 viewBlock
+ *          依赖 ../review/templates 的 viewBlock 与 ./moc 的 basenameOf
  * [OUTPUT]: 对外提供 personTemplateFile/personNoteContent、clientTemplateFile/clientNoteContent、
- *           contactMocContent/clientMocContent 六个纯函数与 PersonValues/ClientValues 两个入参类型
+ *           contactMocContent/clientMocContent、ensureClientAnswerView 七个纯函数，
+ *           以及 PersonValues/ClientValues 两个入参类型
  * [POS]: 人脉与客户模块唯一生成文本的地方，纯函数无副作用。
  *        一条贯穿全文件的纪律：模板文件的 type 必须留空。识别身份靠 type 而不靠文件夹，
  *        模板一旦自带 type: person，它自己就会变成名录里的一个人、投喂名单上的一张嘴、
@@ -21,6 +22,7 @@ import {
     PAYMENT_FIELDS,
 } from '../../core/constants';
 import { viewBlock } from '../review/templates';
+import { basenameOf } from './moc';
 
 /** 建档时要填进 frontmatter 的值；模板文件则全部留空 */
 export interface PersonValues {
@@ -46,13 +48,8 @@ export interface ClientValues {
     readonly contact: string;
 }
 
-/** MOC 的链接写法，供 up 字段与说明正文共用 */
-const CLIENT_MOC_LINK = `[[${basenameOf(CLIENT_MOC)}]]`;
-
-/** 从笔记路径取出可用于双链的名字 */
-export function basenameOf(path: string): string {
-    return path.replace(/\.md$/, '').split('/').pop() ?? path;
-}
+const CLIENT_ANSWER_HEADING = '## 客户答疑（自动）';
+const CLIENT_ANSWER_VIEW = viewBlock('客户答疑');
 
 // ============================================================
 // 人脉档案
@@ -154,6 +151,10 @@ export function clientNoteContent(values: ClientValues): string {
         '',
         viewBlock('付费与交付'),
         '',
+        CLIENT_ANSWER_HEADING,
+        '',
+        CLIENT_ANSWER_VIEW,
+        '',
         '## 关键事件（自动）',
         '',
         viewBlock('关键事件'),
@@ -168,6 +169,32 @@ export function clientNoteContent(values: ClientValues): string {
 /** 供手工复制的客户模板：全字段留空 */
 export function clientTemplateFile(): string {
     return clientNoteContent({ created: '', uid: null, type: '', source: '', contact: '' });
+}
+
+/**
+ * 给旧客户档案只补一块“客户答疑”视图。
+ *
+ * 这是显式升级命令的纯文本内核：已有块逐字不动；已有同名标题就只把块放进标题下；
+ * 标题也没有时优先插在关键事件前，让新旧档案的阅读顺序一致。全文换行符沿用原文件。
+ */
+export function ensureClientAnswerView(content: string): string {
+    const newline = content.includes('\r\n') ? '\r\n' : '\n';
+    const normalized = content.replace(/\r\n/g, '\n');
+
+    if (normalized.includes(CLIENT_ANSWER_VIEW)) return content;
+
+    const section = `${CLIENT_ANSWER_HEADING}\n\n${CLIENT_ANSWER_VIEW}\n`;
+    let updated: string;
+
+    if (normalized.includes(CLIENT_ANSWER_HEADING)) {
+        updated = normalized.replace(CLIENT_ANSWER_HEADING, `${CLIENT_ANSWER_HEADING}\n\n${CLIENT_ANSWER_VIEW}`);
+    } else if (normalized.includes('## 关键事件（自动）')) {
+        updated = normalized.replace('## 关键事件（自动）', `${section}\n## 关键事件（自动）`);
+    } else {
+        updated = `${normalized.replace(/\n*$/, '')}\n\n${section}`;
+    }
+
+    return newline === '\n' ? updated : updated.replace(/\n/g, newline);
 }
 
 // ============================================================
@@ -191,11 +218,15 @@ function areaFrontmatter(description: string, created: string, uid: number): str
 }
 
 /** 人脉领域总控台 */
-export function contactMocContent(created: string, uid: number): string {
+export function contactMocContent(
+    created: string,
+    uid: number,
+    clientMocName = basenameOf(CLIENT_MOC),
+): string {
     return [
         areaFrontmatter('人脉领域总控台：按圈子分组的名录、投喂名单、本月生日、人情余额', created, uid),
         '',
-        `> 这里是全部人的经营视角。付费与交付另见 ${CLIENT_MOC_LINK}。`,
+        `> 这里是全部人的经营视角。付费与交付另见 [[${clientMocName}]]。`,
         '> 一个人可以同时出现在两张地图上：他确实可以既是我的客户，又是我的朋友。',
         '',
         '## 📇 名录',

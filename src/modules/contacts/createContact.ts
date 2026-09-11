@@ -1,16 +1,17 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Notice/TFile；依赖 core/commands 的 CONTACT_COMMANDS，
- *          core/constants 的 CONTACT_FOLDER/CONTACT_MOC/CONTACT_TIERS/CONTACT_DIRECTIONS/NOTE_TYPES，
+ *          core/constants 的 CONTACT_FOLDER/CONTACT_MOC/LEGACY_CONTACT_MOC/CONTACT_TIERS/CONTACT_DIRECTIONS/NOTE_TYPES，
  *          core/folders 的 ensureFolderPath/
  *          normalizeFolderPath，core/modals 的 TextInputModal/ChoiceModal，core/time 的 nowStampAndUid，
- *          core/types 的 ZiminosContext；依赖 ./templates 的 personNoteContent/basenameOf
+ *          core/types 的 ZiminosContext；依赖 ./moc 的新旧 MOC 寻址与 ./templates 的 personNoteContent
  * [OUTPUT]: 对外提供 registerCreateContactCommand（注册「新建人脉」命令）
  * [POS]: 人脉档案的诞生处。三连问的顺序是设计过的——姓名是自由文本放最前，
  *        分层与方向都是封闭枚举放在后面：先付出的成本最小，中途反悔损失最少。
  *        两个枚举一律走 ChoiceModal 而非文本输入，这是全模块的纪律：
  *        自由文本会长出「近/较近/比较近」三种写法，而它们在名录里是三个不同的层。
  *        type: person 由本命令填、模板留空——识别身份靠 type 不靠文件夹，
- *        模板若自带 type，它自己就会变成名录里的一个人
+ *        模板若自带 type，它自己就会变成名录里的一个人。新建档案的 up 优先指向新名，
+ *        但已安装库只有旧 MOC 时继续指向旧名，不因插件升级制造悬空双链
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -21,13 +22,15 @@ import {
     CONTACT_FOLDER,
     CONTACT_MOC,
     CONTACT_TIERS,
+    LEGACY_CONTACT_MOC,
     NOTE_TYPES,
 } from '../../core/constants';
 import { ensureFolderPath, normalizeFolderPath } from '../../core/folders';
 import { ChoiceModal, TextInputModal } from '../../core/modals';
 import { nowStampAndUid } from '../../core/time';
 import type { ZiminosContext } from '../../core/types';
-import { basenameOf, personNoteContent } from './templates';
+import { basenameOf, resolveBuiltInMocPath } from './moc';
+import { personNoteContent } from './templates';
 
 /** Obsidian 文件名禁用的字符，外加会破坏双链解析的方括号与井号 */
 const ILLEGAL_NAME = /[\\/:*?"<>|#^[\]]/;
@@ -113,6 +116,7 @@ async function createContact(ctx: ZiminosContext): Promise<void> {
         }
 
         const folder = normalizeFolderPath(ctx.settings.contactFolder, CONTACT_FOLDER);
+        const mocPath = resolveBuiltInMocPath(ctx.app, folder, CONTACT_MOC, LEGACY_CONTACT_MOC);
         const path = `${folder}/${name}.md`;
         const existing = ctx.app.vault.getAbstractFileByPath(path);
 
@@ -129,7 +133,7 @@ async function createContact(ctx: ZiminosContext): Promise<void> {
             created: stamp,
             uid,
             type: NOTE_TYPES.person,
-            up: `[[${basenameOf(CONTACT_MOC)}]]`,
+            up: `[[${basenameOf(mocPath)}]]`,
             tier,
             direction,
         });

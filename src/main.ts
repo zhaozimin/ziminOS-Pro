@@ -3,7 +3,7 @@
  *          INIT_VAULT_COMMAND、DEFAULT_SETTINGS/normalizeSettings、
  *          ZiminosSettings/ZiminosContext/VaultSeed 契约、PERIODS 与 registerViewCodeBlock；
  *          依赖 modules/setup 的 initializeVault/applySeed，以及项目管理（含存量 Bases 迁移）、读书笔记、灵感收集、
- *          日历、复盘、人脉与客户七个模块各自的 seed、register 函数与视图数组，
+ *          日历、复盘、人脉与客户等业务模块各自的 seed、register 函数与视图数组，
  *          其中读书笔记那三条命令还要 modules/projects/createContainer 的 createContainer/BOOK_KIND
  *          来填「建一个书籍容器」那个洞，设置页那颗「扫码连接」还要 modules/books/sourceWeread
  *          的 loginWeread/disconnectWeread/disposeWereadSession 来管理登录窗口、断开与卸载清理；
@@ -13,6 +13,7 @@
  *          modules/eagle 的 registerEagleBridge（附件粘贴/呈现与 Eagle 配对），并由
  *          modules/projects/location 向它注入“当前笔记应归入哪个容器/日记”的唯一判定、
  *          modules/editing 的 registerPasteLink/registerCursorMemory、
+ *          modules/export 的 registerExportCommand、
  *          modules/explorer 的 registerFolderCount/registerRecentFiles/registerFilePath、
  *          modules/legacy 的 registerLegacyDock
  *          与 modules/about 的 aboutViews/renderAboutPanel
@@ -61,6 +62,7 @@ import { registerEagleBridge } from './modules/eagle';
 import { registerFolderCount } from './modules/explorer/badge';
 import { registerFilePath } from './modules/explorer/filePath';
 import { registerRecentFiles } from './modules/explorer/recentFiles';
+import { registerExportCommand } from './modules/export/exporter';
 import { registerFormatter } from './modules/format/formatter';
 import { registerLegacyDock } from './modules/legacy/vaultDock';
 import { registerCalendar } from './modules/calendar/view';
@@ -231,7 +233,7 @@ export default class ZiminosPlugin extends Plugin {
         registerCursorMemory(ctx);
 
         // ============================================================
-        // 文件：文件夹计数、最近文件与状态栏路径
+        // 文件：导出、文件夹计数、最近文件与状态栏路径
         // ============================================================
 
         // 三样东西回答同一个问题（我在哪、有哪些、刚才去过哪儿），因此只向设置页交回
@@ -239,6 +241,8 @@ export default class ZiminosPlugin extends Plugin {
         // 装配位置从「边栏之后」挪到了这里（v0.17.0）——最近文件与复制路径是两条命令，
         // 而边栏是照着花名册摆图标的，摆的时候花名册必须已经收齐。
         // 这也让装配顺序重新等于设置页那八张标签的先后：编辑（含排版）→ 文件 → 边栏
+        // 导出只在用户按命令时渲染一次，不持有视图状态，因此无需交回同步函数。
+        registerExportCommand(ctx);
         const syncFolderCount = registerFolderCount(ctx);
         const syncRecentFiles = registerRecentFiles(ctx);
         const syncFilePath = registerFilePath(ctx);
@@ -264,7 +268,7 @@ export default class ZiminosPlugin extends Plugin {
         const syncRibbon = registerRibbon(ctx);
 
         // ============================================================
-        // 代码块视图引擎：二十三个笔记内视图；日历是独立 ItemView，不在此处重复注册
+        // 代码块视图引擎：二十四个笔记内视图；日历是独立 ItemView，不在此处重复注册
         // ============================================================
 
         registerViewCodeBlock(ctx, [

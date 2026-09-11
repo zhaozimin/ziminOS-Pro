@@ -1,6 +1,6 @@
 {
   "name": "ziminos",
-  "version": "0.22.12",
+  "version": "0.23.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,6 +21,8 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "dom-to-image-more": "3.10.2",
+    "jspdf": "4.2.1",
     "lunar-typescript": "1.8.6"
   }
 }
