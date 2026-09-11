@@ -32,6 +32,13 @@ interface SaveDialogResult {
     readonly filePath?: string;
 }
 
+/** 这次导出要落到哪儿。先问、后做，因此它必须是一个能提前拿在手里的值 */
+interface ExportTarget {
+    /** system＝系统保存框选的库外路径；vault＝没有系统框时落在笔记旁边 */
+    readonly kind: 'system' | 'vault';
+    readonly path: string;
+}
+
 interface SaveDialog {
     showSaveDialog(options: {
         readonly title: string;
@@ -64,20 +71,38 @@ async function exportCurrentNote(ctx: ZiminosContext): Promise<void> {
         paper = await renderPaper(ctx, file);
 
         const context = templateContextOf(file);
+        // 先问去处、后做图。旧的顺序是反的：点完「导出」先栅格化整张长图（长文要好几秒），
+        // 期间弹窗已经关掉、屏幕上什么都没有，保存框才姗姗来迟——用户以为它死了。
+        // 而且那几秒是白花的：他完全可能在保存框里按取消。
+        // 这个盒子存在的唯一理由是回调里赋的值要带出闭包，TypeScript 对闭包里的赋值不做收窄。
+        const picked: { target: ExportTarget | null } = { target: null };
         const style = await new ExportPreviewModal(
             ctx.app,
             paper,
             ctx.settings.exportStyle,
             context,
-        ).openAndGetValue();
+            async (candidate) => {
+                picked.target = await chooseTarget(ctx, file, candidate.format);
 
-        if (!style) return;
+                return picked.target !== null;
+            },
+        ).openAndGetValue();
+        const target = picked.target;
+
+        if (!style || !target) return;
 
         await rememberStyle(ctx, style);
 
-        const saved = await capture(ctx, file, paper, style, context);
+        // 0 表示不自动消失：这一段是真的要等，得有个东西一直在那儿说「还在做」。
+        const progress = new Notice('正在生成，请稍候…', 0);
 
-        if (saved) new Notice(`已导出：${saved}`);
+        try {
+            const saved = await capture(ctx, file, paper, style, context, target);
+
+            new Notice(`已导出：${saved}`);
+        } finally {
+            progress.hide();
+        }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
@@ -104,7 +129,8 @@ async function capture(
     paper: ExportPaper,
     style: ExportStyle,
     context: ExportTemplateContext,
-): Promise<string | null> {
+    target: ExportTarget,
+): Promise<string> {
     // 标志在这里重解一次而不是信弹窗那一份：读盘是异步的，用户完全可能在它读完之前就点了导出。
     // resolveLogo 自带按路径与修改时间的缓存，重解一次通常连一次读盘都不会发生。
     applyDecorations(paper.article, style, context, await resolveLogo(ctx.app, style.logo));
@@ -123,12 +149,12 @@ async function capture(
     const bytes = style.format === 'png'
         ? new Uint8Array(await blob.arrayBuffer())
         : await pdfBytes(blob, width, height, links);
-    const saved = await saveExport(ctx, file, style.format, bytes);
+    const saved = await writeTarget(ctx, target, bytes);
 
     // PNG 就是一堆像素，「可点」这个概念在它那里不存在。用户填了链接却什么都没发生时，
     // 他会以为是链接写错了——所以这句话必须在他刚拿到文件的那一刻说，而不是只写在设置旁边。
-    if (saved && style.format === 'png' && links.length) {
-        new Notice('页眉/页脚的链接没有写进 PNG——图片点不了。要可点的链接，导出成 PDF。');
+    if (style.format === 'png' && links.length) {
+        new Notice('笔记里的链接没有写进 PNG——图片点不了。要可点的链接，导出成 PDF。');
     }
 
     return saved;
@@ -180,12 +206,18 @@ async function pdfBytes(
     return new Uint8Array(pdf.output('arraybuffer'));
 }
 
-async function saveExport(
+/**
+ * 问清这次要落到哪儿。取消返回 null，于是预览弹窗留在原地等他改主意——
+ * 这正是用户要的那条顺序：点导出 → 立刻弹保存框 → 选完路径，弹窗才消失。
+ *
+ * 没有系统保存框时（移动端，或探不到 Electron）不弹任何东西，直接给出笔记旁边的位置：
+ * 那条路上本来就没有「去哪儿」这个问题要问。
+ */
+async function chooseTarget(
     ctx: ZiminosContext,
     source: TFile,
     format: ExportFormat,
-    bytes: Uint8Array,
-): Promise<string | null> {
+): Promise<ExportTarget | null> {
     const fileName = `${safeExportName(source.basename)}.${format}`;
 
     if (Platform.isDesktopApp) {
@@ -201,21 +233,34 @@ async function saveExport(
 
             if (result.canceled || !result.filePath) return null;
 
-            const fs = require('node:fs/promises') as {
-                writeFile(path: string, data: Uint8Array): Promise<void>;
-            };
-
-            await fs.writeFile(result.filePath, bytes);
-
-            return result.filePath;
+            return { kind: 'system', path: result.filePath };
         }
     }
 
-    const path = await ctx.app.fileManager.getAvailablePathForAttachment(fileName, source.path);
+    return {
+        kind: 'vault',
+        path: await ctx.app.fileManager.getAvailablePathForAttachment(fileName, source.path),
+    };
+}
 
-    await ctx.app.vault.createBinary(path, bytes.slice().buffer as ArrayBuffer);
+async function writeTarget(
+    ctx: ZiminosContext,
+    target: ExportTarget,
+    bytes: Uint8Array,
+): Promise<string> {
+    if (target.kind === 'system') {
+        const fs = require('node:fs/promises') as {
+            writeFile(path: string, data: Uint8Array): Promise<void>;
+        };
 
-    return path;
+        await fs.writeFile(target.path, bytes);
+
+        return target.path;
+    }
+
+    await ctx.app.vault.createBinary(target.path, bytes.slice().buffer as ArrayBuffer);
+
+    return target.path;
 }
 
 /** Electron 只负责系统保存框；探不到时调用方有公开 Vault API 的完整降级路径 */

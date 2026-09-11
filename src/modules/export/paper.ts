@@ -49,6 +49,25 @@ interface PaperMetrics {
     readonly lineHeight: string;
 }
 
+/**
+ * 正文栏那一个元素，按这个顺序找。
+ *
+ * 阅读态是 `.markdown-preview-sizer`；编辑态**必须是 `.cm-content`**，不能是 `.cm-sizer`——
+ * 后者是整个编辑器那一栏，左右内边距为 0，量它会得到「纸和编辑器一样宽、正文顶到纸边」，
+ * 也正是 v0.25.0 里文字被挤出显示范围的原因。`.cm-content` 才是行真正落脚的盒子，
+ * 它的内边距就是 Obsidian 的 `--file-margins`。
+ */
+const COLUMN_SELECTORS = ['.markdown-preview-sizer', '.cm-content', '.cm-sizer'] as const;
+
+/**
+ * 纸的最小页边。
+ *
+ * 留白优先取真实值，但**不能取到 0**：量到的那个元素未必自己带边距（编辑态常常不带），
+ * 而一张文字顶着边框的纸不是排版紧凑，是排版坏了。所以这不是「发明尺寸」的回潮——
+ * 它回答的是另一个问题：纸总得有边。
+ */
+const MIN_PAGE_MARGIN = 48;
+
 /** 只有在连编辑区都探不到时才用的兜底：它是「没有事实可依」时的最后一手，不是默认版面 */
 const FALLBACK_METRICS: PaperMetrics = {
     width: 760,
@@ -111,6 +130,8 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
                 left: '0',
                 top: '0',
                 zIndex: 'auto',
+                // 停靠时它是全透明的（见 parkStage），借给预览就得把这层隐藏收回来
+                opacity: '1',
                 transform: `scale(${scale})`,
                 transformOrigin: 'top left',
             });
@@ -130,12 +151,23 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
     };
 }
 
-/** 舞台不被预览借走时停在屏幕外：看不见、不挡事、不参与任何命中测试 */
+/**
+ * 舞台不被预览借走时停在哪儿：**屏幕左上角，完全透明、不吃鼠标、压在所有内容之下**。
+ *
+ * v0.25.0 之前它停在 `left: -100000px`。那个位置的代价是看不见的：
+ * Obsidian Bases 这类视图按「进没进视口」决定要不要把单元格画出来，
+ * 而一张停在十万像素之外的纸永远不进视口——于是导出的图里表格有行、有「4 个结果」，
+ * 单元格却是空的。挪回视口之内、靠透明度隐藏，那类懒渲染才会真的发生。
+ *
+ * 透明度写在舞台上而不是纸上：被拍的是纸，dom-to-image 读的是**它自己**的计算样式，
+ * 祖先的 opacity 不参与，因此这层隐藏不会把导出的图一起变透明。
+ */
 function parkStage(stage: HTMLElement): void {
     Object.assign(stage.style, {
         position: 'fixed',
-        left: '-100000px',
+        left: '0',
         top: '0',
+        opacity: '0',
         width: 'max-content',
         height: 'max-content',
         overflow: 'visible',
@@ -160,7 +192,11 @@ function measureSource(ctx: ZiminosContext, file: TFile): PaperMetrics {
 
     if (!view || view.file?.path !== file.path) return FALLBACK_METRICS;
 
-    const element = view.contentEl.querySelector<HTMLElement>('.markdown-preview-sizer, .cm-sizer');
+    // 按顺序找而不是交给一条并列选择器：querySelector 返回的是**文档顺序**里的第一个，
+    // 两种视图同时在场时谁先谁后并无保证，而这两者量出来的东西差着一整条编辑器的宽度。
+    const element = COLUMN_SELECTORS
+        .map((selector) => view.contentEl.querySelector<HTMLElement>(selector))
+        .find((found): found is HTMLElement => found !== null);
 
     if (!element) return FALLBACK_METRICS;
 
@@ -170,8 +206,8 @@ function measureSource(ctx: ZiminosContext, file: TFile): PaperMetrics {
 
     if (!Number.isFinite(width) || width < 1) return FALLBACK_METRICS;
 
-    const paddingLeft = pixels(computed.paddingLeft);
-    const paddingRight = pixels(computed.paddingRight);
+    const paddingLeft = Math.max(MIN_PAGE_MARGIN, pixels(computed.paddingLeft));
+    const paddingRight = Math.max(MIN_PAGE_MARGIN, pixels(computed.paddingRight));
     const paddingTop = pixels(computed.paddingTop);
 
     return {
@@ -180,7 +216,7 @@ function measureSource(ctx: ZiminosContext, file: TFile): PaperMetrics {
         paddingRight,
         // 上下留白取真实值；真实值是 0 时跟左右一样宽——
         // 那不是发明，是「这一栏的留白就这么宽」在另一个方向上的同一句话。
-        paddingY: paddingTop > 0 ? paddingTop : Math.max(paddingLeft, paddingRight),
+        paddingY: Math.max(MIN_PAGE_MARGIN, paddingTop > 0 ? paddingTop : Math.max(paddingLeft, paddingRight)),
         fontSize: computed.fontSize,
         fontFamily: computed.fontFamily,
         lineHeight: computed.lineHeight,

@@ -1455,13 +1455,18 @@ a[href^="ziminos-eagle://"] {
     --ziminos-guide-color: var(--text-faint);
 }
 
-.ziminos-export-guides .ziminos-export-markdown ul,
-.ziminos-export-guides .ziminos-export-markdown ol {
+/*
+ * 只有**嵌套**的列表才画线：`li > ul` 而不是 `ul`。
+ * 参考线回答的是「这几条归谁管」，而顶层列表没有父级——给它画一条，
+ * 得到的是一根贴着左边、什么都不表示的竖线（v0.25.0 就是这么错的）。
+ */
+.ziminos-export-guides .ziminos-export-markdown li > ul,
+.ziminos-export-guides .ziminos-export-markdown li > ol {
     position: relative;
 }
 
-.ziminos-export-guides .ziminos-export-markdown ul::before,
-.ziminos-export-guides .ziminos-export-markdown ol::before {
+.ziminos-export-guides .ziminos-export-markdown li > ul::before,
+.ziminos-export-guides .ziminos-export-markdown li > ol::before {
     content: "";
     position: absolute;
     top: 0.2em;

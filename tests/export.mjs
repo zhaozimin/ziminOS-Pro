@@ -405,7 +405,19 @@ test('纸的宽度、留白与字号量自编辑区，不再有任何一个凭�
 
     assert.match(paper, /measureSource/);
     assert.match(paper, /getComputedStyle\(element\)/);
-    assert.match(paper, /\.markdown-preview-sizer, \.cm-sizer/);
+
+    // 编辑态必须量 .cm-content 而不是 .cm-sizer：后者是整个编辑器那一栏、左右内边距为 0，
+    // 量它会得到「纸和编辑器一样宽、正文顶到纸边」——v0.25.0 的文字溢出就是这么来的。
+    assert.match(paper, /COLUMN_SELECTORS/);
+    assert.match(paper, /'\.markdown-preview-sizer', '\.cm-content'/);
+
+    // 留白优先取真实值，但不能取到 0：量到的那个元素未必自己带边距，而纸总得有边
+    assert.match(paper, /MIN_PAGE_MARGIN/);
+
+    // 纸停在视口之内、靠透明度隐藏：停在十万像素之外时，Bases 这类按可见性懒渲染的视图
+    // 永远不会把单元格画出来，导出的图里表格有行却是空的
+    assert.doesNotMatch(paper, /-100000px/);
+    assert.match(paper, /opacity: '0'/);
 
     // 三处旧的发明：夹取区间、写死的内边距、按 scrollWidth 把纸加宽
     assert.doesNotMatch(paper, /ARTICLE_WIDTH_MIN|ARTICLE_WIDTH_MAX/);
@@ -430,8 +442,45 @@ test('链接只写进 PDF，PNG 当场说自己点不了', () => {
 
     // 量的是那一行里真正有墨的部分，不是整行的盒子——一行 flex 横跨整张纸宽
     assert.match(decorate, /function inkWithin/);
-    // 用布局值而不是 getBoundingClientRect：后者会把预览那层缩放一起算进去
-    assert.doesNotMatch(decorate, /getBoundingClientRect/);
+    // 页眉页脚走 offsetLeft/offsetTop 链，天生不受祖先 transform 影响
+    assert.match(decorate, /offsetParent/);
+
+    // 正文里本来就有的链接同样要能点：导出成 PDF 之后外链全变死字，
+    // 是个不该由用户承担的退化——那些链接是他自己写进笔记里的
+    assert.match(decorate, /function anchorRegions/);
+    assert.match(decorate, /querySelectorAll<HTMLAnchorElement>\('a\[href\]'\)/);
+    // 逐行取矩形：一条横跨两行的链接，整包围盒会把中间那段无关的空白也圈成可点
+    assert.match(decorate, /getClientRects\(\)/);
+    // 客户端矩形会带上预览那层缩放，必须除回去，否则本函数在缩放与否时答案不同
+    assert.match(decorate, /article\.offsetWidth/);
+});
+
+test('先问去处再做图：保存框立刻弹出，选完路径弹窗才关', () => {
+    const exporter = code('src/modules/export/exporter.ts');
+    const modal = code('src/modules/export/modal.ts');
+
+    // 旧顺序是先栅格化（长文好几秒、屏幕上什么都没有）再弹保存框，
+    // 而且那几秒完全可能白花——用户在保存框里按了取消。
+    const asked = exporter.indexOf('chooseTarget(ctx, file, candidate.format)');
+    const drawn = exporter.indexOf('domToImage.toBlob');
+
+    assert.ok(asked > 0 && drawn > asked, '必须先 chooseTarget 再栅格化');
+
+    // 取消保存框＝这次没导出成，弹窗留着：他刚调了十分钟的那套风格不该因此消失
+    assert.match(modal, /if \(!await this\.confirm\(this\.value\)\) return;/);
+    assert.match(exporter, /return picked\.target !== null;/);
+
+    // 真的要等的那一段得有个一直在的提示（0＝不自动消失）
+    assert.match(exporter, /new Notice\('正在生成，请稍候…', 0\)/);
+    assert.match(exporter, /progress\.hide\(\)/);
+});
+
+test('参考线只画给嵌套列表：顶层没有父级，那条线什么都不表示', () => {
+    const css = source('vault/.obsidian/plugins/ziminos/styles.css');
+
+    assert.match(css, /\.ziminos-export-guides \.ziminos-export-markdown li > ul::before/);
+    // v0.25.0 画给了所有 ul，于是列表左边多出一条贴边的竖线
+    assert.doesNotMatch(css, /\.ziminos-export-guides \.ziminos-export-markdown ul::before/);
 });
 
 test('演示页是生成物：改了插件却忘了重新生成，这里当场变红', async () => {

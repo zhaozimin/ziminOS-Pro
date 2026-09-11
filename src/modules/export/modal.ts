@@ -15,7 +15,7 @@
  */
 
 import { Modal, Notice, Setting, TFile } from 'obsidian';
-import type { App, TextComponent } from 'obsidian';
+import type { App, ButtonComponent, TextComponent } from 'obsidian';
 import {
     DEFAULT_EXPORT_STYLE,
     EXPORT_ALIGN_LABELS,
@@ -73,6 +73,15 @@ function syncText(text: TextComponent, value: string): void {
     if (text.getValue() !== value) text.setValue(value);
 }
 
+/**
+ * 「用户按下了导出」这件事的接收者。返回 true 才关窗。
+ *
+ * 它存在的理由是一条顺序：**先问去处，再做图**。导出器在这个回调里弹系统保存框——
+ * 那一步是瞬时的，于是点完按钮当场就有反应；若用户在保存框里按了取消，
+ * 回调返回 false，预览留在原地等他改主意，而不是先把窗关掉、再让他对着空屏幕等几秒。
+ */
+type ExportConfirm = (style: ExportStyle) => Promise<boolean>;
+
 export class ExportPreviewModal extends Modal {
     private readonly paper: ExportPaper;
     private readonly initial: ExportStyle;
@@ -88,14 +97,24 @@ export class ExportPreviewModal extends Modal {
     private logo: ResolvedLogo | null = null;
     /** 解析标志是异步的；只有最后一次请求有权写回结果，否则快速换两张图会画错那一张 */
     private logoToken = 0;
+    private readonly confirm: ExportConfirm;
+    /** 正在问去处。挡住第二次点击——两个保存框叠在一起谁都说不清是哪一次导出 */
+    private asking = false;
 
-    constructor(app: App, paper: ExportPaper, initial: ExportStyle, context: ExportTemplateContext) {
+    constructor(
+        app: App,
+        paper: ExportPaper,
+        initial: ExportStyle,
+        context: ExportTemplateContext,
+        confirm: ExportConfirm,
+    ) {
         super(app);
 
         this.paper = paper;
         this.initial = initial;
         this.context = context;
         this.value = initial;
+        this.confirm = confirm;
     }
 
     openAndGetValue(): Promise<ExportStyle | null> {
@@ -571,16 +590,38 @@ export class ExportPreviewModal extends Modal {
                 button
                     .setButtonText('导出')
                     .setCta()
-                    .onClick(() => {
-                        this.settle(this.value);
-                        this.close();
-                    });
+                    .onClick(() => void this.finish(button));
             });
     }
 
     // ============================================================
     // 状态
     // ============================================================
+
+    /**
+     * 按下导出：先问去处，问到了才关窗。
+     *
+     * 取消保存框与导出失败在这里是同一种结局——弹窗留着。它们对用户是同一件事：
+     * 「这次没导出成」，而他刚调了十分钟的那套风格不该因此消失。
+     */
+    private async finish(button: ButtonComponent): Promise<void> {
+        if (this.asking) return;
+
+        this.asking = true;
+        button.setDisabled(true);
+
+        try {
+            if (!await this.confirm(this.value)) return;
+
+            this.settle(this.value);
+            this.close();
+        } catch (error) {
+            new Notice(`导出失败：${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            this.asking = false;
+            button.setDisabled(false);
+        }
+    }
 
     private update(patch: Partial<ExportStyle>): void {
         const previous = this.value.logo;

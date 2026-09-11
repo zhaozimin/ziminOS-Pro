@@ -40894,6 +40894,28 @@ function linkRegions(article, style) {
   };
   collect(".ziminos-export-header", style.headerLink);
   collect(".ziminos-export-footer", style.footerLink);
+  for (const region of anchorRegions(article)) regions.push(region);
+  return regions;
+}
+function anchorRegions(article) {
+  var _a2;
+  const regions = [];
+  const base = article.getBoundingClientRect();
+  const scale = base.width > 0 && article.offsetWidth > 0 ? base.width / article.offsetWidth : 1;
+  for (const anchor of article.querySelectorAll("a[href]")) {
+    const url = exportLinkUrl((_a2 = anchor.getAttribute("href")) != null ? _a2 : "");
+    if (!url) continue;
+    for (const rect of anchor.getClientRects()) {
+      if (rect.width < 1 || rect.height < 1) continue;
+      regions.push({
+        url,
+        x: (rect.left - base.left) / scale,
+        y: (rect.top - base.top) / scale,
+        width: rect.width / scale,
+        height: rect.height / scale
+      });
+    }
+  }
   return regions;
 }
 function inkWithin(line, article) {
@@ -41094,7 +41116,7 @@ function syncText(text5, value) {
   if (text5.getValue() !== value) text5.setValue(value);
 }
 var ExportPreviewModal = class extends import_obsidian30.Modal {
-  constructor(app, paper, initial, context) {
+  constructor(app, paper, initial, context, confirm) {
     super(app);
     this.resolver = null;
     this.refreshers = [];
@@ -41106,10 +41128,13 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
     this.logo = null;
     /** 解析标志是异步的；只有最后一次请求有权写回结果，否则快速换两张图会画错那一张 */
     this.logoToken = 0;
+    /** 正在问去处。挡住第二次点击——两个保存框叠在一起谁都说不清是哪一次导出 */
+    this.asking = false;
     this.paper = paper;
     this.initial = initial;
     this.context = context;
     this.value = initial;
+    this.confirm = confirm;
   }
   openAndGetValue() {
     this.open();
@@ -41417,15 +41442,33 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
     }).addButton((button) => {
       button.setButtonText("\u53D6\u6D88").onClick(() => this.close());
     }).addButton((button) => {
-      button.setButtonText("\u5BFC\u51FA").setCta().onClick(() => {
-        this.settle(this.value);
-        this.close();
-      });
+      button.setButtonText("\u5BFC\u51FA").setCta().onClick(() => void this.finish(button));
     });
   }
   // ============================================================
   // 状态
   // ============================================================
+  /**
+   * 按下导出：先问去处，问到了才关窗。
+   *
+   * 取消保存框与导出失败在这里是同一种结局——弹窗留着。它们对用户是同一件事：
+   * 「这次没导出成」，而他刚调了十分钟的那套风格不该因此消失。
+   */
+  async finish(button) {
+    if (this.asking) return;
+    this.asking = true;
+    button.setDisabled(true);
+    try {
+      if (!await this.confirm(this.value)) return;
+      this.settle(this.value);
+      this.close();
+    } catch (error) {
+      new import_obsidian30.Notice(`\u5BFC\u51FA\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.asking = false;
+      button.setDisabled(false);
+    }
+  }
   update(patch) {
     const previous = this.value.logo;
     this.value = { ...this.value, ...patch };
@@ -41462,6 +41505,8 @@ function applySliderState(rows, state) {
 
 // src/modules/export/paper.ts
 var import_obsidian31 = require("obsidian");
+var COLUMN_SELECTORS = [".markdown-preview-sizer", ".cm-content", ".cm-sizer"];
+var MIN_PAGE_MARGIN = 48;
 var FALLBACK_METRICS = {
   width: 760,
   paddingLeft: 56,
@@ -41506,6 +41551,8 @@ async function renderPaper(ctx, file) {
         left: "0",
         top: "0",
         zIndex: "auto",
+        // 停靠时它是全透明的（见 parkStage），借给预览就得把这层隐藏收回来
+        opacity: "1",
         transform: `scale(${scale})`,
         transformOrigin: "top left"
       });
@@ -41527,8 +41574,9 @@ async function renderPaper(ctx, file) {
 function parkStage(stage) {
   Object.assign(stage.style, {
     position: "fixed",
-    left: "-100000px",
+    left: "0",
     top: "0",
+    opacity: "0",
     width: "max-content",
     height: "max-content",
     overflow: "visible",
@@ -41541,14 +41589,14 @@ function measureSource(ctx, file) {
   var _a2;
   const view = ctx.app.workspace.getActiveViewOfType(import_obsidian31.MarkdownView);
   if (!view || ((_a2 = view.file) == null ? void 0 : _a2.path) !== file.path) return FALLBACK_METRICS;
-  const element = view.contentEl.querySelector(".markdown-preview-sizer, .cm-sizer");
+  const element = COLUMN_SELECTORS.map((selector) => view.contentEl.querySelector(selector)).find((found) => found !== null);
   if (!element) return FALLBACK_METRICS;
   const box = element.getBoundingClientRect();
   const computed = getComputedStyle(element);
   const width = Math.round(box.width);
   if (!Number.isFinite(width) || width < 1) return FALLBACK_METRICS;
-  const paddingLeft = pixels(computed.paddingLeft);
-  const paddingRight = pixels(computed.paddingRight);
+  const paddingLeft = Math.max(MIN_PAGE_MARGIN, pixels(computed.paddingLeft));
+  const paddingRight = Math.max(MIN_PAGE_MARGIN, pixels(computed.paddingRight));
   const paddingTop = pixels(computed.paddingTop);
   return {
     width,
@@ -41556,7 +41604,7 @@ function measureSource(ctx, file) {
     paddingRight,
     // 上下留白取真实值；真实值是 0 时跟左右一样宽——
     // 那不是发明，是「这一栏的留白就这么宽」在另一个方向上的同一句话。
-    paddingY: paddingTop > 0 ? paddingTop : Math.max(paddingLeft, paddingRight),
+    paddingY: Math.max(MIN_PAGE_MARGIN, paddingTop > 0 ? paddingTop : Math.max(paddingLeft, paddingRight)),
     fontSize: computed.fontSize,
     fontFamily: computed.fontFamily,
     lineHeight: computed.lineHeight
@@ -41672,16 +41720,27 @@ async function exportCurrentNote(ctx) {
     new import_obsidian32.Notice("\u6B63\u5728\u751F\u6210\u9884\u89C8\u2026");
     paper = await renderPaper(ctx, file);
     const context = templateContextOf(file);
+    const picked = { target: null };
     const style = await new ExportPreviewModal(
       ctx.app,
       paper,
       ctx.settings.exportStyle,
-      context
+      context,
+      async (candidate) => {
+        picked.target = await chooseTarget(ctx, file, candidate.format);
+        return picked.target !== null;
+      }
     ).openAndGetValue();
-    if (!style) return;
+    const target = picked.target;
+    if (!style || !target) return;
     await rememberStyle(ctx, style);
-    const saved = await capture(ctx, file, paper, style, context);
-    if (saved) new import_obsidian32.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${saved}`);
+    const progress = new import_obsidian32.Notice("\u6B63\u5728\u751F\u6210\uFF0C\u8BF7\u7A0D\u5019\u2026", 0);
+    try {
+      const saved = await capture(ctx, file, paper, style, context, target);
+      new import_obsidian32.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${saved}`);
+    } finally {
+      progress.hide();
+    }
   } catch (error) {
     const message2 = error instanceof Error ? error.message : String(error);
     new import_obsidian32.Notice(`\u5BFC\u51FA\u5931\u8D25\uFF1A${message2}`);
@@ -41693,7 +41752,7 @@ async function rememberStyle(ctx, style) {
   ctx.settings.exportStyle = style;
   await ctx.saveSettings();
 }
-async function capture(ctx, file, paper, style, context) {
+async function capture(ctx, file, paper, style, context, target) {
   applyDecorations(paper.article, style, context, await resolveLogo(ctx.app, style.logo));
   const { width, height } = paper.measure();
   const blob = await import_dom_to_image_more.default.toBlob(paper.article, {
@@ -41705,9 +41764,9 @@ async function capture(ctx, file, paper, style, context) {
   if (!blob) throw new Error("\u6D4F\u89C8\u5668\u6CA1\u6709\u751F\u6210\u56FE\u7247\u6570\u636E");
   const links = linkRegions(paper.article, style);
   const bytes = style.format === "png" ? new Uint8Array(await blob.arrayBuffer()) : await pdfBytes(blob, width, height, links);
-  const saved = await saveExport(ctx, file, style.format, bytes);
-  if (saved && style.format === "png" && links.length) {
-    new import_obsidian32.Notice("\u9875\u7709/\u9875\u811A\u7684\u94FE\u63A5\u6CA1\u6709\u5199\u8FDB PNG\u2014\u2014\u56FE\u7247\u70B9\u4E0D\u4E86\u3002\u8981\u53EF\u70B9\u7684\u94FE\u63A5\uFF0C\u5BFC\u51FA\u6210 PDF\u3002");
+  const saved = await writeTarget(ctx, target, bytes);
+  if (style.format === "png" && links.length) {
+    new import_obsidian32.Notice("\u7B14\u8BB0\u91CC\u7684\u94FE\u63A5\u6CA1\u6709\u5199\u8FDB PNG\u2014\u2014\u56FE\u7247\u70B9\u4E0D\u4E86\u3002\u8981\u53EF\u70B9\u7684\u94FE\u63A5\uFF0C\u5BFC\u51FA\u6210 PDF\u3002");
   }
   return saved;
 }
@@ -41740,7 +41799,7 @@ async function pdfBytes(image, width, height, links) {
   }
   return new Uint8Array(pdf.output("arraybuffer"));
 }
-async function saveExport(ctx, source, format, bytes) {
+async function chooseTarget(ctx, source, format) {
   const fileName = `${safeExportName(source.basename)}.${format}`;
   if (import_obsidian32.Platform.isDesktopApp) {
     const dialog = resolveSaveDialog();
@@ -41752,14 +41811,22 @@ async function saveExport(ctx, source, format, bytes) {
         properties: ["showOverwriteConfirmation", "createDirectory"]
       });
       if (result.canceled || !result.filePath) return null;
-      const fs = require("node:fs/promises");
-      await fs.writeFile(result.filePath, bytes);
-      return result.filePath;
+      return { kind: "system", path: result.filePath };
     }
   }
-  const path = await ctx.app.fileManager.getAvailablePathForAttachment(fileName, source.path);
-  await ctx.app.vault.createBinary(path, bytes.slice().buffer);
-  return path;
+  return {
+    kind: "vault",
+    path: await ctx.app.fileManager.getAvailablePathForAttachment(fileName, source.path)
+  };
+}
+async function writeTarget(ctx, target, bytes) {
+  if (target.kind === "system") {
+    const fs = require("node:fs/promises");
+    await fs.writeFile(target.path, bytes);
+    return target.path;
+  }
+  await ctx.app.vault.createBinary(target.path, bytes.slice().buffer);
+  return target.path;
 }
 function resolveSaveDialog() {
   var _a2, _b2;

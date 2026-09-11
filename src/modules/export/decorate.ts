@@ -256,6 +256,48 @@ export function linkRegions(article: HTMLElement, style: ExportStyle): LinkRegio
     collect('.ziminos-export-header', style.headerLink);
     collect('.ziminos-export-footer', style.footerLink);
 
+    // 正文里本来就有的链接同样该能点。
+    // 「导出成 PDF 之后所有外链变成死字」是个不该由用户承担的退化——
+    // 那些链接是他写进笔记里的，图片留不住它们，而 PDF 留得住。
+    for (const region of anchorRegions(article)) regions.push(region);
+
+    return regions;
+}
+
+/**
+ * 正文里每一个外链的可点区域。
+ *
+ * 用 `getClientRects()` 而不是一个整的包围盒：一条横跨两行的链接，包围盒会把中间那段
+ * 与它无关的空白也圈进去，用户点在两行之间的缝隙上也会跳转。逐行取矩形才对得上他看见的下划线。
+ *
+ * 只放 http/https 过去：`app://`、`obsidian://` 与库内双链在 Obsidian 之外没有意义，
+ * 把它们写进 PDF 只会得到一个点了没反应（或者更糟，弹一个陌生的协议提示）的链接。
+ */
+function anchorRegions(article: HTMLElement): LinkRegion[] {
+    const regions: LinkRegion[] = [];
+    const base = article.getBoundingClientRect();
+    // 预览里这张纸是被 transform 缩过的，客户端矩形会一并带上那个比例。
+    // 拿「画出来多宽 ÷ 布局上多宽」把它除回去，于是本函数在缩放与不缩放时给出同一组坐标。
+    const scale = base.width > 0 && article.offsetWidth > 0 ? base.width / article.offsetWidth : 1;
+
+    for (const anchor of article.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+        const url = exportLinkUrl(anchor.getAttribute('href') ?? '');
+
+        if (!url) continue;
+
+        for (const rect of anchor.getClientRects()) {
+            if (rect.width < 1 || rect.height < 1) continue;
+
+            regions.push({
+                url,
+                x: (rect.left - base.left) / scale,
+                y: (rect.top - base.top) / scale,
+                width: rect.width / scale,
+                height: rect.height / scale,
+            });
+        }
+    }
+
     return regions;
 }
 
