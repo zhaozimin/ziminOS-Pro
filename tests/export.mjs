@@ -1,9 +1,10 @@
 /**
- * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 export/layout 纯函数，
- *          并读取导出器、命令表与 package.json 的装配事实
- * [OUTPUT]: 验证长页画布自适应、PDF 单页边界、装饰占位符、完整 DOM 栅格化与两种格式接线
- * [POS]: tests 的导出模块专项契约；浏览器真机负责验视觉，本文件先钉住不会静默截断的尺寸算法
- *        与“一份渲染结果、两种交付格式”的架构边界
+ * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 export/layout 与 core/exportStyle 两层纯函数，
+ *          并读取纸面层、装饰层、预览弹窗、导出器与命令表的装配事实
+ * [OUTPUT]: 验证长页画布自适应、PDF 单页边界、装饰占位符、水印几何与落点、风格验形，
+ *           以及「内容渲一次、装饰重放无数次」这条预览赖以成立的架构边界
+ * [POS]: tests 的导出模块专项契约；浏览器真机负责验视觉，本文件先钉住不会静默截断的尺寸算法、
+ *        界面范围与持久化区间同源，以及预览绝不重新渲染正文这三件看不见却最容易被改坏的事
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -13,12 +14,13 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { buildExportDemo, DEMO_PATH } from '../docs/export-demo/build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-async function loadLayout() {
+async function loadModule(relative) {
     const result = await build({
-        entryPoints: [path.join(ROOT, 'src/modules/export/layout.ts')],
+        entryPoints: [path.join(ROOT, relative)],
         bundle: true,
         format: 'esm',
         platform: 'node',
@@ -30,7 +32,24 @@ async function loadLayout() {
     return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
 }
 
-const layout = await loadLayout();
+function source(relative) {
+    return readFileSync(path.join(ROOT, relative), 'utf8');
+}
+
+/**
+ * 去掉注释之后的源码。
+ *
+ * 「这个文件里不许出现 X」这类断言必须只看代码：本仓库的注释恰恰在**解释**为什么不许有 X，
+ * 于是照全文匹配的断言会被自己的说明文字判为失败——第一版就栽在这儿。
+ */
+function code(relative) {
+    return source(relative)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+const layout = await loadModule('src/modules/export/layout.ts');
+const style = await loadModule('src/core/exportStyle.ts');
 
 test('短文保留 2x，超长文自动降采样但不越过画布边界', () => {
     assert.equal(layout.captureScale(800, 3_000), 2);
@@ -67,21 +86,325 @@ test('页眉页脚与水印只替换公开占位符，文件名跨平台安全',
     assert.equal(layout.safeExportName('答疑/Alex: 第1篇'), '答疑－Alex－ 第1篇');
 });
 
-test('导出命令只渲染一次完整 DOM，再分流 PNG 与单页 PDF', () => {
-    const exporter = readFileSync(path.join(ROOT, 'src/modules/export/exporter.ts'), 'utf8');
-    const commands = readFileSync(path.join(ROOT, 'src/core/commands.ts'), 'utf8');
-    const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+test('一枚标记可以只有字、只有图，也可以图在左字在右', () => {
+    const textOnly = layout.watermarkMark({ textWidth: 100, fontSize: 20, logoWidth: 0, logoHeight: 0 });
+
+    assert.equal(textOnly.width, 100);
+    assert.equal(textOnly.height, 27);
+    assert.equal(textOnly.logoWidth, 0);
+
+    const logoOnly = layout.watermarkMark({ textWidth: 0, fontSize: 20, logoWidth: 60, logoHeight: 40 });
+
+    // 只有图时没有图字间距可言，宽度就是图的宽度
+    assert.equal(logoOnly.width, 60);
+    assert.equal(logoOnly.height, 40);
+    assert.equal(logoOnly.logoY, 0);
+
+    const both = layout.watermarkMark({ textWidth: 100, fontSize: 20, logoWidth: 60, logoHeight: 40 });
+
+    // 图在左、字在右，中间按字号留一份空（round(20 × 0.45) = 9）
+    assert.equal(both.width, 169);
+    // 高度取两者之高：图比一行字高，于是字在图的正中对齐
+    assert.equal(both.height, 40);
+    assert.equal(both.textX, 119);
+    assert.equal(both.textY, 20);
+});
+
+test('水印砖按旋转后的外接矩形加间距，角度变大不会让两行挤在一起', () => {
+    const mark = layout.watermarkMark({ textWidth: 100, fontSize: 20, logoWidth: 0, logoHeight: 0 });
+    const flat = layout.watermarkTile(mark, 0, 40, 30);
+
+    // 水平时宽就是文字宽加一份横向间距，高是行高加一份纵向间距
+    assert.equal(flat.width, 140);
+    assert.equal(flat.height, 57);
+
+    const upright = layout.watermarkTile(mark, 90, 40, 30);
+
+    // 竖过来之后文字的长度改为占据高度：这正是「外接矩形」而不是「文字宽高」的意义
+    assert.ok(upright.height > flat.height);
+    assert.ok(upright.width < flat.width);
+    assert.ok(upright.height >= 100 + 30);
+
+    const tilted = layout.watermarkTile(mark, 45, 0, 0);
+
+    assert.ok(tilted.width > 100 * Math.SQRT1_2);
+    assert.ok(tilted.height > 100 * Math.SQRT1_2);
+
+    // 间距是唯一能把砖变大的旋钮方向：调大间距绝不会让砖反而变小
+    const loose = layout.watermarkTile(mark, 45, 80, 60);
+
+    assert.equal(loose.width - tilted.width, 80);
+    assert.equal(loose.height - tilted.height, 60);
+
+    // 标志把标记撑大，砖必须跟着大——否则平铺时相邻两枚标志会互相压住
+    const withLogo = layout.watermarkMark({ textWidth: 100, fontSize: 20, logoWidth: 60, logoHeight: 40 });
+    const logoTile = layout.watermarkTile(withLogo, 0, 40, 30);
+
+    assert.ok(logoTile.width > flat.width);
+    assert.ok(logoTile.height > flat.height);
+});
+
+test('单个水印的九种落点各自成立，靠右靠下按「容器减图」留边', () => {
+    assert.equal(layout.watermarkPosition('top-left', 40, 30), '40px 30px');
+    assert.equal(layout.watermarkPosition('middle-center', 40, 30), '50% 50%');
+    assert.equal(
+        layout.watermarkPosition('bottom-right', 40, 30),
+        'calc(100% - 40px) calc(100% - 30px)',
+    );
+    assert.equal(layout.watermarkPosition('bottom-left', 0, 0), '0px calc(100% - 0px)');
+
+    // 负数只可能来自被手改过的 data.json；夹到 0 而不是把图顶出纸外
+    assert.equal(layout.watermarkPosition('top-left', -20, -10), '0px 0px');
+});
+
+test('水印 SVG 让图与字一起转、一起淡，并对文本转义', () => {
+    const mark = layout.watermarkMark({ textWidth: 120, fontSize: 18, logoWidth: 0, logoHeight: 0 });
+    const tile = { width: 200, height: 100 };
+    const svg = layout.watermarkSvg({
+        text: '赵子民 <ziminOS> & Co.',
+        logoDataUrl: '',
+        mark,
+        tile,
+        fontSize: 18,
+        angle: -28,
+        color: '#333333',
+        fontFamily: 'LXGW WenKai GB Screen',
+        opacity: 14,
+    });
+
+    // 旋转与不透明度都挂在外层 <g> 上：图与字因此不可能各转各的、各淡各的
+    assert.match(svg, /<g opacity="0\.14" transform="rotate\(-28 100 50\)/);
+    assert.match(svg, /font-size="18"/);
+    assert.match(svg, /&lt;ziminOS&gt; &amp; Co\./);
+    assert.doesNotMatch(svg, /<ziminOS>/);
+    assert.doesNotMatch(svg, /<image/);
+});
+
+test('水印带标志时嵌入的是自包含 data URI，不是对文件的引用', () => {
+    const mark = layout.watermarkMark({ textWidth: 0, fontSize: 18, logoWidth: 80, logoHeight: 40 });
+    const tile = layout.watermarkTile(mark, 0, 100, 80);
+    const svg = layout.watermarkSvg({
+        text: '',
+        logoDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        mark,
+        tile,
+        fontSize: 18,
+        angle: 0,
+        color: '#333333',
+        fontFamily: 'sans-serif',
+        opacity: 20,
+    });
+
+    assert.match(svg, /<image /);
+    assert.match(svg, /href="data:image\/png;base64,iVBORw0KGgo="/);
+    assert.match(svg, /width="80" height="40"/);
+    // 没有文字就不画 <text>：一个空的文本节点会在某些渲染器里留下一个基线高的空隙
+    assert.doesNotMatch(svg, /<text/);
+});
+
+test('滑块表就是验形区间：界面拖得到的值，重启之后一定还认', () => {
+    const numericKeys = Object.entries(style.DEFAULT_EXPORT_STYLE)
+        .filter(([, value]) => typeof value === 'number')
+        .map(([key]) => key)
+        .sort();
+
+    // 一根滑块对应一个数字字段，不多不少——多出来的没人画，少掉的没人验形
+    assert.deepEqual(style.EXPORT_SLIDERS.map((spec) => spec.key).sort(), numericKeys);
+
+    for (const spec of style.EXPORT_SLIDERS) {
+        const fallback = style.DEFAULT_EXPORT_STYLE[spec.key];
+
+        assert.ok(spec.min <= fallback && fallback <= spec.max, `${spec.key} 的默认值不在自己的区间里`);
+        assert.ok(spec.step > 0);
+    }
+});
+
+test('导出风格的越界数字夹回区间，坏值回落默认，好值原样通过', () => {
+    assert.deepEqual(style.normalizeExportStyle(undefined), style.DEFAULT_EXPORT_STYLE);
+    assert.deepEqual(style.normalizeExportStyle('坏掉的 JSON'), style.DEFAULT_EXPORT_STYLE);
+
+    const clamped = style.normalizeExportStyle({
+        watermarkOpacity: 999,
+        watermarkGapX: -50,
+        watermarkAngle: 1_000,
+    });
+
+    assert.equal(clamped.watermarkOpacity, 100);
+    assert.equal(clamped.watermarkGapX, 0);
+    assert.equal(clamped.watermarkAngle, 90);
+
+    const garbage = style.normalizeExportStyle({
+        format: 'jpg',
+        headerAlign: '居中',
+        watermarkMode: 'scatter',
+        watermarkAnchor: 'nowhere',
+        watermarkSize: Number.NaN,
+        header: 42,
+    });
+
+    assert.equal(garbage.format, style.DEFAULT_EXPORT_STYLE.format);
+    assert.equal(garbage.headerAlign, style.DEFAULT_EXPORT_STYLE.headerAlign);
+    assert.equal(garbage.watermarkMode, style.DEFAULT_EXPORT_STYLE.watermarkMode);
+    assert.equal(garbage.watermarkAnchor, style.DEFAULT_EXPORT_STYLE.watermarkAnchor);
+    assert.equal(garbage.watermarkSize, style.DEFAULT_EXPORT_STYLE.watermarkSize);
+    assert.equal(garbage.header, style.DEFAULT_EXPORT_STYLE.header);
+
+    const kept = style.normalizeExportStyle({
+        format: 'pdf',
+        header: '赵子民 · {date}',
+        headerAlign: 'right',
+        watermarkMode: 'single',
+        watermarkAnchor: 'bottom-left',
+        watermarkOpacity: 22,
+        logo: '90-system/logo.png',
+        watermarkLogoSize: 96,
+    });
+
+    assert.equal(kept.format, 'pdf');
+    assert.equal(kept.header, '赵子民 · {date}');
+    assert.equal(kept.headerAlign, 'right');
+    assert.equal(kept.watermarkMode, 'single');
+    assert.equal(kept.watermarkAnchor, 'bottom-left');
+    assert.equal(kept.watermarkOpacity, 22);
+    assert.equal(kept.logo, '90-system/logo.png');
+    assert.equal(kept.watermarkLogoSize, 96);
+});
+
+test('三处标志尺寸默认为 0：老库升级之后导出的那张图与升级前一模一样', () => {
+    assert.equal(style.DEFAULT_EXPORT_STYLE.logo, '');
+    assert.equal(style.DEFAULT_EXPORT_STYLE.headerLogoSize, 0);
+    assert.equal(style.DEFAULT_EXPORT_STYLE.footerLogoSize, 0);
+    assert.equal(style.DEFAULT_EXPORT_STYLE.watermarkLogoSize, 0);
+
+    // 升级前写下的那份设置里根本没有这四个键，读回来必须等于「没有标志」
+    const legacy = style.normalizeExportStyle({ format: 'png', watermark: '赵子民', watermarkOpacity: 14 });
+
+    assert.equal(legacy.logo, '');
+    assert.equal(legacy.headerLogoSize, 0);
+    assert.equal(legacy.watermarkLogoSize, 0);
+});
+
+test('每根滑块都说得出自己得先有什么，否则界面无从判断谁该变灰', () => {
+    const allowed = new Set(['text', 'logo', 'mark']);
+
+    for (const spec of style.EXPORT_SLIDERS) {
+        assert.ok(allowed.has(spec.requires), `${spec.key} 的 requires 不在闭合集合里`);
+    }
+
+    // 标志尺寸只认 logo：认成 text 或 mark，文字一空它就跟着变灰——
+    // 而那时用户正想靠它把标志打开，于是被锁在外面。
+    for (const key of ['headerLogoSize', 'footerLogoSize', 'watermarkLogoSize']) {
+        const spec = style.EXPORT_SLIDERS.find((item) => item.key === key);
+
+        assert.ok(spec, `${key} 没有对应的滑块`);
+        assert.equal(spec.requires, 'logo');
+        assert.equal(spec.min, 0, `${key} 必须能拖到 0——0 就是这一处不放标志`);
+    }
+});
+
+test('内容渲一次、装饰重放无数次：预览不得重新解释 Markdown', () => {
+    const paper = code('src/modules/export/paper.ts');
+    const decorate = code('src/modules/export/decorate.ts');
+    const modal = code('src/modules/export/modal.ts');
+
+    // 纸面层独占昂贵的那一半
+    assert.match(paper, /MarkdownRenderer\.render/);
+    assert.match(paper, /article\.scrollWidth/);
+    assert.match(paper, /article\.scrollHeight/);
+
+    // 装饰层先清后建，这是幂等的全部实现
+    assert.match(decorate, /querySelectorAll\(DECORATION_SELECTOR\)/);
+    assert.match(decorate, /export function applyDecorations/);
+    assert.doesNotMatch(decorate, /MarkdownRenderer/);
+
+    // 装饰层必须全同步：它一旦 await，帧与帧就会乱序，
+    // 用户会看见上一帧的水印盖在这一帧的排版上。标志的字节由 logo.ts 预先解析好递进来。
+    assert.doesNotMatch(decorate, /\bawait\b/);
+    assert.doesNotMatch(decorate, /\basync\b/);
+    assert.doesNotMatch(decorate, /readBinary/);
+
+    // 预览只重放装饰。它一旦碰内容渲染，每拖一格滑块就要重解析一遍整篇笔记
+    assert.match(modal, /applyDecorations\(this\.paper\.article/);
+    assert.doesNotMatch(modal, /MarkdownRenderer/);
+    assert.doesNotMatch(modal, /renderPaper/);
+});
+
+test('导出命令截图前照终值再施一次风格，并只在确认后记住这套风格', () => {
+    const exporter = code('src/modules/export/exporter.ts');
+    const commands = source('src/core/commands.ts');
+    const pkg = JSON.parse(source('package.json'));
 
     assert.match(commands, /id: 'export-current-note'/);
     assert.match(commands, /name: '导出当前笔记'/);
-    assert.match(exporter, /MarkdownRenderer\.render/);
-    assert.match(exporter, /domToImage\.toBlob/);
+
+    // 拖完滑块立刻点导出时，预览排队中的那一帧可能还没轮到——
+    // 所以截图必须发生在再放一次装饰之后，看见的与拿到的才是同一张图
+    const decorated = exporter.indexOf('applyDecorations(paper.article');
+    const captured = exporter.indexOf('domToImage.toBlob');
+
+    assert.ok(decorated > 0 && captured > decorated);
+
+    // 标志在导出前重解一次：读盘是异步的，用户完全可能在弹窗读完之前就点了导出
+    assert.match(exporter, /await resolveLogo\(ctx\.app, style\.logo\)/);
+
     assert.match(exporter, /pdf\.addImage/);
-    assert.match(exporter, /article\.scrollWidth/);
-    assert.match(exporter, /article\.scrollHeight/);
-    assert.match(exporter, /options\.header/);
-    assert.match(exporter, /options\.footer/);
-    assert.match(exporter, /options\.watermark/);
+    assert.match(exporter, /ctx\.settings\.exportStyle = style/);
+    assert.match(exporter, /openAndGetValue/);
     assert.equal(pkg.dependencies['dom-to-image-more'], '3.10.2');
     assert.equal(pkg.dependencies.jspdf, '4.2.1');
 });
+
+test('演示页是生成物：改了插件却忘了重新生成，这里当场变红', async () => {
+    const generated = await buildExportDemo();
+    const committed = readFileSync(DEMO_PATH, 'utf8');
+
+    // 不用 assert.equal——两份九万字节的字符串不相等时，它会把整份差异打进终端
+    assert.ok(
+        generated === committed,
+        'docs/导出预览交互演示.html 已过期：它的源改了但产物没跟着生成。运行 npm run demo。',
+    );
+});
+
+test('演示页嵌的是插件真源，而不是一份照着抄的仿真', () => {
+    const demo = readFileSync(DEMO_PATH, 'utf8');
+    const css = source('vault/.obsidian/plugins/ziminos/styles.css');
+    const version = JSON.parse(source('package.json')).version;
+
+    // 导出样式逐字嵌入：挑三条只可能来自插件 styles.css 的规则
+    for (const rule of [
+        '.ziminos-export-viewport {',
+        '.ziminos-export-picker.ziminos-export-grid {',
+        '.ziminos-export-controls .setting-item.ziminos-export-hidden {',
+    ]) {
+        assert.ok(css.includes(rule), `styles.css 里没有 ${rule}，这条断言该改了`);
+        assert.ok(demo.includes(rule), `演示页没有逐字嵌入 ${rule}`);
+    }
+
+    // 几何与装饰来自 esbuild 打包，而不是演示页自己又写了一遍
+    assert.match(demo, /watermarkMark/);
+    assert.match(demo, /applyDecorations/);
+    assert.ok(demo.includes(`v${version}`), '演示页的版本号与 package.json 对不上');
+
+    // 演示页永远不该自己解释 Markdown 或读盘：它只有一张写死的样张
+    assert.doesNotMatch(demo, /MarkdownRenderer/);
+});
+
+test('演示页的接缝进了类型检查，但缺了它的第一版仓库同样要编得过', () => {
+    const tsconfig = JSON.parse(source('tsconfig.json'));
+    const publish = source('publish-v1.sh');
+
+    // publish-v1.sh 把 tsconfig.json 同步给第一版，却把 docs/ 留在第二版这边。
+    // 于是第一版仓库会拿到一条指向不存在路径的 include——这正是备案里那次
+    // 「发布通道静默卡死」的形状，所以这条断言必须存在。
+    assert.ok(/^\s*tsconfig\.json\s*$/m.test(publish), 'publish-v1.sh 不再同步 tsconfig，这条断言该改了');
+    assert.ok(/^\s*docs\s*$/m.test(publish), 'docs 不再是第二版专属，这条断言该改了');
+
+    assert.ok(tsconfig.include.includes('docs/export-demo/entry.ts'));
+    // src 那条必须留着：include 里的路径不匹配只是被忽略，但**全部都不匹配**时
+    // tsc 会报「找不到输入文件」而整条构建断在第一版那边。
+    assert.ok(
+        tsconfig.include.includes('src/**/*.ts'),
+        'include 里必须留着 src 那条，否则缺了 docs/ 的第一版仓库会报「找不到输入」',
+    );
+});
+

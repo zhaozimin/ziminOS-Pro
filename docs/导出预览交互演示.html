@@ -1,0 +1,2571 @@
+<!--
+  这个文件是**生成**出来的，不要手改：改动会在下一次 npm run demo 时被整份覆盖。
+  真源在 docs/export-demo/ —— 外壳 shell.html、驱动 driver.js、与 src/ 的接缝 entry.ts。
+  页内的导出样式逐字来自 vault/.obsidian/plugins/ziminos/styles.css，
+  几何与装饰逻辑由 esbuild 从 src/ 直接打包，因此它与插件里跑的是同一份判断。
+  ziminOS v0.24.0
+-->
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ziminOS 导出预览｜交互演示 v0.24.0</title>
+<style>
+/* ── 外壳：近似 Obsidian app.css 与 Minimal 主题的那几条变量与控件样式 ── */
+:root[data-theme="light"] {
+  --text-normal:#2b3138; --text-muted:#6a7480; --text-faint:#9aa3ad; --text-accent:#6c5ce7;
+  --text-on-accent:#fff; --background-primary:#ffffff; --background-primary-alt:#fafbfc;
+  --background-secondary:#f2f4f7; --background-modifier-border:#dcdfe5;
+  --background-modifier-form-field:#ffffff; --interactive-normal:#eef0f4; --interactive-hover:#e4e7ed;
+  --interactive-accent:#6c5ce7; --shell-ground:#e7e9ee; --shell-panel:#ffffff; --shell-veil:rgba(18,22,28,.42);
+}
+:root[data-theme="dark"] {
+  --text-normal:#dadde2; --text-muted:#8b939e; --text-faint:#6b737d; --text-accent:#a99bff;
+  --text-on-accent:#fff; --background-primary:#1e2126; --background-primary-alt:#23262c;
+  --background-secondary:#181b1f; --background-modifier-border:#343941;
+  --background-modifier-form-field:#15181c; --interactive-normal:#2a2e35; --interactive-hover:#343941;
+  --interactive-accent:#7c6cf0; --shell-ground:#101317; --shell-panel:#1e2126; --shell-veil:rgba(0,0,0,.55);
+}
+:root { --radius-s:4px; --radius-m:8px; --radius-l:14px; --font-ui-smaller:12px; --font-ui-small:13px;
+  color-scheme:light dark; }
+:root[data-theme="dark"] { color-scheme:dark; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--shell-ground); color:var(--text-normal); line-height:1.7;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:14px; }
+code { padding:.12em .36em; border-radius:4px; background:var(--background-secondary);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+
+.brief { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:26px 0 6px; }
+.brief h1 { margin:0 0 6px; font-size:clamp(22px,3.4vw,32px); letter-spacing:-.02em; }
+.brief p { margin:6px 0; max-width:78ch; color:var(--text-muted); }
+.brief .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:14px; }
+.brief button { font:inherit; padding:6px 13px; border-radius:999px; cursor:pointer;
+  border:1px solid var(--background-modifier-border); background:var(--interactive-normal);
+  color:var(--text-normal); }
+.brief button:hover { background:var(--interactive-hover); }
+.brief .hint { color:var(--text-faint); font-size:var(--font-ui-smaller); }
+
+/* 弹窗站在一层遮罩上，与 Obsidian 里打开它时看到的层次一致 */
+.stage { width:min(1180px,calc(100% - 32px)); margin:14px auto 40px; padding:26px;
+  border-radius:20px; background:var(--shell-veil); }
+.modal { background:var(--background-primary); border-radius:var(--radius-l); padding:20px 24px 16px;
+  box-shadow:0 22px 70px rgba(0,0,0,.34); margin:0 auto; }
+.modal-title { margin-bottom:14px; font-size:18px; font-weight:600; }
+
+/* Obsidian 的 Setting 原语：名字 + 说明在左，控件在右 */
+.setting-item { display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:.75em 0; border-top:1px solid var(--background-modifier-border); }
+.setting-item-info { margin-right:20px; }
+.setting-item-description { padding-top:2px; color:var(--text-muted); font-size:var(--font-ui-smaller);
+  line-height:1.5; }
+.setting-item-control { display:flex; align-items:center; justify-content:flex-end; flex:1 1 auto; gap:8px; }
+.setting-item-heading { padding-top:16px; }
+.setting-item-heading .setting-item-name { font-weight:700; font-size:13px; letter-spacing:.04em;
+  color:var(--text-muted); }
+input[type=text], select { padding:5px 8px; border:1px solid var(--background-modifier-border);
+  border-radius:var(--radius-s); background:var(--background-modifier-form-field);
+  color:var(--text-normal); font:inherit; }
+input[type=range] { accent-color:var(--interactive-accent); }
+.setting-item button { font:inherit; padding:6px 13px; border-radius:var(--radius-s); cursor:pointer;
+  border:1px solid var(--background-modifier-border); background:var(--interactive-normal);
+  color:var(--text-normal); }
+.setting-item button.mod-cta { background:var(--interactive-accent); color:var(--text-on-accent);
+  border-color:var(--interactive-accent); }
+.clickable-icon { padding:4px 9px !important; background:none !important; border:0 !important;
+  color:var(--text-muted) !important; }
+
+/* 演示专属：右下角那句回执，替代 Obsidian 的 Notice */
+.toast { position:fixed; right:20px; bottom:20px; max-width:340px; padding:12px 15px;
+  border-radius:var(--radius-m); background:var(--background-primary-alt); color:var(--text-normal);
+  border:1px solid var(--background-modifier-border); box-shadow:0 10px 30px rgba(0,0,0,.24);
+  opacity:0; transform:translateY(8px); transition:opacity .18s,transform .18s; pointer-events:none; }
+.toast.is-on { opacity:1; transform:none; }
+
+/* 演示里那张纸的正文排版，替代 Obsidian 的阅读视图样式 */
+.demo-body p { margin:0 0 14px; line-height:1.78; }
+.demo-body h2 { margin:26px 0 10px; font-size:21px; letter-spacing:-.01em; }
+.demo-body blockquote { margin:0 0 14px; padding:2px 0 2px 16px; color:var(--text-muted);
+  border-left:3px solid var(--interactive-accent); }
+.demo-body pre { margin:0 0 14px; padding:13px 15px; border-radius:7px; overflow:auto;
+  background:var(--background-secondary); font-size:13px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+.demo-body ul { margin:0 0 14px; padding-left:22px; }
+.demo-body li { margin:4px 0; }
+.demo-title { margin:0 0 16px; font-size:30px; font-weight:700; letter-spacing:-.02em; }
+</style>
+<style>
+/* ══════════════════════════════════════════════════════════════
+ * 以下整段逐字来自 vault/.obsidian/plugins/ziminos/styles.css，由 build.mjs 注入。
+ * 不要在这里手改任何一条——改了也会在下次生成时被覆盖，而真正的样式在插件那边。
+ * ══════════════════════════════════════════════════════════════ */
+/*
+ * ziminOS 视图样式
+ *
+ * 服务插件自渲染的二十四个笔记内视图、中国日历与最近文件两个 ItemView、外观开关浮层、
+ * 文件浏览器里那串文件夹计数、状态栏那一块当前路径、导出预览弹窗（连同会被拍进 PNG/PDF 的
+ * 页眉页脚），以及设置页的八张标签页与开荒页尾的落款，
+ * 全部选择器都带 ziminos- 前缀，不碰用户笔记正文。
+ * 除文末那一条藏边栏图标的规则外，不覆盖主题的任何既有规则——那一条的理由写在它自己头上。
+ * 文件夹计数那两条以 .nav-folder-title 打头，看着像在碰主题，其实只选我们自己插进去的那个
+ * 子元素：主题的规则一条没动，我们只是说清了自己那个节点在别人的 flex 行里怎么站。
+ * 颜色一律取 Obsidian 的语义变量，因此跟随主题与 Style Settings 的配色走，
+ * 换主题、切明暗、改配色都不需要动这个文件。
+ */
+
+/* ── 三线表：顶线粗、栏目线细、底线粗，没有竖线也没有行线 ── */
+
+.ziminos-table-wrap {
+    /* 列多的时候（名录六列）让表格自己横向滚，而不是把整页撑宽 */
+    overflow-x: auto;
+    width: 100%;
+    margin: 0.6em 0 1.2em;
+
+    /*
+     * 表宽这件事改的是变量，不是宽度本身——理由值得写清楚，它是本文件最容易改错的一处。
+     *
+     * Minimal 把「表格多宽」整个接管了（theme.css 约 2198 行）：
+     *     .markdown-source-view.mod-cm6.is-readable-line-width … > .cm-content table,
+     *     .markdown-preview-view.is-readable-line-width .markdown-preview-sizer table {
+     *         width: var(--table-width);
+     *         min-width: var(--table-min-width);
+     *         max-width: var(--table-max-width);
+     *         margin-inline: var(--table-margin); }
+     * 编辑态那一条打头六个类，特异性 (0,6,1)；我们这条 (0,2,2)，class 数先比，压不住。
+     * 也就是说 width / min-width / max-width 三条全归它管，取的是 body 上的默认值：
+     * --table-width: auto，而 --table-min-width 干脆没定义（等于 auto）。
+     * auto 正是「按内容收缩」——于是同一页上两张表各算各的宽，宽窄不一。
+     *
+     * 出路不是把特异性堆得更高，更不是 !important：那条规则是主题的实现，
+     * 变量才是主题给出的接口。在包裹层上写这四个变量，主题自己那条规则算出来的
+     * 就是整行宽——不覆盖、不竞争，只是回答了它提出的那个问题。
+     * 认识这些变量的主题走这里，不认识的走下面那条 100%，两条路得到同一个结果。
+     */
+    --table-width: 100%;
+    --table-min-width: 100%;
+    --table-max-width: 100%;
+    --table-margin: 0;
+}
+
+/* ============================================================
+ * 中国日历 · ItemView
+ * ============================================================ */
+
+.workspace-leaf-content[data-type="ziminos-calendar"] .view-content {
+    padding: 0;
+}
+
+.ziminos-calendar {
+    overflow: auto;
+}
+
+.ziminos-calendar-shell {
+    min-width: 286px;
+    padding: 14px 12px 12px;
+    color: var(--text-normal);
+}
+
+.ziminos-calendar button {
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    font: inherit;
+}
+
+.ziminos-calendar-stepper,
+.ziminos-calendar-today,
+.ziminos-calendar-view-toggle,
+.ziminos-calendar-period,
+.ziminos-calendar-week,
+.ziminos-calendar-day {
+    cursor: pointer;
+}
+
+.ziminos-calendar-header {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 14px;
+}
+
+.ziminos-calendar-header-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+}
+
+.ziminos-calendar-coordinate {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 24px minmax(62px, 1fr) 24px;
+    align-items: center;
+    justify-content: center;
+}
+
+.ziminos-calendar-stepper {
+    display: inline-flex;
+    width: 24px;
+    height: 26px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-faint);
+    font-size: 20px;
+    line-height: 1;
+    opacity: 0.48;
+    transition: color 120ms ease, background-color 120ms ease, opacity 120ms ease;
+}
+
+.ziminos-calendar-coordinate:hover .ziminos-calendar-stepper,
+.ziminos-calendar-coordinate:focus-within .ziminos-calendar-stepper {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+.ziminos-calendar-stepper:hover {
+    background: var(--background-modifier-hover);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-coordinate > .ziminos-calendar-coordinate-label {
+    overflow: hidden;
+    min-width: 0;
+    min-height: 26px;
+    padding: 2px 4px;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 15px;
+    font-weight: 650;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ziminos-calendar-coordinate > .ziminos-calendar-coordinate-label:hover {
+    background: var(--background-modifier-hover);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-header-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+.ziminos-calendar-today,
+.ziminos-calendar-view-toggle {
+    display: inline-flex;
+    width: 25px;
+    height: 25px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 12px;
+}
+
+.ziminos-calendar-today {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.ziminos-calendar-today:hover {
+    background: var(--interactive-accent-hover);
+}
+
+.ziminos-calendar-today.is-current {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 24%, transparent);
+}
+
+.ziminos-calendar-view-toggle:hover {
+    background: var(--background-modifier-hover);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-grid {
+    display: grid;
+    grid-template-columns: 27px repeat(7, minmax(30px, 1fr));
+    gap: 2px 1px;
+}
+
+.ziminos-calendar-weekday {
+    padding: 2px 0 7px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 650;
+    text-align: center;
+}
+
+.ziminos-calendar-week {
+    min-height: 45px;
+    padding: 5px 0 0;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.ziminos-calendar-week:hover {
+    background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-day {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 45px;
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 4px 1px 3px;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-normal);
+    text-align: center;
+}
+
+.ziminos-calendar-day:hover {
+    background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+
+.ziminos-calendar-day.is-other-month {
+    opacity: 0.24;
+}
+
+.ziminos-calendar-day.is-today {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.ziminos-calendar-day.is-today:hover {
+    background: var(--interactive-accent-hover);
+}
+
+.ziminos-calendar-day.is-special-day:not(.is-today) .ziminos-calendar-lunar {
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-day-top {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+}
+
+.ziminos-calendar-solar {
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.1;
+}
+
+.ziminos-calendar-badge {
+    display: inline-flex;
+    width: 13px;
+    height: 13px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    color: white;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.ziminos-calendar-badge.is-rest {
+    background: #C15449;
+}
+
+.ziminos-calendar-badge.is-work {
+    background: #4C8DD6;
+}
+
+.ziminos-calendar-lunar {
+    overflow: hidden;
+    width: 100%;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 9px;
+    line-height: 1.15;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ziminos-calendar-day.is-today .ziminos-calendar-lunar {
+    color: var(--text-on-accent);
+}
+
+.ziminos-calendar-year-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 5px;
+}
+
+.ziminos-calendar-quarter {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.ziminos-calendar-quarter > .ziminos-calendar-period {
+    width: 100%;
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-quarter-months {
+    display: contents;
+}
+
+.ziminos-calendar-period {
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 3px;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.ziminos-calendar-period:hover,
+.ziminos-calendar-period.is-selected {
+    background: color-mix(in srgb, var(--interactive-accent) 13%, transparent);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-status {
+    margin-top: 10px;
+    color: var(--text-faint);
+    font-size: 9px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+@media (max-width: 360px) {
+    .ziminos-calendar-shell {
+        min-width: 270px;
+        padding: 8px;
+    }
+
+    .ziminos-calendar-grid {
+        grid-template-columns: 24px repeat(7, minmax(28px, 1fr));
+    }
+
+    .ziminos-calendar-day,
+    .ziminos-calendar-week {
+        min-height: 43px;
+    }
+}
+
+/*
+ * 选择器写成「元素.类 > 元素.类」两级，是为了把这张表与用户笔记里的普通表格分开，
+ * 而不是为了跟主题抢宽度——那场仗按特异性打是打不赢的，宽度已在上面用变量解决。
+ */
+div.ziminos-table-wrap > table.ziminos-table {
+    border-collapse: collapse;
+    table-layout: auto;
+    /*
+     * 给不认识上面那组变量的主题兜底：三条一起写，是因为「占满整行」这件事
+     * 只有 width 会被 max-width 夹、被 min-width 顶，三条同向才不会互相拆台。
+     * 列太多时 min-content 大于整行，表格照样溢出，由包裹层的 overflow-x 接住。
+     */
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    font-size: 0.92em;
+    line-height: 1.65;
+    border-top: 2px solid var(--text-normal);
+    border-bottom: 2px solid var(--text-normal);
+}
+
+div.ziminos-table-wrap > table.ziminos-table th,
+div.ziminos-table-wrap > table.ziminos-table td {
+    border: none;
+    padding: 7px 22px 7px 0;
+    text-align: left;
+    vertical-align: top;
+    white-space: normal;
+    word-break: break-word;
+}
+
+div.ziminos-table-wrap > table.ziminos-table th {
+    border-bottom: 1px solid var(--background-modifier-border);
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* 末列右侧不留悬空的内边距，底线才收得干净 */
+div.ziminos-table-wrap > table.ziminos-table th:last-child,
+div.ziminos-table-wrap > table.ziminos-table td:last-child {
+    padding-right: 0;
+}
+
+/*
+ * 列宽分配：定宽列各取所需，句子列吃掉全部余量。
+ * width:1px 配 nowrap 是让一列「刚好够用」的标准写法——
+ * 浏览器把它撑到内容宽度就停手，剩下的空间全归 auto 的那一列。
+ * 不这样做的话，浏览器会按内容比例摊给每一列，结果是每列都窄一点、每列都要换行。
+ */
+div.ziminos-table-wrap > table.ziminos-table th.ziminos-tight,
+div.ziminos-table-wrap > table.ziminos-table td.ziminos-tight {
+    width: 1px;
+    white-space: nowrap;
+}
+
+div.ziminos-table-wrap > table.ziminos-table th.ziminos-grow,
+div.ziminos-table-wrap > table.ziminos-table td.ziminos-grow {
+    width: auto;
+    white-space: normal;
+}
+
+div.ziminos-table-wrap > table.ziminos-table tbody tr:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* ── 待办：同样是三线表，复选框与事项同处一格 ── */
+
+/* 复选框与事项必须在同一格里，否则一个待办会被表格的列分成两半 */
+.ziminos-task {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5em;
+}
+
+.ziminos-task input[type='checkbox'] {
+    flex: none;
+    margin: 0;
+    cursor: pointer;
+}
+
+.ziminos-task-text {
+    flex: 1 1 auto;
+    /* flex 子项默认 min-width:auto，长句子会撑破单元格，必须显式放开 */
+    min-width: 0;
+}
+
+.ziminos-task.is-checked .ziminos-task-text {
+    color: var(--text-faint);
+    text-decoration: line-through;
+}
+
+/* ── 文字 ── */
+
+.ziminos-summary {
+    margin: 0.4em 0;
+}
+
+.ziminos-note,
+.ziminos-empty {
+    margin: 0.4em 0;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.ziminos-heading {
+    margin: 1.2em 0 0.3em;
+}
+
+/* ── 外观开关：右下角状态栏按钮与它弹出的浮层 ── */
+
+.ziminos-appearance-switch {
+    display: flex;
+    align-items: center;
+}
+
+/*
+ * 浮层挂在 body 上而不是状态栏里：状态栏会裁掉溢出内容，
+ * 挂在里面的面板一长就被切一半。位置由 JS 按按钮的实际矩形算出，
+ * 这里只负责「浮起来」和长高之后自己滚。
+ */
+.ziminos-appearance-panel {
+    position: fixed;
+    /* 带兜底值：变量万一没了，z-index 会整条失效退回 auto，浮层就被状态栏压住了 */
+    z-index: var(--layer-menu, 65);
+    width: 300px;
+    max-width: calc(100vw - 24px);
+    max-height: min(60vh, 460px);
+    overflow-y: auto;
+    padding: 10px 4px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background-color: var(--background-secondary);
+    box-shadow: var(--shadow-s);
+    font-size: var(--font-ui-small);
+}
+
+.ziminos-appearance-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0 12px 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    font-weight: 600;
+}
+
+.ziminos-appearance-count {
+    color: var(--text-faint);
+    font-weight: 400;
+    font-size: var(--font-ui-smaller);
+}
+
+.ziminos-appearance-empty {
+    padding: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.ziminos-appearance-group {
+    padding: 10px 12px 2px;
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+}
+
+.ziminos-appearance-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 12px;
+    border-radius: var(--radius-s);
+}
+
+.ziminos-appearance-row:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+/*
+ * 片段名可能很长，让它自己截断，绝不把开关挤出浮层。
+ * flex 与 min-width 是行里有了第三个孩子（出门按钮）之后必须的：
+ * 只靠 space-between 会把三个孩子均匀摊开，按钮飘到行中间；
+ * min-width:0 则是 flex 子项能真正截断的前提——不写它，
+ * 子项的最小宽度是内容宽度，长名字会把两个控件顶出浮层。
+ */
+.ziminos-appearance-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-normal);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/*
+ * 每行开关左边那个「打开这个 CSS 文件」。
+ * 常驻可见而非悬停才现：它是这个面板的一半用途，藏起来等于没做。
+ * 但常驻十二个图标会跟片段名抢眼睛，所以静默时压到 --text-faint，
+ * 只有指到它那一行才提亮——看得见、但不喊。
+ */
+.ziminos-appearance-open {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-s);
+    color: var(--text-faint);
+    cursor: pointer;
+}
+
+.ziminos-appearance-open svg {
+    width: 15px;
+    height: 15px;
+}
+
+.ziminos-appearance-row:hover .ziminos-appearance-open {
+    color: var(--text-muted);
+}
+
+.ziminos-appearance-open:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+}
+
+/*
+ * 页脚：右下角那个「片段文件夹」。
+ * 一道分隔线把它与片段清单隔开——它不是第十三个片段，是这张面板的出口。
+ *
+ * sticky 是必须的而不是讲究：浮层有 460px 的高度上限，十二个片段一定滚动，
+ * 页脚若随内容走，「右下角那个按钮」就变成了「滚到底才看得见的按钮」。
+ * 三个负数各有各的活：左右 -4px 抵掉浮层的横向内衬，让分隔线画到面板两边、
+ * 与页眉那道线对齐；下方的 -8px 与 bottom: -8px 一起抵掉浮层的底部内衬，
+ * 让页脚真正贴住底边——否则它会悬在离底 8px 处，片段从那道缝里穿过去。
+ * 底色不能省：sticky 元素默认透明，滚动的片段会从字底下爬过去。
+ */
+.ziminos-appearance-footer {
+    position: sticky;
+    bottom: -8px;
+    display: flex;
+    justify-content: flex-end;
+    margin: 8px -4px -8px;
+    padding: 8px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+}
+
+.ziminos-appearance-folder {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: var(--radius-s);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.ziminos-appearance-folder:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+}
+
+.ziminos-appearance-folder svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* ── 左侧边栏：本次会话内被取消勾选的图标 ── */
+
+/*
+ * 这是全文件唯一一处 !important，值得写清楚为什么。
+ *
+ * 它不是在跟主题抢表现（表格撑满那处刻意用 min-width 绕开了那场竞争）。
+ * 这里要压住的是一个不确定的对手：Obsidian 核心给 .side-dock-ribbon-action 的规则，
+ * 加上任何主题可能追加的更高特异性选择器。而这条声明没有任何商量余地——
+ * 用户在设置里取消了勾选，这个图标就必须消失，输掉这场竞争等于功能不存在。
+ *
+ * inline display 这条通道不能用：Obsidian 的边栏重排会无条件覆写它（见 dock.ts）。
+ */
+.ziminos-ribbon-item.ziminos-ribbon-hidden {
+    display: none !important;
+}
+
+/* ── 左侧边栏：设置页里那二十九行的分组标签、图标与行距 ── */
+
+/*
+ * 分组标签。它不是 Obsidian 的 setting heading，因为它比页头矮一级——
+ * 「左侧边栏」是一整页，「项目」「复盘」是页里的组，两者不该长得一样。
+ */
+.ziminos-ribbon-group {
+    margin: 14px 0 2px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.04em;
+}
+
+/*
+ * 二十九行挨着排，用 Obsidian 默认的行距会把这一区拉出两屏。
+ * 只收紧上下内边距，不动左右，行与页面其他设置项仍然对齐。
+ */
+.setting-item.ziminos-ribbon-row {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-top: none;
+}
+
+/*
+ * 命令名前面那个图标：它就是这条命令在边栏上的样子，勾之前先让人看见。
+ * 尺寸取 --icon-s 而非写死像素，跟着 Obsidian 的图标标度走。
+ */
+.ziminos-ribbon-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 8px;
+    color: var(--text-muted);
+    vertical-align: -0.2em;
+}
+
+.ziminos-ribbon-icon .svg-icon {
+    width: var(--icon-s, 16px);
+    height: var(--icon-s, 16px);
+}
+
+/* ── 关于作者：首页导航尾部与设置页开荒页尾共用的同一张名片（v0.9.4 版式） ── */
+
+/* 磁贴在上、两个频道分区在下，块间距一致 */
+.ziminos-about {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 0.6em 0 1.2em;
+}
+
+.ziminos-about-region {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 区名比页内小节标题矮一级：它是名片里的分组，不是页面的一节 */
+.ziminos-about-region-title {
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.04em;
+}
+
+/* 站点磁贴两枚并排，窄容器自动落成单列 */
+.ziminos-about-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+/* 一枚磁贴一个站：头部是身份，下面国内外两个域名各自成行。hairline 描边、无底色、无阴影 */
+.ziminos-about-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+}
+
+.ziminos-about-tile-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/*
+ * 头像是背景图 div 而不是 <img>：外观包的「图片居中」片段给一切 img 加
+ * margin:auto !important，flex 行里的头像会被推到中间、文字挤到边上。
+ * 背景图不吃任何针对 img 的规则，名片在任何主题任何片段下都站得稳。
+ */
+.ziminos-about-logo-round {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+}
+
+.ziminos-about-logo-square {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    display: block;
+    flex-shrink: 0;
+}
+
+.ziminos-about-tile-name {
+    color: var(--text-normal);
+    font-weight: var(--font-semibold);
+    line-height: 1.4;
+}
+
+.ziminos-about-tile-sub {
+    color: var(--text-faint);
+    font-size: var(--font-smaller, 0.875em);
+    line-height: 1.4;
+}
+
+.ziminos-about-domains {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 域名一行：域名靠左、部署地靠右，链接灰阶、悬停升正文色 */
+.ziminos-about-domain {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.ziminos-about-domain:hover {
+    color: var(--text-normal);
+    text-decoration: none;
+}
+
+.ziminos-about-domain-region {
+    color: var(--text-faint);
+    font-size: var(--font-smaller, 0.875em);
+}
+
+/* 频道胶囊一排，窄容器自动换行 */
+.ziminos-about-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/*
+ * 频道胶囊：hairline 描边、无底色。文字取弱化色而非链接色——
+ * 身份已经由品牌原色的 logo 说明了，一排下划线蓝字反而谁都认不出。
+ */
+.ziminos-about-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: var(--font-smaller, 0.875em);
+}
+
+.ziminos-about-pill:hover {
+    color: var(--text-normal);
+    border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
+    text-decoration: none;
+}
+
+/* 品牌图标：YouTube/B站/小红书的官方色由数据写在元素上；GitHub 与 X 官方即黑白，随 currentColor */
+.ziminos-about-pill-icon {
+    width: 15px;
+    height: 15px;
+    display: block;
+    flex-shrink: 0;
+}
+
+/*
+ * 字标（小红书）：它是三个汉字组成的文字标，没有色块打底，15px 根本认不清。
+ * 放大到 26px，负外边距抵掉多出的高度——字形只占方框中段约三分之一，
+ * 画出来的像素仍落在胶囊里，胶囊高度因此与同排其他胶囊分毫不差。
+ */
+.ziminos-about-pill-icon.is-wordmark {
+    width: 26px;
+    height: 26px;
+    margin: -6px 0;
+}
+
+/*
+ * 致谢：名片的最后一段，留给别人。
+ *
+ * 整块压到弱化色与小一号字，与上方作者自己的入口拉开层级——
+ * 这一段是署名不是入口，它该被读到，不该被点着走。
+ * 上方一条细线，与设置页落款那条同一画法：分节，不分页。
+ */
+.ziminos-about-credits {
+    margin-top: 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--background-modifier-border);
+    font-size: var(--font-smaller, 0.875em);
+    line-height: 1.6;
+}
+
+.ziminos-about-credits-title {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.04em;
+}
+
+.ziminos-about-credits-intro {
+    margin-bottom: 10px;
+    color: var(--text-faint);
+}
+
+/* 一条致谢：项目名一行，学到了什么另起一行缩进——名字要认得出，句子要读得下去 */
+.ziminos-about-credit {
+    margin-bottom: 8px;
+}
+
+.ziminos-about-credit-name {
+    color: var(--text-normal);
+    font-weight: var(--font-semibold);
+    text-decoration: none;
+}
+
+.ziminos-about-credit-name:hover {
+    color: var(--text-accent);
+    text-decoration: underline;
+}
+
+.ziminos-about-credit-what {
+    padding-left: 10px;
+    color: var(--text-muted);
+}
+
+/*
+ * 随库交付的署名：一段连排的文字而不是又一列条目。
+ * 它回答的是「这里面有谁的东西」，不是「我们学到了什么」，
+ * 排成清单会让它看起来和上面一样重要，而它只是许可要求的一行字。
+ */
+.ziminos-about-bundled {
+    margin-top: 12px;
+    color: var(--text-faint);
+}
+
+.ziminos-about-bundled-link {
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.ziminos-about-bundled-link:hover {
+    color: var(--text-accent);
+    text-decoration: underline;
+}
+
+/* ── 设置页：顶上那排标签，一页一个系统模块 ── */
+
+/*
+ * 标签栏吸顶。边栏那一页有二十九行，翻到第十八行时标签栏早已滚出视野，
+ * 想换一页就得先滚回顶部——吸顶让「换页」随时可做，这是分页值不值的关键一环。
+ *
+ * 背景必须是实心的，否则下面的行会从字缝里透上来；取 --background-primary，
+ * 那正是设置弹窗内容区自己的底色，因此吸住时看不出接缝。
+ */
+/*
+ * 标签栏随内容滚动，不吸顶。
+ * 吸顶版在真机上与 Obsidian 设置容器自身的内边距与滚动结构打架：
+ * 页头文字会从标签栏上方钻出来、被裁一半（v0.9.4 实测截图为证）。
+ * 换页本就是低频动作，滚回顶部的代价远小于一条永远错位的悬浮条。
+ */
+.ziminos-settings .ziminos-settings-tabs {
+    padding: 8px 0 12px;
+}
+
+/*
+ * 标签行踩在一条通到底的基线上：细线属于整行，不属于哪一枚标签。
+ * 这条线把「导航」与「内容」分成上下两个世界——标签自然宽度、左对齐，
+ * 八枚两字标签一行排下，永远不换行（flex-wrap 只是极窄窗口下的保险）。
+ */
+.ziminos-settings .ziminos-settings-tabrail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/*
+ * 一枚标签。它是真的 <button>，所以得先把浏览器与 Obsidian 给按钮的立体外观卸干净——
+ * 八个自带底色投影的立体按钮排成一行，看着像八个待按的动作，而它们其实只是八个位置。
+ *
+ * 选择器写成两级，与本文件里表格那处同理：主题也会给内容区里的 button 定规矩，
+ * 单一个类名跟它打平手时，胜负就取决于谁的样式表后加载，那不是可以依赖的东西。
+ */
+.ziminos-settings .ziminos-settings-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: auto;
+    padding: 5px 12px;
+    border: none;
+    border-radius: var(--radius-m);
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    font-weight: var(--font-normal);
+    line-height: 1.3;
+    cursor: pointer;
+    transition: color 120ms ease-out, background-color 120ms ease-out;
+}
+
+.ziminos-settings .ziminos-settings-tab:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: none;
+    color: var(--text-normal);
+}
+
+/* 键盘走到哪一枚，哪一枚亮圈；鼠标点按不画圈（focus-visible 的本职） */
+.ziminos-settings .ziminos-settings-tab:focus-visible {
+    box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+}
+
+/*
+ * 当前页：填充成一枚实底胶囊，字重加粗，图标着强调色。
+ * 三个信号叠加而不只靠颜色——低对比度主题与色觉差异下也认得出。
+ */
+.ziminos-settings .ziminos-settings-tab.is-active {
+    background-color: var(--background-modifier-active-hover, var(--background-modifier-hover));
+    color: var(--text-normal);
+    font-weight: var(--font-semibold);
+}
+
+/* 标签上的笔画图标：与左侧边栏同一套图形，同一条描边变量 */
+.ziminos-settings-tab-icon {
+    display: inline-flex;
+    align-items: center;
+    color: currentColor;
+}
+
+.ziminos-settings-tab-icon .svg-icon {
+    width: var(--icon-xs, 14px);
+    height: var(--icon-xs, 14px);
+}
+
+.ziminos-settings .ziminos-settings-tab.is-active .ziminos-settings-tab-icon {
+    color: var(--text-accent);
+}
+
+/* 页头：同一枚图标大一号、着强调色，是整页唯一的强调色锚点 */
+.ziminos-settings-page-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ziminos-settings-page-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-accent);
+}
+
+.ziminos-settings-page-icon .svg-icon {
+    width: var(--icon-m, 18px);
+    height: var(--icon-m, 18px);
+}
+
+/* 页头与标签栏之间留一口气，第一条设置项不必顶着标签栏 */
+.ziminos-settings-body .setting-item-heading {
+    padding-top: 18px;
+}
+
+/* ── 设置页：每页末尾那个「高级设置（一般不用改）」折叠区 ── */
+
+/*
+ * 各页共用同一个折叠区样式，位置也一律在页尾。
+ * 它比页头轻（muted + 小一号），因为它是「一般不用改」的东西，不该与页头抢注意力。
+ */
+.ziminos-advanced > summary {
+    padding: 12px 0;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+}
+
+/* ── 文件浏览器：文件夹右侧那个计数 ── */
+
+/*
+ * 挂在 .nav-folder-title 里的最后一个子元素上，所以它天然排在文件夹名之后。
+ * 靠右不靠 position/float，靠 margin-left:auto——那一行是 flex（Obsidian 的 .tree-item-self
+ * 就是 flex），auto 外边距会把余量全吃到左边，数字于是贴着右缘；
+ * 而主题若把文件夹名设成 flex:1，数字同样落在右缘，两种情形结果一致。
+ * flex-shrink:0 是为了让挤压发生在文件夹名上而不是数字上：名字可以省略号，数字不能只剩一半。
+ */
+.ziminos-folder-count {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-left: 6px;
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+
+    /* 等宽数字：1 和 8 一样宽，一列数字的右缘才对得齐，翻看时不会左右跳 */
+    font-variant-numeric: tabular-nums;
+}
+
+/* 鼠标停在那一行上时抬一档：正在看的那一行把数字说清楚，其余的继续退到背景里 */
+.nav-folder-title:hover .ziminos-folder-count,
+.nav-folder-title.is-active .ziminos-folder-count {
+    color: var(--text-muted);
+}
+
+/* ── 最近文件：右侧栏那张清单 ── */
+
+.workspace-leaf-content[data-type="ziminos-recent-files"] .view-content {
+    padding: 0;
+}
+
+.ziminos-recent {
+    overflow: auto;
+    padding: 8px 6px 12px;
+}
+
+.ziminos-recent-empty {
+    padding: 12px 10px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.6;
+}
+
+.ziminos-recent-list {
+    display: flex;
+    flex-direction: column;
+}
+
+/*
+ * 一行一篇，只有名字——与文件树里的一行长一个样。
+ *
+ * 「长一个样」不是靠抄一遍主题的规则，而是取它自己给出的那套 --nav-item-* 变量：
+ * 行高、字号、字重、颜色、悬停底色全从那里来，于是换主题、在 Style Settings 里
+ * 调过侧栏字号之后，这张清单跟着一起变，不会变成侧栏里唯一一块「别人家的控件」。
+ * 变量取不到时每条都回落到语义变量，两头都不会出错。
+ */
+.ziminos-recent-row {
+    padding: var(--nav-item-padding, 4px 8px);
+    overflow: hidden;
+    border-radius: var(--radius-s);
+    color: var(--nav-item-color, var(--text-muted));
+    font-size: var(--nav-item-size, var(--font-ui-small));
+    font-weight: var(--nav-item-weight, inherit);
+    line-height: var(--line-height-tight);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ziminos-recent-row:hover {
+    background: var(--nav-item-background-hover, var(--background-modifier-hover));
+    color: var(--nav-item-color-hover, var(--text-normal));
+}
+
+/* ── 状态栏：当前笔记路径 ── */
+
+/*
+ * 路径可以很长，而状态栏是所有插件共用的一条。给它一个上限并自己截断，
+ * 而不是把别人的状态栏项挤出屏幕——完整路径在悬停提示里，也在点一下就到手的剪贴板里。
+ *
+ * 刻意**不**用 direction: rtl 把省略号挪到左边（那样能留下文件名，看着更划算）：
+ * 那是一个双向文字技巧，而库里的路径里全是中文书名号与括号——
+ * 这类中性字符落在字符串末尾时会被 bidi 算法搬到最前面，得到一个看着像坏了的路径。
+ * 一个偶尔截掉尾巴的路径只是少几个字，一个偶尔乱序的路径会让人怀疑插件在乱写。
+ */
+.ziminos-file-path {
+    max-width: 32ch;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ziminos-file-path:hover {
+    color: var(--text-normal);
+}
+
+/* ── Eagle 身份附件 ── */
+
+/*
+ * Markdown 里留的始终是 ziminos-eagle:// 身份链接，渲染层只把图片 src
+ * 暂时换成 blob URL。光标因此是这层唯一需要的视觉信号：点它会去 Eagle，
+ * 不是在 Obsidian 里打开一份本地副本。尺寸、居中和边框仍交给主题与用户片段。
+ */
+.ziminos-eagle-attachment,
+a[href^="ziminos-eagle://"] {
+    cursor: pointer;
+}
+
+.ziminos-eagle-attachment[data-ziminos-eagle-state="error"] {
+    outline: 1px dashed var(--text-error);
+    outline-offset: 3px;
+}
+
+/* ── 开荒页尾：作者名片当落款 ── */
+
+/* 落款与上方内容划一条细线：它不是设置，是这套交付物的署名 */
+.ziminos-settings-footer {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+/* 落款的小标题，比页头矮一级——它是页里的一节，不是一页 */
+.ziminos-settings-footer-title {
+    margin-bottom: 12px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.04em;
+}
+
+.ziminos-settings-body .ziminos-about {
+    margin: 0;
+}
+
+/* ============================================================
+ * 开荒礼花
+ *
+ * 只在点完「初始化」那一刻出现一次，几秒后连同整层自行移除。
+ * 它取代的是从前那个「问你叫什么、给你开第一个项目」的弹窗：
+ * 同样是告诉学员装好了，但不索取、不阻塞、不需要他做任何决定。
+ *
+ * 轨迹与颜色由 modules/setup/celebrate 逐片计算（Web Animations API），
+ * 这里只定义「一片纸屑长什么样、那一层怎么铺」——
+ * 七十二片各有各的落点，写成 CSS 关键帧要生成七十二组，那是把随机性硬编码。
+ * ============================================================ */
+
+.ziminos-confetti {
+    /* fixed 而不是 absolute：absolute 的 inset: 0 要靠「宿主恰好是个定位祖先」才成立，
+       那是别人家 DOM 的实现细节，赌错的表现是整层贴到别的元素上、礼花在角落里飞 */
+    position: fixed;
+    inset: 0;
+    /* 绝不吃鼠标：覆盖层铺满整个工作区，不设这条，礼花飞的那两秒用户点什么都没反应，
+       而他不会把这归咎于一个动画 */
+    pointer-events: none;
+    overflow: hidden;
+    /* 压在模态框之下、内容之上：庆祝不该盖住任何需要操作的东西 */
+    z-index: var(--layer-notice);
+}
+
+.ziminos-confetti-piece {
+    position: absolute;
+    width: 8px;
+    height: 14px;
+    /* 长方形而不是圆点：旋转时宽窄交替，才有纸片翻面的手感 */
+    border-radius: 2px;
+    will-change: transform, opacity;
+}
+
+/* 系统开了「减少动效」时连节点都不生成（判断在 celebrate 里），
+   这一条是第二道保险：万一某个环境的 matchMedia 探不到，至少不让它动 */
+@media (prefers-reduced-motion: reduce) {
+    .ziminos-confetti {
+        display: none;
+    }
+}
+
+/* ============================================================
+ * 导出预览 · 弹窗
+ *
+ * 这一段服务两类东西，值得先分清，否则改错了没人当场发现：
+ * 前半段（modal / layout / viewport / picker …）只活在弹窗里，用户看完就关；
+ * 后半段（header / footer / image-fallback）会被 dom-to-image 连同计算样式一起
+ * **拍进最终的 PNG 与 PDF**——改它等于改交付物本身。
+ * 因此后半段只用相对单位与语义变量：纸的宽度由笔记决定，写死 px 会让宽窄两篇长得不一样。
+ * ============================================================ */
+
+.modal.ziminos-export-modal {
+    /* 预览要占掉大半个弹窗才看得清版式，默认的模态宽度装不下「纸 + 一列控件」 */
+    width: min(1120px, 94vw);
+    max-width: none;
+}
+
+.ziminos-export-layout {
+    display: flex;
+    gap: 18px;
+    align-items: stretch;
+    /* 高度写死在这一层而不是让弹窗自己长：纸可以有几千像素高，
+       不给边界的话弹窗会顶到屏幕外，而滚动条本该长在预览区里 */
+    height: min(64vh, 640px);
+}
+
+.ziminos-export-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ziminos-export-meta {
+    flex: 0 0 auto;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    /* 拖滑块时这行数字每帧都在变，等宽数字才不会让整行左右抖 */
+    font-variant-numeric: tabular-nums;
+}
+
+.ziminos-export-viewport {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    /* 这 12px 的左右内边距正是 modal.ts 里那个 VIEWPORT_PADDING 的另一半：
+       clientWidth 含内边距，两处必须对得上，否则纸不是溢出就是白留半边 */
+    padding: 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background: var(--background-secondary);
+}
+
+.ziminos-export-canvas {
+    position: relative;
+    margin: 0 auto;
+    /* 一道投影把「纸」从「底板」上分出来——没有它，白纸白底就看不出边界在哪 */
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+}
+
+.ziminos-export-controls {
+    flex: 0 0 320px;
+    min-width: 0;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.ziminos-export-controls .setting-item {
+    border-top: none;
+    padding: 10px 0;
+}
+
+/*
+ * 上面那条把每一行的分隔线都去掉了——三百二十像素一列，十几道横线只会把它切成碎片。
+ * 于是「页眉 / 页脚 / 水印」三道小标题重新拿回那根线：分隔留给分段，不留给每一行。
+ */
+.ziminos-export-controls .setting-item.setting-item-heading {
+    border-top: 1px solid var(--background-modifier-border);
+    margin-top: 8px;
+    padding-top: 18px;
+}
+
+/*
+ * 三百二十像素一列，Obsidian 默认的「名字在左、控件在右」会把滑块挤成一小段。
+ * 所以带 field 标记的行改成上下两层：说明在上，控件占满整行。
+ */
+.ziminos-export-controls .setting-item.ziminos-export-field {
+    display: block;
+}
+
+.ziminos-export-controls .ziminos-export-field .setting-item-info {
+    margin-right: 0;
+}
+
+.ziminos-export-controls .ziminos-export-field .setting-item-control {
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: 6px;
+}
+
+.ziminos-export-controls .ziminos-export-field input[type="text"],
+.ziminos-export-controls .ziminos-export-field select,
+.ziminos-export-controls .ziminos-export-field input[type="range"] {
+    width: 100%;
+}
+
+/*
+ * 标志那一行的说明位里显示的是库内路径，可能很长且没有空格可断。
+ * 不给它断行的余地，它会把整列撑宽、把预览挤扁——而那条路径本来只是个回执。
+ */
+.ziminos-export-controls .ziminos-export-logo .setting-item-description {
+    overflow-wrap: anywhere;
+}
+
+.ziminos-export-controls .ziminos-export-logo .setting-item-control {
+    gap: 6px;
+}
+
+.ziminos-export-value {
+    margin-left: 8px;
+    font-weight: normal;
+    color: var(--text-accent);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 位置这件事用位置来问：一排互斥按钮，而不是一个把空间压成一列文字的下拉框 */
+.ziminos-export-picker {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+}
+
+.ziminos-export-picker button {
+    flex: 1 1 0;
+    padding: 5px 0;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    background: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.ziminos-export-picker button:hover {
+    color: var(--text-normal);
+}
+
+.ziminos-export-picker button.is-active {
+    color: var(--text-on-accent);
+    background: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+}
+
+.ziminos-export-picker.ziminos-export-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 216px;
+}
+
+/*
+ * 那九个格子与那几根滑块是我们自己建的 DOM，Setting.setDisabled 够不着它们。
+ * 不补这一条，文字留空时控件看着还能点——点了却什么都不发生，比变灰难懂得多。
+ */
+.ziminos-export-controls .setting-item.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* 平铺的水印没有「位置」，那一行整行收起而不是变灰：
+   一个永远无效的控件留在那儿，用户会以为是它坏了 */
+.ziminos-export-controls .setting-item.ziminos-export-hidden {
+    display: none;
+}
+
+.ziminos-export-actions {
+    border-top: 1px solid var(--background-modifier-border);
+    padding-top: 14px;
+    margin-top: 4px;
+}
+
+@media (max-width: 820px) {
+    .ziminos-export-layout {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .ziminos-export-viewport {
+        height: 42vh;
+    }
+
+    .ziminos-export-controls {
+        flex: 1 1 auto;
+        max-height: 42vh;
+    }
+
+    .ziminos-export-picker.ziminos-export-grid {
+        max-width: none;
+    }
+}
+
+/* ── 以下三条会被拍进 PNG / PDF，改它们等于改交付物 ── */
+
+.ziminos-export-header,
+.ziminos-export-footer {
+    /* em 而不是 px：纸的正文字号随主题与用户选的阅读字体走，页眉页脚得跟着走 */
+    font-size: 0.82em;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+}
+
+/*
+ * 页眉页脚里那枚标志。高度由插件按用户拖的值内联写死、宽度随比例走，
+ * 这里只负责挡住主题可能加在 img 上的圆角、投影与外边距——
+ * 那些是给正文插图准备的，而这一枚是版式的一部分，不该被当成插图装饰。
+ */
+.ziminos-export-header img,
+.ziminos-export-footer img {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    max-width: none;
+}
+
+.ziminos-export-image-fallback {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    border: 1px dashed var(--background-modifier-border);
+    border-radius: var(--radius-s);
+}
+
+</style>
+</head>
+<body>
+<div class="brief">
+  <h1>导出预览长什么样</h1>
+  <p>这是 ziminOS <code>导出当前笔记</code> 弹出来的那个窗口。左边是等比缩小的整张成品，右边是控件——<strong>拖一格就变一格</strong>。左边那张纸不是示意图，它就是等会儿被拍成 PNG / PDF 的那一个元素。</p>
+  <p>本页里的水印几何、页眉页脚排布与装饰逻辑，用的是插件源码里同一份 <code>applyDecorations</code>，由构建脚本从 <code>src/</code> 直接打包进来；外壳（遮罩、控件外观）是对 Obsidian 的近似。真插件里"选择图片"打开的是笔记库里的图片清单，本页换成了你本机的文件选择框，方便你直接拿自己的 logo 试。</p>
+  <div class="bar">
+    <button type="button" data-demo="theme">切换明暗</button>
+    <button type="button" data-demo="preset-brand">试一套：品牌落款</button>
+    <button type="button" data-demo="preset-guard">试一套：防转发平铺</button>
+    <button type="button" data-demo="reset">恢复默认</button>
+    <span class="hint">v0.24.0 · 单文件，可离线打开、可转发</span>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="modal ziminos-export-modal">
+    <div class="modal-title">导出当前笔记</div>
+    <div class="modal-content">
+      <div class="ziminos-export-layout">
+        <div class="ziminos-export-preview">
+          <div class="ziminos-export-meta" id="meta"></div>
+          <div class="ziminos-export-viewport" id="viewport">
+            <div class="ziminos-export-canvas" id="canvas"></div>
+          </div>
+        </div>
+        <div class="ziminos-export-controls" id="controls"></div>
+      </div>
+      <div class="setting-item ziminos-export-actions">
+        <div class="setting-item-info"></div>
+        <div class="setting-item-control" id="actions"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="picker" accept="image/*" hidden>
+
+<script>"use strict";
+var ZExport = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // docs/export-demo/entry.ts
+  var entry_exports = {};
+  __export(entry_exports, {
+    DEFAULT_EXPORT_STYLE: () => DEFAULT_EXPORT_STYLE,
+    EXPORT_ALIGN_LABELS: () => EXPORT_ALIGN_LABELS,
+    EXPORT_FORMAT_LABELS: () => EXPORT_FORMAT_LABELS,
+    EXPORT_SLIDERS: () => EXPORT_SLIDERS,
+    WATERMARK_ANCHOR_GRID: () => WATERMARK_ANCHOR_GRID,
+    WATERMARK_ANCHOR_LABELS: () => WATERMARK_ANCHOR_LABELS,
+    WATERMARK_MODE_LABELS: () => WATERMARK_MODE_LABELS,
+    applyDecorations: () => applyDecorations,
+    captureScale: () => captureScale,
+    normalizeExportStyle: () => normalizeExportStyle,
+    pdfPageSize: () => pdfPageSize,
+    resolveExportText: () => resolveExportText
+  });
+
+  // src/core/exportStyle.ts
+  var EXPORT_FORMAT_LABELS = {
+    png: "PNG \u957F\u56FE",
+    pdf: "PDF \u5355\u9875"
+  };
+  var EXPORT_ALIGN_LABELS = {
+    left: "\u9760\u5DE6",
+    center: "\u5C45\u4E2D",
+    right: "\u9760\u53F3"
+  };
+  var WATERMARK_MODE_LABELS = {
+    tile: "\u5E73\u94FA\u6574\u7BC7",
+    single: "\u5355\u4E2A\u843D\u6B3E"
+  };
+  var WATERMARK_ANCHOR_GRID = [
+    ["top-left", "top-center", "top-right"],
+    ["middle-left", "middle-center", "middle-right"],
+    ["bottom-left", "bottom-center", "bottom-right"]
+  ];
+  var WATERMARK_ANCHOR_LABELS = {
+    "top-left": "\u5DE6\u4E0A",
+    "top-center": "\u6B63\u4E0A",
+    "top-right": "\u53F3\u4E0A",
+    "middle-left": "\u5DE6\u4E2D",
+    "middle-center": "\u6B63\u4E2D",
+    "middle-right": "\u53F3\u4E2D",
+    "bottom-left": "\u5DE6\u4E0B",
+    "bottom-center": "\u6B63\u4E0B",
+    "bottom-right": "\u53F3\u4E0B"
+  };
+  var DEFAULT_EXPORT_STYLE = {
+    format: "png",
+    header: "",
+    headerAlign: "center",
+    headerGap: 24,
+    footer: "",
+    footerAlign: "center",
+    footerGap: 32,
+    watermark: "",
+    watermarkMode: "tile",
+    watermarkAnchor: "bottom-right",
+    watermarkSize: 18,
+    watermarkGapX: 140,
+    watermarkGapY: 100,
+    watermarkAngle: -28,
+    watermarkOpacity: 14,
+    logo: "",
+    // 三个尺寸默认 0：老库升级之后，没选过标志的人导出的那张图与升级前逐像素相同。
+    // 新功能的默认值应当是「不发生」，而不是「替他做了个决定」。
+    headerLogoSize: 0,
+    footerLogoSize: 0,
+    watermarkLogoSize: 0
+  };
+  var EXPORT_SLIDERS = [
+    {
+      key: "headerLogoSize",
+      section: "header",
+      name: "\u6807\u5FD7\u5927\u5C0F",
+      desc: "\u9875\u7709\u91CC\u90A3\u679A\u6807\u5FD7\u591A\u9AD8\u30020 \u5C31\u662F\u9875\u7709\u4E0D\u653E\u6807\u5FD7\u3002",
+      min: 0,
+      max: 160,
+      step: 2,
+      unit: "px",
+      requires: "logo"
+    },
+    {
+      key: "headerGap",
+      section: "header",
+      name: "\u4E0E\u6B63\u6587\u7684\u8DDD\u79BB",
+      desc: "\u9875\u7709\u79BB\u6807\u9898\u591A\u8FDC\u30020 \u5C31\u662F\u7D27\u8D34\u7740\u6807\u9898\u3002",
+      min: 0,
+      max: 120,
+      step: 2,
+      unit: "px",
+      requires: "mark"
+    },
+    {
+      key: "footerLogoSize",
+      section: "footer",
+      name: "\u6807\u5FD7\u5927\u5C0F",
+      desc: "\u9875\u811A\u91CC\u90A3\u679A\u6807\u5FD7\u591A\u9AD8\u30020 \u5C31\u662F\u9875\u811A\u4E0D\u653E\u6807\u5FD7\u3002",
+      min: 0,
+      max: 160,
+      step: 2,
+      unit: "px",
+      requires: "logo"
+    },
+    {
+      key: "footerGap",
+      section: "footer",
+      name: "\u4E0E\u6B63\u6587\u7684\u8DDD\u79BB",
+      desc: "\u9875\u811A\u79BB\u6700\u540E\u4E00\u884C\u591A\u8FDC\u3002",
+      min: 0,
+      max: 120,
+      step: 2,
+      unit: "px",
+      requires: "mark"
+    },
+    {
+      key: "watermarkLogoSize",
+      section: "watermark",
+      name: "\u6807\u5FD7\u5927\u5C0F",
+      desc: "\u6C34\u5370\u91CC\u90A3\u679A\u6807\u5FD7\u591A\u9AD8\u30020 \u5C31\u662F\u6C34\u5370\u53EA\u6709\u6587\u5B57\u3002",
+      min: 0,
+      max: 320,
+      step: 4,
+      unit: "px",
+      requires: "logo"
+    },
+    {
+      key: "watermarkSize",
+      section: "watermark",
+      name: "\u5B57\u53F7",
+      desc: "\u6C34\u5370\u6587\u5B57\u672C\u8EAB\u591A\u5927\u3002",
+      min: 10,
+      max: 120,
+      step: 1,
+      unit: "px",
+      requires: "text"
+    },
+    {
+      key: "watermarkGapX",
+      section: "watermark",
+      name: "\u6A2A\u5411\u95F4\u8DDD",
+      desc: "\u5E73\u94FA\u65F6\u662F\u5DE6\u53F3\u4E24\u4E2A\u6C34\u5370\u4E4B\u95F4\u7684\u8DDD\u79BB\uFF1B\u5355\u4E2A\u65F6\u662F\u79BB\u5DE6\u53F3\u7EB8\u8FB9\u7684\u8DDD\u79BB\u3002",
+      min: 0,
+      max: 480,
+      step: 4,
+      unit: "px",
+      requires: "mark"
+    },
+    {
+      key: "watermarkGapY",
+      section: "watermark",
+      name: "\u7EB5\u5411\u95F4\u8DDD",
+      desc: "\u5E73\u94FA\u65F6\u662F\u4E0A\u4E0B\u4E24\u4E2A\u6C34\u5370\u4E4B\u95F4\u7684\u8DDD\u79BB\uFF1B\u5355\u4E2A\u65F6\u662F\u79BB\u4E0A\u4E0B\u7EB8\u8FB9\u7684\u8DDD\u79BB\u3002",
+      min: 0,
+      max: 480,
+      step: 4,
+      unit: "px",
+      requires: "mark"
+    },
+    {
+      key: "watermarkAngle",
+      section: "watermark",
+      name: "\u503E\u659C\u89D2\u5EA6",
+      desc: "\u8D1F\u6570\u5F80\u5DE6\u5012\uFF0C\u6B63\u6570\u5F80\u53F3\u5012\uFF0C0 \u662F\u6C34\u5E73\u3002\u6807\u5FD7\u4E0E\u6587\u5B57\u4E00\u8D77\u8F6C\u3002",
+      min: -90,
+      max: 90,
+      step: 1,
+      unit: "\xB0",
+      requires: "mark"
+    },
+    {
+      key: "watermarkOpacity",
+      section: "watermark",
+      name: "\u4E0D\u900F\u660E\u5EA6",
+      desc: "\u8D8A\u4F4E\u8D8A\u50CF\u7EB8\u7EB9\uFF0C\u8D8A\u9AD8\u8D8A\u96BE\u88AB\u88C1\u6389\u2014\u2014\u4F46\u4E5F\u8D8A\u6321\u5B57\u3002\u6807\u5FD7\u4E0E\u6587\u5B57\u540C\u4E00\u4E2A\u6570\u3002",
+      min: 1,
+      max: 100,
+      step: 1,
+      unit: "%",
+      requires: "mark"
+    }
+  ];
+  function normalizeExportStyle(input) {
+    const stored = isRecord(input) ? input : {};
+    const numbers = {
+      headerGap: DEFAULT_EXPORT_STYLE.headerGap,
+      footerGap: DEFAULT_EXPORT_STYLE.footerGap,
+      watermarkSize: DEFAULT_EXPORT_STYLE.watermarkSize,
+      watermarkGapX: DEFAULT_EXPORT_STYLE.watermarkGapX,
+      watermarkGapY: DEFAULT_EXPORT_STYLE.watermarkGapY,
+      watermarkAngle: DEFAULT_EXPORT_STYLE.watermarkAngle,
+      watermarkOpacity: DEFAULT_EXPORT_STYLE.watermarkOpacity,
+      headerLogoSize: DEFAULT_EXPORT_STYLE.headerLogoSize,
+      footerLogoSize: DEFAULT_EXPORT_STYLE.footerLogoSize,
+      watermarkLogoSize: DEFAULT_EXPORT_STYLE.watermarkLogoSize
+    };
+    for (const spec of EXPORT_SLIDERS) {
+      numbers[spec.key] = clampSlider(stored[spec.key], spec, numbers[spec.key]);
+    }
+    return {
+      format: isFormat(stored.format) ? stored.format : DEFAULT_EXPORT_STYLE.format,
+      header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
+      headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
+      headerGap: numbers.headerGap,
+      footer: text(stored.footer, DEFAULT_EXPORT_STYLE.footer),
+      footerAlign: isAlign(stored.footerAlign) ? stored.footerAlign : DEFAULT_EXPORT_STYLE.footerAlign,
+      footerGap: numbers.footerGap,
+      watermark: text(stored.watermark, DEFAULT_EXPORT_STYLE.watermark),
+      watermarkMode: isMode(stored.watermarkMode) ? stored.watermarkMode : DEFAULT_EXPORT_STYLE.watermarkMode,
+      watermarkAnchor: isAnchor(stored.watermarkAnchor) ? stored.watermarkAnchor : DEFAULT_EXPORT_STYLE.watermarkAnchor,
+      watermarkSize: numbers.watermarkSize,
+      watermarkGapX: numbers.watermarkGapX,
+      watermarkGapY: numbers.watermarkGapY,
+      watermarkAngle: numbers.watermarkAngle,
+      watermarkOpacity: numbers.watermarkOpacity,
+      logo: text(stored.logo, DEFAULT_EXPORT_STYLE.logo),
+      headerLogoSize: numbers.headerLogoSize,
+      footerLogoSize: numbers.footerLogoSize,
+      watermarkLogoSize: numbers.watermarkLogoSize
+    };
+  }
+  function clampSlider(value, spec, fallback) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+    return Math.min(spec.max, Math.max(spec.min, Math.round(value)));
+  }
+  function text(value, fallback) {
+    return typeof value === "string" ? value : fallback;
+  }
+  function isRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isFormat(value) {
+    return value === "png" || value === "pdf";
+  }
+  function isAlign(value) {
+    return value === "left" || value === "center" || value === "right";
+  }
+  function isMode(value) {
+    return value === "tile" || value === "single";
+  }
+  function isAnchor(value) {
+    return typeof value === "string" && WATERMARK_ANCHOR_GRID.some((row) => row.some((anchor) => anchor === value));
+  }
+
+  // src/modules/export/layout.ts
+  var MAX_CANVAS_SIDE = 32e3;
+  var MAX_CANVAS_PIXELS = 192e6;
+  var PREFERRED_SCALE = 2;
+  var MAX_PDF_POINTS = 14400;
+  var POINTS_PER_CSS_PIXEL = 72 / 96;
+  var LINE_BOX_RATIO = 1.32;
+  function resolveExportText(template, context) {
+    const values = {
+      title: context.title,
+      date: context.date,
+      time: context.time
+    };
+    return template.replace(/\{(title|date|time)\}/g, (_match, key) => values[key]);
+  }
+  function captureScale(width, height) {
+    const safeWidth = Math.max(1, width);
+    const safeHeight = Math.max(1, height);
+    const bySide = Math.min(MAX_CANVAS_SIDE / safeWidth, MAX_CANVAS_SIDE / safeHeight);
+    const byArea = Math.sqrt(MAX_CANVAS_PIXELS / (safeWidth * safeHeight));
+    return Math.max(Number.EPSILON, Math.min(PREFERRED_SCALE, bySide, byArea));
+  }
+  function pdfPageSize(width, height) {
+    const pointWidth = Math.max(1, width) * POINTS_PER_CSS_PIXEL;
+    const pointHeight = Math.max(1, height) * POINTS_PER_CSS_PIXEL;
+    const scale = Math.min(1, MAX_PDF_POINTS / Math.max(pointWidth, pointHeight));
+    return {
+      width: pointWidth * scale,
+      height: pointHeight * scale
+    };
+  }
+  var LOGO_TEXT_GAP_RATIO = 0.45;
+  function watermarkMark(input) {
+    const textWidth = Math.max(0, input.textWidth);
+    const logoWidth = Math.max(0, input.logoWidth);
+    const logoHeight = Math.max(0, input.logoHeight);
+    const textHeight = textWidth > 0 ? input.fontSize * LINE_BOX_RATIO : 0;
+    const gap = textWidth > 0 && logoWidth > 0 ? Math.round(input.fontSize * LOGO_TEXT_GAP_RATIO) : 0;
+    const width = Math.max(1, Math.ceil(logoWidth + gap + textWidth));
+    const height = Math.max(1, Math.ceil(Math.max(logoHeight, textHeight)));
+    return {
+      width,
+      height,
+      logoX: 0,
+      logoY: (height - logoHeight) / 2,
+      logoWidth,
+      logoHeight,
+      textX: logoWidth + gap + textWidth / 2,
+      textY: height / 2
+    };
+  }
+  function watermarkTile(mark, angle, gapX, gapY) {
+    const radians = angle * Math.PI / 180;
+    const sin = Math.abs(Math.sin(radians));
+    const cos = Math.abs(Math.cos(radians));
+    return {
+      width: Math.max(1, Math.ceil(mark.width * cos + mark.height * sin + Math.max(0, gapX))),
+      height: Math.max(1, Math.ceil(mark.width * sin + mark.height * cos + Math.max(0, gapY)))
+    };
+  }
+  function watermarkSvg(input) {
+    const centerX = input.tile.width / 2;
+    const centerY = input.tile.height / 2;
+    const offsetX = (input.tile.width - input.mark.width) / 2;
+    const offsetY = (input.tile.height - input.mark.height) / 2;
+    const opacity = Math.min(1, Math.max(0, input.opacity / 100));
+    const logo = input.logoDataUrl && input.mark.logoWidth > 0 ? `<image x="${input.mark.logoX}" y="${round(input.mark.logoY)}" width="${round(input.mark.logoWidth)}" height="${round(input.mark.logoHeight)}" href="${escapeXml(input.logoDataUrl)}"/>` : "";
+    const text2 = input.text ? `<text x="${round(input.mark.textX)}" y="${round(input.mark.textY)}" text-anchor="middle" dominant-baseline="central" fill="${escapeXml(input.color)}" font-family="${escapeXml(input.fontFamily)}" font-size="${input.fontSize}">${escapeXml(input.text)}</text>` : "";
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${input.tile.width}" height="${input.tile.height}"><g opacity="${opacity}" transform="rotate(${input.angle} ${centerX} ${centerY}) translate(${round(offsetX)} ${round(offsetY)})">${logo}${text2}</g></svg>`;
+  }
+  function round(value) {
+    return Math.round(value * 100) / 100;
+  }
+  function watermarkPosition(anchor, gapX, gapY) {
+    const [vertical, horizontal] = anchor.split("-");
+    const x = horizontal === "left" ? `${Math.max(0, gapX)}px` : horizontal === "right" ? `calc(100% - ${Math.max(0, gapX)}px)` : "50%";
+    const y = vertical === "top" ? `${Math.max(0, gapY)}px` : vertical === "bottom" ? `calc(100% - ${Math.max(0, gapY)}px)` : "50%";
+    return `${x} ${y}`;
+  }
+  function escapeXml(text2) {
+    return text2.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  }
+
+  // src/modules/export/decorate.ts
+  var DECORATION_SELECTOR = ".ziminos-export-header, .ziminos-export-footer, .ziminos-export-watermark";
+  var JUSTIFY = {
+    left: "flex-start",
+    center: "center",
+    right: "flex-end"
+  };
+  var ruler = null;
+  function applyDecorations(article, style, context, logo) {
+    const content = article.querySelector(".markdown-preview-sizer");
+    if (!content) return;
+    article.querySelectorAll(DECORATION_SELECTOR).forEach((node) => node.remove());
+    const header = buildLine(content, "ziminos-export-header", {
+      text: resolveExportText(style.header.trim(), context),
+      align: style.headerAlign,
+      logo,
+      logoSize: style.headerLogoSize
+    });
+    if (header) {
+      header.style.marginBottom = `${style.headerGap}px`;
+      content.prepend(header);
+    }
+    const footer = buildLine(content, "ziminos-export-footer", {
+      text: resolveExportText(style.footer.trim(), context),
+      align: style.footerAlign,
+      logo,
+      logoSize: style.footerLogoSize
+    });
+    if (footer) footer.style.marginTop = `${style.footerGap}px`;
+    applyWatermark(article, style, context, logo);
+  }
+  function buildLine(host, cls, input) {
+    const showLogo = Boolean(input.logo) && input.logoSize > 0;
+    if (!input.text && !showLogo) return null;
+    const line = host.createDiv({ cls });
+    Object.assign(line.style, {
+      display: "flex",
+      alignItems: "center",
+      // 用 em 而不是 px：这一行的字号随主题与用户选的阅读字体走，
+      // 图字之间那点空得跟着走，写死 px 会让换过字体的人看见图贴着字
+      gap: "0.55em",
+      justifyContent: JUSTIFY[input.align]
+    });
+    if (showLogo && input.logo) {
+      const image = line.createEl("img", { attr: { src: input.logo.dataUrl, alt: "" } });
+      Object.assign(image.style, {
+        height: `${input.logoSize}px`,
+        width: "auto",
+        display: "block",
+        flex: "0 0 auto"
+      });
+    }
+    if (input.text) line.createSpan({ text: input.text });
+    return line;
+  }
+  function applyWatermark(article, style, context, logo) {
+    const text2 = resolveExportText(style.watermark.trim(), context);
+    const showLogo = Boolean(logo) && style.watermarkLogoSize > 0;
+    if (!text2 && !showLogo) return;
+    const computed = getComputedStyle(article);
+    const fontFamily = computed.fontFamily || "sans-serif";
+    const tiled = style.watermarkMode === "tile";
+    const logoHeight = showLogo ? style.watermarkLogoSize : 0;
+    const logoWidth = showLogo && logo ? Math.max(1, Math.round(logoHeight * logo.width / logo.height)) : 0;
+    const mark = watermarkMark({
+      textWidth: text2 ? measureTextWidth(text2, style.watermarkSize, fontFamily) : 0,
+      fontSize: style.watermarkSize,
+      logoWidth,
+      logoHeight
+    });
+    const tile = watermarkTile(
+      mark,
+      style.watermarkAngle,
+      // 单个落款的间距量的是「离纸边多远」，砖本身不留白，否则那份留白会被算进偏移里两次
+      tiled ? style.watermarkGapX : 0,
+      tiled ? style.watermarkGapY : 0
+    );
+    const svg = watermarkSvg({
+      text: text2,
+      logoDataUrl: showLogo && logo ? logo.dataUrl : "",
+      mark,
+      tile,
+      fontSize: style.watermarkSize,
+      angle: style.watermarkAngle,
+      // 水印文字取正文色而不是单开一个取色器：它在明暗两套主题里都读得出，
+      // 而一个写死的品牌色在暗色主题下会变成一块看不见的东西。标志自带颜色，不受这条影响。
+      color: computed.color || "#6b7280",
+      fontFamily,
+      opacity: style.watermarkOpacity
+    });
+    const layer = article.createDiv({ cls: "ziminos-export-watermark" });
+    Object.assign(layer.style, {
+      position: "absolute",
+      left: "0",
+      top: "0",
+      // 高度按此刻的真实纸高写死而不是 inset:0：纸的盒子高度与它的 scrollHeight
+      // 在内容溢出时并不相等，而截图取的正是后者，水印必须盖满被拍下来的那一块。
+      width: `${Math.ceil(Math.max(1, article.scrollWidth))}px`,
+      height: `${Math.ceil(Math.max(1, article.scrollHeight))}px`,
+      zIndex: "20",
+      pointerEvents: "none",
+      backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`,
+      backgroundRepeat: tiled ? "repeat" : "no-repeat",
+      backgroundPosition: tiled ? "0 0" : watermarkPosition(style.watermarkAnchor, style.watermarkGapX, style.watermarkGapY)
+    });
+  }
+  function measureTextWidth(text2, fontSize, fontFamily) {
+    ruler != null ? ruler : ruler = document.createElement("canvas");
+    const context = ruler.getContext("2d");
+    if (!context) return text2.length * fontSize * 0.9;
+    context.font = `${fontSize}px ${fontFamily}`;
+    return context.measureText(text2).width || text2.length * fontSize * 0.9;
+  }
+  return __toCommonJS(entry_exports);
+})();
+</script>
+<script>/*
+ * [INPUT]: 依赖 window.ZExport（由 entry.ts 打包而来的插件真源：契约表、几何与 applyDecorations）
+ *          与 shell.html 铺好的那几个挂载点
+ * [OUTPUT]: 让演示页里的弹窗真的能用——控件、实时预览、明暗切换与两套示例风格
+ * [POS]: 演示页的"驱动"一半。它刻意**不复制**插件的任何判断：控件清单来自 EXPORT_SLIDERS，
+ *        标签来自那几张 LABELS 表，装饰由 applyDecorations 施加，
+ *        因此改了插件的表、演示页下次生成就跟着变，不存在两处各说各话的可能。
+ *        它与 modules/export/modal.ts 是同一套交互的两个宿主：那边住在 Obsidian 里，
+ *        这边住在浏览器里；两边都只会做一件事——改 style，然后重放装饰
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+
+(function () {
+    'use strict';
+
+    var Z = window.ZExport;
+
+    // ── Obsidian 给 HTMLElement 挂的那几个便捷方法。decorate.ts 用到哪几个就补哪几个 ──
+    HTMLElement.prototype.createDiv = function (o) {
+        return this.appendChild(apply(document.createElement('div'), o));
+    };
+    HTMLElement.prototype.createSpan = function (o) {
+        return this.appendChild(apply(document.createElement('span'), o));
+    };
+    HTMLElement.prototype.createEl = function (tag, o) {
+        return this.appendChild(apply(document.createElement(tag), o));
+    };
+
+    function apply(el, o) {
+        if (!o) return el;
+        if (o.cls) el.className = o.cls;
+        if (o.text) el.textContent = o.text;
+        if (o.attr) Object.keys(o.attr).forEach(function (k) { el.setAttribute(k, o.attr[k]); });
+        return el;
+    }
+
+    // ── 这一次"导出"的三个事实，与插件里 templateContextOf 取的是同样三样 ──
+    var now = new Date();
+    var CONTEXT = {
+        title: '为什么你的方法论没人愿意抄',
+        date: now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()),
+        time: pad(now.getHours()) + ':' + pad(now.getMinutes()),
+    };
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    /** 演示开场不是空白的默认值：空着的页眉页脚水印说明不了任何事 */
+    var OPENING = Object.assign({}, Z.DEFAULT_EXPORT_STYLE, {
+        header: '{title}　·　{date}',
+        headerAlign: 'right',
+        headerGap: 22,
+        footer: '赵子民　·　ziminOS 个人知识管理',
+        footerAlign: 'left',
+        footerGap: 34,
+        watermark: '赵子民 · ziminOS',
+        watermarkOpacity: 13,
+        headerLogoSize: 26,
+        watermarkLogoSize: 34,
+    });
+
+    var PRESETS = {
+        'preset-brand': {
+            label: '品牌落款',
+            patch: {
+                watermarkMode: 'single',
+                watermarkAnchor: 'bottom-right',
+                watermarkGapX: 44,
+                watermarkGapY: 36,
+                watermarkSize: 20,
+                watermarkLogoSize: 40,
+                watermarkAngle: 0,
+                watermarkOpacity: 40,
+                watermark: '赵子民',
+            },
+        },
+        'preset-guard': {
+            label: '防转发平铺',
+            patch: {
+                watermarkMode: 'tile',
+                watermarkGapX: 96,
+                watermarkGapY: 72,
+                watermarkSize: 15,
+                watermarkLogoSize: 26,
+                watermarkAngle: -32,
+                watermarkOpacity: 11,
+                watermark: '赵子民 · 仅供本人阅读',
+            },
+        },
+    };
+
+    var style = Object.assign({}, OPENING);
+    var logo = null;
+    var refreshers = [];
+    var frame = null;
+
+    var viewport = document.getElementById('viewport');
+    var canvas = document.getElementById('canvas');
+    var meta = document.getElementById('meta');
+    var controls = document.getElementById('controls');
+    var picker = document.getElementById('picker');
+    var toastEl = document.getElementById('toast');
+
+    var stage = document.createElement('div');
+    var article = buildPaper(stage);
+
+    // ══════════════════════════════════════════════════════════
+    // 那张纸
+    // ══════════════════════════════════════════════════════════
+
+    function buildPaper(host) {
+        var el = host.createDiv({ cls: 'ziminos-export-article' });
+
+        Object.assign(el.style, {
+            boxSizing: 'border-box', position: 'relative', width: '760px', minHeight: '1px',
+            overflow: 'visible', color: 'var(--text-normal)', background: 'var(--background-primary)',
+        });
+
+        var content = el.createDiv({ cls: 'markdown-preview-sizer' });
+
+        Object.assign(content.style, {
+            boxSizing: 'border-box', position: 'relative', width: '760px',
+            maxWidth: 'none', padding: '48px 56px',
+        });
+
+        var title = content.createDiv({ cls: 'demo-title' });
+
+        title.textContent = CONTEXT.title;
+
+        var body = content.createDiv({ cls: 'demo-body' });
+
+        body.innerHTML = [
+            '<p>你问我：把答案整理好发给客户，对方转手就发给了别人，我还剩下什么。</p>',
+            '<h2>水印不是补丁，是这张纸本来的样子</h2>',
+            '<p>贴一层半透明的字上去，谁都会。难的是让它<strong>既裁不掉、又不挡字</strong>——这两件事互相拉扯，只有你亲眼看着调，才知道停在哪儿。所以这个功能的第一性不是"能加水印"，是"边看边调"。</p>',
+            '<blockquote><p>左边那张纸，就是等会儿被拍下来的那一个元素。不是示意图。</p></blockquote>',
+            '<p>平铺适合防转发：整篇铺满，截哪一段都带着你的名字。单个落款适合署名：安静地待在一角，像信纸下方那一行。两者不是浓淡之别，是两个目的。</p>',
+            '<ul><li>页眉页脚：对齐、与正文的距离、可以只放标志不写字</li><li>水印：排布、九宫格落点、字号、横纵间距、角度、不透明度</li><li>标志：选一张库内图片，三处各自决定放多大，0 就是不放</li></ul>',
+            '<pre><code>applyDecorations(article, style, context, logo)</code></pre>',
+            '<p>整套风格会被记住。水印是你的品牌，而品牌的意思就是每次都一样。</p>',
+        ].join('');
+
+        return el;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // 预览
+    // ══════════════════════════════════════════════════════════
+
+    function redraw() {
+        Z.applyDecorations(article, style, CONTEXT, logo);
+        fit();
+    }
+
+    function schedule() {
+        if (frame !== null) return;
+        frame = requestAnimationFrame(function () { frame = null; redraw(); });
+    }
+
+    function fit() {
+        var width = Math.ceil(Math.max(1, article.scrollWidth));
+        var height = Math.ceil(Math.max(1, article.scrollHeight));
+        var available = Math.max(1, viewport.clientWidth - 24);
+        var scale = Math.min(1, available / width);
+
+        canvas.appendChild(stage);
+        Object.assign(stage.style, {
+            position: 'absolute', left: '0', top: '0',
+            transform: 'scale(' + scale + ')', transformOrigin: 'top left',
+        });
+        canvas.style.width = Math.ceil(width * scale) + 'px';
+        canvas.style.height = Math.ceil(height * scale) + 'px';
+
+        meta.textContent =
+            '纸面 ' + width.toLocaleString('zh-CN') + ' × ' + height.toLocaleString('zh-CN') + ' px' +
+            '　·　导出清晰度 ' + Z.captureScale(width, height).toFixed(1) + '×' +
+            '　·　预览 ' + Math.round(scale * 100) + '%';
+    }
+
+    new ResizeObserver(fit).observe(viewport);
+
+    // ══════════════════════════════════════════════════════════
+    // 控件：清单全部来自插件真源，演示页自己不列一份
+    // ══════════════════════════════════════════════════════════
+
+    function row(cls, name, desc) {
+        var item = controls.createDiv({ cls: 'setting-item' + (cls ? ' ' + cls : '') });
+        var info = item.createDiv({ cls: 'setting-item-info' });
+        var nameEl = info.createDiv({ cls: 'setting-item-name' });
+
+        nameEl.textContent = name;
+
+        var descEl = info.createDiv({ cls: 'setting-item-description' });
+
+        if (desc) descEl.textContent = desc;
+
+        return { item: item, name: nameEl, desc: descEl, control: item.createDiv({ cls: 'setting-item-control' }) };
+    }
+
+    function heading(text) { row('setting-item-heading', text, ''); }
+
+    function update(patch) {
+        style = Object.assign({}, style, patch);
+        sync();
+        schedule();
+    }
+
+    function sync() { refreshers.forEach(function (fn) { fn(); }); }
+
+    function picker3(host, values, labels, read, write, grid) {
+        var group = host.createDiv({ cls: 'ziminos-export-picker' + (grid ? ' ziminos-export-grid' : '') });
+        var buttons = values.map(function (value) {
+            var button = group.createEl('button', { attr: { type: 'button' } });
+
+            button.textContent = labels[value];
+            button.addEventListener('click', function () { write(value); });
+
+            return { value: value, button: button };
+        });
+
+        refreshers.push(function () {
+            var current = read();
+
+            buttons.forEach(function (entry) {
+                entry.button.classList.toggle('is-active', entry.value === current);
+            });
+        });
+    }
+
+    function textbox(host, key, placeholder) {
+        var input = host.createEl('input', { attr: { type: 'text', placeholder: placeholder } });
+
+        input.addEventListener('input', function () {
+            var patch = {};
+
+            patch[key] = input.value;
+            update(patch);
+        });
+        refreshers.push(function () {
+            if (input.value !== style[key]) input.value = style[key];
+        });
+    }
+
+    /** 一段（页眉/页脚/水印）此刻有没有东西，与 modal.ts 的 stateOf 同一套判据 */
+    function stateOf(textKey, logoSizeKey) {
+        var hasText = String(style[textKey]).trim() !== '';
+        var hasLogo = logo !== null;
+
+        return { text: hasText, logo: hasLogo, mark: hasText || (hasLogo && style[logoSizeKey] > 0) };
+    }
+
+    function sliders(section) {
+        return Z.EXPORT_SLIDERS.filter(function (spec) { return spec.section === section; })
+            .map(function (spec) {
+                var cell = row('ziminos-export-field', spec.name, spec.desc);
+                var readout = cell.name.createSpan({ cls: 'ziminos-export-value' });
+                var input = cell.control.createEl('input', { attr: { type: 'range' } });
+
+                input.min = spec.min;
+                input.max = spec.max;
+                input.step = spec.step;
+                input.addEventListener('input', function () {
+                    var patch = {};
+
+                    patch[spec.key] = Number(input.value);
+                    update(patch);
+                });
+                refreshers.push(function () {
+                    if (Number(input.value) !== style[spec.key]) input.value = style[spec.key];
+                    readout.textContent = style[spec.key] + spec.unit;
+                });
+
+                return { spec: spec, cell: cell };
+            });
+    }
+
+    function disable(rows, state) {
+        rows.forEach(function (entry) {
+            entry.cell.item.classList.toggle('is-disabled', !state[entry.spec.requires]);
+        });
+    }
+
+    // 格式
+    (function () {
+        var cell = row('ziminos-export-field', '格式', 'PNG 是一整张长图；PDF 是只含一页的完整长页。两者拍的是同一张图。');
+        var select = cell.control.createEl('select');
+
+        Object.keys(Z.EXPORT_FORMAT_LABELS).forEach(function (value) {
+            var option = select.createEl('option');
+
+            option.value = value;
+            option.textContent = Z.EXPORT_FORMAT_LABELS[value];
+        });
+        select.addEventListener('change', function () { update({ format: select.value }); });
+        refreshers.push(function () { select.value = style.format; });
+    })();
+
+    // 品牌标志
+    (function () {
+        heading('品牌标志');
+
+        var cell = row('ziminos-export-field ziminos-export-logo', '图片', '');
+        var choose = cell.control.createEl('button', { attr: { type: 'button' } });
+        var clear = cell.control.createEl('button', { attr: { type: 'button' } });
+
+        choose.textContent = '选择图片…';
+        clear.textContent = '✕';
+        clear.className = 'clickable-icon';
+        clear.title = '不用标志';
+
+        choose.addEventListener('click', function () { picker.click(); });
+        clear.addEventListener('click', function () { setLogo(null, ''); });
+        picker.addEventListener('change', function () {
+            var file = picker.files && picker.files[0];
+
+            if (!file) return;
+
+            var reader = new FileReader();
+
+            reader.onload = function () { loadLogo(String(reader.result), file.name); };
+            reader.readAsDataURL(file);
+            picker.value = '';
+        });
+
+        refreshers.push(function () {
+            cell.desc.textContent = !style.logo
+                ? '选一张图片。页眉、页脚与水印各自决定放多大，尺寸 0 就是那一处不放。'
+                : (logo ? style.logo + '　·　' + logo.width + ' × ' + logo.height
+                    : '这张图读不出来了：' + style.logo);
+        });
+    })();
+
+    ['header', 'footer'].forEach(function (section) {
+        var label = section === 'header' ? '页眉' : '页脚';
+        var alignKey = section === 'header' ? 'headerAlign' : 'footerAlign';
+        var logoSizeKey = section === 'header' ? 'headerLogoSize' : 'footerLogoSize';
+        var where = section === 'header' ? '显示在文章标题上方。' : '显示在文章正文下方。';
+
+        heading(label);
+        textbox(row('ziminos-export-field', '文字', where + '留空即不添加；可用 {title}、{date}、{time}。').control,
+            section, '留空即不添加');
+
+        var alignCell = row('ziminos-export-field', '位置', '');
+
+        picker3(alignCell.control, ['left', 'center', 'right'], Z.EXPORT_ALIGN_LABELS,
+            function () { return style[alignKey]; },
+            function (value) { var p = {}; p[alignKey] = value; update(p); });
+
+        var rows = sliders(section);
+
+        refreshers.push(function () {
+            var state = stateOf(section, logoSizeKey);
+
+            alignCell.item.classList.toggle('is-disabled', !state.mark);
+            disable(rows, state);
+        });
+    });
+
+    // 水印
+    (function () {
+        heading('水印');
+        textbox(row('ziminos-export-field', '文字', '留空即不添加；可用 {title}、{date}、{time}。只放标志也成立。').control,
+            'watermark', '留空即不添加');
+
+        var modeCell = row('ziminos-export-field', '排布', '平铺裁不掉，适合防转发；单个安静，适合当落款。');
+
+        picker3(modeCell.control, ['tile', 'single'], Z.WATERMARK_MODE_LABELS,
+            function () { return style.watermarkMode; },
+            function (value) { update({ watermarkMode: value }); });
+
+        var anchorCell = row('ziminos-export-field', '位置', '单个落款落在纸的哪一格。');
+        var anchors = Z.WATERMARK_ANCHOR_GRID.reduce(function (all, line) { return all.concat(line); }, []);
+
+        picker3(anchorCell.control, anchors, Z.WATERMARK_ANCHOR_LABELS,
+            function () { return style.watermarkAnchor; },
+            function (value) { update({ watermarkAnchor: value }); }, true);
+
+        var rows = sliders('watermark');
+
+        refreshers.push(function () {
+            var state = stateOf('watermark', 'watermarkLogoSize');
+
+            modeCell.item.classList.toggle('is-disabled', !state.mark);
+            anchorCell.item.classList.toggle('ziminos-export-hidden',
+                !state.mark || style.watermarkMode !== 'single');
+            disable(rows, state);
+        });
+    })();
+
+    // ══════════════════════════════════════════════════════════
+    // 底部按钮与外壳
+    // ══════════════════════════════════════════════════════════
+
+    (function () {
+        var host = document.getElementById('actions');
+        var reset = host.createEl('button', { attr: { type: 'button' } });
+        var cancel = host.createEl('button', { attr: { type: 'button' } });
+        var confirm = host.createEl('button', { attr: { type: 'button' } });
+
+        reset.textContent = '↺';
+        reset.className = 'clickable-icon';
+        reset.title = '恢复默认风格';
+        cancel.textContent = '取消';
+        confirm.textContent = '导出';
+        confirm.className = 'mod-cta';
+
+        reset.addEventListener('click', function () { update(Z.DEFAULT_EXPORT_STYLE); });
+        cancel.addEventListener('click', function () {
+            toast('取消了。真插件里这一步零写入：设置不动，磁盘上什么都不留。');
+        });
+        confirm.addEventListener('click', function () {
+            var size = Z.pdfPageSize(article.scrollWidth, article.scrollHeight);
+
+            toast(style.format === 'png'
+                ? '真插件会把左边这张纸一次性拍成 PNG，弹出系统保存框，并记住这套风格。'
+                : '真插件会把同一张图装进一页 ' + Math.round(size.width) + '×' + Math.round(size.height) +
+                  ' pt 的 PDF，弹出系统保存框，并记住这套风格。');
+        });
+    })();
+
+    document.querySelectorAll('[data-demo]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var action = button.getAttribute('data-demo');
+
+            if (action === 'theme') {
+                var root = document.documentElement;
+
+                root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+                schedule();
+
+                return;
+            }
+
+            if (action === 'reset') { update(Z.DEFAULT_EXPORT_STYLE); return; }
+
+            var preset = PRESETS[action];
+
+            if (preset) {
+                update(preset.patch);
+                toast('已套用「' + preset.label + '」。每一项都还能继续拖。');
+            }
+        });
+    });
+
+    var toastTimer = null;
+
+    function toast(text) {
+        toastEl.textContent = text;
+        toastEl.classList.add('is-on');
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(function () { toastEl.classList.remove('is-on'); }, 4200);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // 标志
+    // ══════════════════════════════════════════════════════════
+
+    function setLogo(resolved, path) {
+        logo = resolved;
+        update({ logo: path });
+    }
+
+    /** 与插件 logo.ts 同一个姿态：解出来的是自包含 data URI 加它的像素尺寸 */
+    function loadLogo(dataUrl, path) {
+        var image = new Image();
+
+        image.onload = function () {
+            setLogo({
+                path: path,
+                dataUrl: dataUrl,
+                width: image.naturalWidth || 1,
+                height: image.naturalHeight || 1,
+            }, path);
+        };
+        image.onerror = function () { setLogo(null, path); };
+        image.src = dataUrl;
+    }
+
+    /** 开场先给一枚示例标志，否则三根「标志大小」滑块一上来就是灰的，看不出它们干什么 */
+    function sampleLogo() {
+        var svg = [
+            '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="80" viewBox="0 0 220 80">',
+            '<rect x="2" y="2" width="76" height="76" rx="18" fill="#6c5ce7"/>',
+            '<text x="40" y="41" text-anchor="middle" dominant-baseline="central" fill="#fff"',
+            ' font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="40" font-weight="700">子</text>',
+            '<text x="94" y="33" fill="#2b3138" font-family="PingFang SC, sans-serif"',
+            ' font-size="26" font-weight="700">赵子民</text>',
+            '<text x="95" y="58" fill="#8b939e" font-family="Helvetica, sans-serif"',
+            ' font-size="15" letter-spacing="2">ziminOS</text></svg>',
+        ].join('');
+
+        loadLogo('data:image/svg+xml,' + encodeURIComponent(svg), '90-system/示例标志.svg');
+    }
+
+    sync();
+    redraw();
+    sampleLogo();
+})();
+</script>
+</body>
+</html>

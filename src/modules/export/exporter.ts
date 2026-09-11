@@ -1,44 +1,30 @@
 /**
- * [INPUT]: 依赖 obsidian 的 Component/MarkdownRenderer/MarkdownView/Notice/Platform/requestUrl/TFile；
- *          依赖 dom-to-image-more 的整 DOM 栅格化、jspdf 的单页 PDF 封装；
- *          依赖 core/commands 的 EXPORT_COMMAND、core/types 的 ZiminosContext，
- *          依赖 ./layout 的选项/尺寸纯函数与 ./modal 的导出弹窗；桌面保存时按需 require Electron 与 node:fs
+ * [INPUT]: 依赖 obsidian 的 Notice/Platform/TFile；依赖 dom-to-image-more 的整 DOM 栅格化、
+ *          jspdf 的单页 PDF 封装；依赖 core/commands 的 EXPORT_COMMAND、core/types 的 ZiminosContext、
+ *          core/exportStyle 的 ExportStyle 契约；依赖 ./paper 渲纸、./logo 解析品牌标志、
+ *          ./decorate 施加风格、./modal 收选择、./layout 的尺寸纯函数；桌面保存时按需 require Electron 与 node:fs
  * [OUTPUT]: 对外提供 registerExportCommand，把“导出当前笔记”接进命令台
- * [POS]: 导出模块的唯一编排点：读取当前笔记、离屏渲染、等待版面稳定、内联图片、一次性截图，
- *        再按用户选择直接保存 PNG 或把同一张图装进单页 PDF。两种格式不各自解释 Markdown，
- *        因此动态视图、页眉页脚与水印天然同构；任何失败都只落 Notice，不影响原笔记与活动视图
+ * [POS]: 导出模块的唯一编排点，只讲流程：渲一张纸 → 交给预览让用户调 → 照终值再施一次风格 →
+ *        一次性截图 → 按格式交付。内容渲染、装饰与界面各有其主，这里一件都不自己做。
+ *        截图前**再施加一次风格**不是保险起见：用户拖完滑块立刻点导出时，
+ *        预览排队中的那一帧可能还没轮到，而 applyDecorations 幂等，重放一次的代价是零。
+ *        任何失败都只落 Notice，不影响原笔记与活动视图
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import domToImage from 'dom-to-image-more';
 import { jsPDF } from 'jspdf';
-import {
-    Component,
-    MarkdownRenderer,
-    MarkdownView,
-    Notice,
-    Platform,
-    requestUrl,
-    TFile,
-} from 'obsidian';
+import { Notice, Platform, TFile } from 'obsidian';
 import { EXPORT_COMMAND } from '../../core/commands';
+import type { ExportFormat, ExportStyle } from '../../core/exportStyle';
 import type { ZiminosContext } from '../../core/types';
-import {
-    captureScale,
-    DEFAULT_EXPORT_OPTIONS,
-    pdfPageSize,
-    resolveExportText,
-    safeExportName,
-} from './layout';
-import type { ExportOptions, ExportTemplateContext } from './layout';
-import { ExportOptionsModal } from './modal';
-
-interface RenderedArticle {
-    readonly element: HTMLElement;
-    readonly width: number;
-    readonly height: number;
-    readonly release: () => void;
-}
+import { applyDecorations } from './decorate';
+import { captureScale, pdfPageSize, safeExportName } from './layout';
+import type { ExportTemplateContext } from './layout';
+import { resolveLogo } from './logo';
+import { ExportPreviewModal } from './modal';
+import { renderPaper } from './paper';
+import type { ExportPaper } from './paper';
 
 interface SaveDialogResult {
     readonly canceled: boolean;
@@ -54,29 +40,14 @@ interface SaveDialog {
     }): Promise<SaveDialogResult>;
 }
 
-const ARTICLE_WIDTH_FALLBACK = 760;
-const ARTICLE_WIDTH_MIN = 480;
-const ARTICLE_WIDTH_MAX = 1_600;
-const IMAGE_TIMEOUT_MS = 6_000;
-const LAYOUT_TIMEOUT_MS = 3_000;
-
-/** 注册唯一入口；上次选择只活在本次 Obsidian 会话，不污染全局设置 */
+/** 注册唯一入口 */
 export function registerExportCommand(ctx: ZiminosContext): void {
-    let previous = DEFAULT_EXPORT_OPTIONS;
-
     ctx.commands.register(EXPORT_COMMAND, () => {
-        void (async () => {
-            const options = await new ExportOptionsModal(ctx.app, previous).openAndGetValue();
-
-            if (!options) return;
-
-            previous = options;
-            await exportCurrentNote(ctx, options);
-        })();
+        void exportCurrentNote(ctx);
     });
 }
 
-async function exportCurrentNote(ctx: ZiminosContext, options: ExportOptions): Promise<void> {
+async function exportCurrentNote(ctx: ZiminosContext): Promise<void> {
     const file = ctx.app.workspace.getActiveFile();
 
     if (!(file instanceof TFile) || file.extension !== 'md') {
@@ -85,26 +56,25 @@ async function exportCurrentNote(ctx: ZiminosContext, options: ExportOptions): P
         return;
     }
 
-    let article: RenderedArticle | null = null;
+    let paper: ExportPaper | null = null;
 
     try {
-        new Notice('正在生成完整长页…');
-        article = await renderArticle(ctx, file, options);
+        new Notice('正在生成预览…');
+        paper = await renderPaper(ctx, file);
 
-        const scale = captureScale(article.width, article.height);
-        const blob = await domToImage.toBlob(article.element, {
-            width: article.width,
-            height: article.height,
-            scale,
-            bgcolor: backgroundColorOf(article.element),
-        });
+        const context = templateContextOf(file);
+        const style = await new ExportPreviewModal(
+            ctx.app,
+            paper,
+            ctx.settings.exportStyle,
+            context,
+        ).openAndGetValue();
 
-        if (!blob) throw new Error('浏览器没有生成图片数据');
+        if (!style) return;
 
-        const bytes = options.format === 'png'
-            ? new Uint8Array(await blob.arrayBuffer())
-            : await pdfBytes(blob, article.width, article.height);
-        const saved = await saveExport(ctx, file, options.format, bytes);
+        await rememberStyle(ctx, style);
+
+        const saved = await capture(ctx, file, paper, style, context);
 
         if (saved) new Notice(`已导出：${saved}`);
     } catch (error) {
@@ -112,250 +82,47 @@ async function exportCurrentNote(ctx: ZiminosContext, options: ExportOptions): P
 
         new Notice(`导出失败：${message}`);
     } finally {
-        article?.release();
+        paper?.release();
     }
 }
 
 /**
- * 用 MarkdownRenderer 重新渲染，而不是截当前可见区域：用户停在源码模式、滚到文章中段，
- * 或视图容器启用了虚拟滚动时，导出仍然必须从标题到最后一行完整一致。
+ * 这套风格落盘，下一次打开预览就是它。
+ *
+ * 只在用户点了「导出」之后才存：拖动过程中的每一个中间值都不算数据，
+ * 取消就该什么都没发生——这是「人主导」在这个弹窗里的具体形状。
  */
-async function renderArticle(
+async function rememberStyle(ctx: ZiminosContext, style: ExportStyle): Promise<void> {
+    ctx.settings.exportStyle = style;
+    await ctx.saveSettings();
+}
+
+async function capture(
     ctx: ZiminosContext,
     file: TFile,
-    options: ExportOptions,
-): Promise<RenderedArticle> {
-    const component = new Component();
-    const stage = document.body.createDiv({ cls: 'ziminos-export-stage' });
-    const article = stage.createDiv({ cls: 'markdown-preview-view markdown-rendered ziminos-export-article' });
-    const content = article.createDiv({ cls: 'markdown-preview-sizer' });
-    const now = new Date();
-    const context: ExportTemplateContext = {
-        title: file.basename,
-        date: localDay(now),
-        time: localTime(now),
-    };
-    const desiredWidth = articleWidthOf(ctx, file);
+    paper: ExportPaper,
+    style: ExportStyle,
+    context: ExportTemplateContext,
+): Promise<string | null> {
+    // 标志在这里重解一次而不是信弹窗那一份：读盘是异步的，用户完全可能在它读完之前就点了导出。
+    // resolveLogo 自带按路径与修改时间的缓存，重解一次通常连一次读盘都不会发生。
+    applyDecorations(paper.article, style, context, await resolveLogo(ctx.app, style.logo));
 
-    component.load();
-    styleStage(stage);
-    styleArticle(article, content, desiredWidth);
-
-    if (options.header.trim()) {
-        content.createDiv({
-            cls: 'ziminos-export-header',
-            text: resolveExportText(options.header.trim(), context),
-        });
-    }
-
-    content.createDiv({ cls: 'inline-title', text: file.basename });
-
-    const markdown = content.createDiv({ cls: 'ziminos-export-markdown' });
-
-    await MarkdownRenderer.render(ctx.app, await ctx.app.vault.cachedRead(file), markdown, file.path, component);
-
-    if (options.footer.trim()) {
-        content.createDiv({
-            cls: 'ziminos-export-footer',
-            text: resolveExportText(options.footer.trim(), context),
-        });
-    }
-
-    await inlineImages(markdown);
-    await document.fonts?.ready;
-    await waitForStableLayout(article);
-
-    // 宽表格与长代码行可以真实撑宽文章；再按 scrollWidth 回填一次，随后重算最终高度。
-    const naturalWidth = Math.ceil(Math.max(desiredWidth, article.scrollWidth));
-
-    article.style.width = `${naturalWidth}px`;
-    content.style.width = `${naturalWidth}px`;
-    await waitForStableLayout(article);
-
-    const width = Math.ceil(Math.max(1, article.scrollWidth));
-    const height = Math.ceil(Math.max(1, article.scrollHeight));
-
-    if (options.watermark.trim()) {
-        addWatermark(article, resolveExportText(options.watermark.trim(), context), width, height);
-    }
-
-    return {
-        element: article,
+    const { width, height } = paper.measure();
+    const blob = await domToImage.toBlob(paper.article, {
         width,
         height,
-        release: () => {
-            component.unload();
-            stage.remove();
-        },
-    };
-}
-
-/** 从当前笔记实际显示宽度取数；源码/阅读两态都探不到时才回落 760px */
-function articleWidthOf(ctx: ZiminosContext, file: TFile): number {
-    const view = ctx.app.workspace.getActiveViewOfType(MarkdownView);
-
-    if (!view || view.file?.path !== file.path) return ARTICLE_WIDTH_FALLBACK;
-
-    const element = view.contentEl.querySelector<HTMLElement>('.markdown-preview-sizer, .cm-sizer');
-    const measured = element?.getBoundingClientRect().width ?? 0;
-
-    return Math.round(Math.min(ARTICLE_WIDTH_MAX, Math.max(ARTICLE_WIDTH_MIN, measured || ARTICLE_WIDTH_FALLBACK)));
-}
-
-function styleStage(stage: HTMLElement): void {
-    Object.assign(stage.style, {
-        position: 'fixed',
-        left: '-100000px',
-        top: '0',
-        width: 'max-content',
-        height: 'max-content',
-        overflow: 'visible',
-        pointerEvents: 'none',
-        zIndex: '-1',
+        scale: captureScale(width, height),
+        bgcolor: backgroundColorOf(paper.article),
     });
-}
 
-function styleArticle(article: HTMLElement, content: HTMLElement, width: number): void {
-    Object.assign(article.style, {
-        boxSizing: 'border-box',
-        position: 'relative',
-        width: `${width}px`,
-        minHeight: '1px',
-        height: 'auto',
-        overflow: 'visible',
-        color: 'var(--text-normal)',
-        background: 'var(--background-primary)',
-    });
-    Object.assign(content.style, {
-        boxSizing: 'border-box',
-        position: 'relative',
-        width: `${width}px`,
-        maxWidth: 'none',
-        minHeight: '1px',
-        padding: '48px 56px',
-    });
-}
+    if (!blob) throw new Error('浏览器没有生成图片数据');
 
-/** 远端图片先经 Obsidian requestUrl 取回，避免浏览器 CORS 让整篇导出在最后一步失败 */
-async function inlineImages(root: HTMLElement): Promise<void> {
-    const images = [...root.querySelectorAll<HTMLImageElement>('img')];
+    const bytes = style.format === 'png'
+        ? new Uint8Array(await blob.arrayBuffer())
+        : await pdfBytes(blob, width, height);
 
-    await Promise.all(images.map(async (img) => {
-        const source = img.currentSrc || img.src;
-
-        if (!source || source.startsWith('data:')) return;
-
-        try {
-            const dataUrl = await withTimeout(imageDataUrl(source), IMAGE_TIMEOUT_MS);
-
-            img.src = dataUrl;
-            await withTimeout(img.decode(), IMAGE_TIMEOUT_MS);
-        } catch {
-            const fallback = document.createElement('span');
-
-            fallback.className = 'ziminos-export-image-fallback';
-            fallback.textContent = `【图片未能载入${img.alt ? `：${img.alt}` : ''}】`;
-            img.replaceWith(fallback);
-        }
-    }));
-}
-
-async function imageDataUrl(source: string): Promise<string> {
-    if (/^https?:/i.test(source)) {
-        const response = await requestUrl({ url: source, method: 'GET' });
-        const type = response.headers['content-type'] || 'application/octet-stream';
-
-        return `data:${type};base64,${base64Of(response.arrayBuffer)}`;
-    }
-
-    const response = await fetch(source);
-
-    if (!response.ok) throw new Error(`图片读取失败：${response.status}`);
-
-    const blob = await response.blob();
-
-    return `data:${blob.type || 'application/octet-stream'};base64,${base64Of(await blob.arrayBuffer())}`;
-}
-
-function base64Of(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-
-    for (let start = 0; start < bytes.length; start += 0x8000) {
-        binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
-    }
-
-    return btoa(binary);
-}
-
-/** 连续三帧尺寸不变即视为稳定；动态视图失手时最多等三秒，不让导出永久悬挂 */
-async function waitForStableLayout(element: HTMLElement): Promise<void> {
-    const started = Date.now();
-    let stableFrames = 0;
-    let previous = '';
-
-    while (stableFrames < 3 && Date.now() - started < LAYOUT_TIMEOUT_MS) {
-        await nextFrame();
-
-        const current = `${element.scrollWidth}x${element.scrollHeight}`;
-
-        stableFrames = current === previous ? stableFrames + 1 : 0;
-        previous = current;
-    }
-}
-
-function nextFrame(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
-function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-        const timer = window.setTimeout(() => reject(new Error('等待超时')), milliseconds);
-
-        promise.then(
-            (value) => {
-                window.clearTimeout(timer);
-                resolve(value);
-            },
-            (error) => {
-                window.clearTimeout(timer);
-                reject(error);
-            },
-        );
-    });
-}
-
-function addWatermark(article: HTMLElement, text: string, width: number, height: number): void {
-    const escaped = escapeXml(text);
-    const color = escapeXml(getComputedStyle(article).color || '#6b7280');
-    const tile = encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="280" height="180">` +
-        `<text x="140" y="90" text-anchor="middle" dominant-baseline="middle" ` +
-        `transform="rotate(-28 140 90)" fill="${color}" fill-opacity="0.14" ` +
-        `font-family="sans-serif" font-size="16">${escaped}</text></svg>`,
-    );
-    const layer = article.createDiv({ cls: 'ziminos-export-watermark' });
-
-    Object.assign(layer.style, {
-        position: 'absolute',
-        left: '0',
-        top: '0',
-        width: `${width}px`,
-        height: `${height}px`,
-        zIndex: '20',
-        pointerEvents: 'none',
-        backgroundImage: `url("data:image/svg+xml,${tile}")`,
-        backgroundRepeat: 'repeat',
-    });
-}
-
-function escapeXml(text: string): string {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;');
+    return saveExport(ctx, file, style.format, bytes);
 }
 
 function backgroundColorOf(element: HTMLElement): string {
@@ -388,7 +155,7 @@ async function pdfBytes(image: Blob, width: number, height: number): Promise<Uin
 async function saveExport(
     ctx: ZiminosContext,
     source: TFile,
-    format: ExportOptions['format'],
+    format: ExportFormat,
     bytes: Uint8Array,
 ): Promise<string | null> {
     const fileName = `${safeExportName(source.basename)}.${format}`;
@@ -440,6 +207,17 @@ function resolveSaveDialog(): SaveDialog | null {
     } catch {
         return null;
     }
+}
+
+/** 占位符认的是「按下导出那一刻」，所以时间在渲纸时取一次，此后拖多久都不变 */
+function templateContextOf(file: TFile): ExportTemplateContext {
+    const now = new Date();
+
+    return {
+        title: file.basename,
+        date: localDay(now),
+        time: localTime(now),
+    };
 }
 
 function localDay(value: Date): string {

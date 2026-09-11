@@ -1,0 +1,150 @@
+<!--
+  [INPUT]: 由同目录 build.mjs 填入四处占位——{{VERSION}}、{{PLUGIN_CSS}}（逐字来自插件 styles.css）、
+           {{BUNDLE}}（entry.ts 的 esbuild 产物）、{{DRIVER}}（同目录 driver.js）
+  [OUTPUT]: docs/导出预览交互演示.html 的外壳：说明栏、主题切换、以及一个近似 Obsidian 的弹窗骨架
+  [POS]: 演示页的"外壳"一半。它只负责把弹窗放进一个像 Obsidian 的环境里——
+         弹窗内部长什么样由插件真正的 styles.css 决定，怎么反应由插件真正的 decorate 决定。
+         本文件里的 CSS 全部是**近似 Obsidian app.css** 的外壳样式，一条都不描述 ziminOS 自己的外观；
+         这条边界必须守住，否则演示页会在不知不觉间长出第二套导出样式
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ziminOS 导出预览｜交互演示 v{{VERSION}}</title>
+<style>
+/* ── 外壳：近似 Obsidian app.css 与 Minimal 主题的那几条变量与控件样式 ── */
+:root[data-theme="light"] {
+  --text-normal:#2b3138; --text-muted:#6a7480; --text-faint:#9aa3ad; --text-accent:#6c5ce7;
+  --text-on-accent:#fff; --background-primary:#ffffff; --background-primary-alt:#fafbfc;
+  --background-secondary:#f2f4f7; --background-modifier-border:#dcdfe5;
+  --background-modifier-form-field:#ffffff; --interactive-normal:#eef0f4; --interactive-hover:#e4e7ed;
+  --interactive-accent:#6c5ce7; --shell-ground:#e7e9ee; --shell-panel:#ffffff; --shell-veil:rgba(18,22,28,.42);
+}
+:root[data-theme="dark"] {
+  --text-normal:#dadde2; --text-muted:#8b939e; --text-faint:#6b737d; --text-accent:#a99bff;
+  --text-on-accent:#fff; --background-primary:#1e2126; --background-primary-alt:#23262c;
+  --background-secondary:#181b1f; --background-modifier-border:#343941;
+  --background-modifier-form-field:#15181c; --interactive-normal:#2a2e35; --interactive-hover:#343941;
+  --interactive-accent:#7c6cf0; --shell-ground:#101317; --shell-panel:#1e2126; --shell-veil:rgba(0,0,0,.55);
+}
+:root { --radius-s:4px; --radius-m:8px; --radius-l:14px; --font-ui-smaller:12px; --font-ui-small:13px;
+  color-scheme:light dark; }
+:root[data-theme="dark"] { color-scheme:dark; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--shell-ground); color:var(--text-normal); line-height:1.7;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:14px; }
+code { padding:.12em .36em; border-radius:4px; background:var(--background-secondary);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+
+.brief { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:26px 0 6px; }
+.brief h1 { margin:0 0 6px; font-size:clamp(22px,3.4vw,32px); letter-spacing:-.02em; }
+.brief p { margin:6px 0; max-width:78ch; color:var(--text-muted); }
+.brief .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:14px; }
+.brief button { font:inherit; padding:6px 13px; border-radius:999px; cursor:pointer;
+  border:1px solid var(--background-modifier-border); background:var(--interactive-normal);
+  color:var(--text-normal); }
+.brief button:hover { background:var(--interactive-hover); }
+.brief .hint { color:var(--text-faint); font-size:var(--font-ui-smaller); }
+
+/* 弹窗站在一层遮罩上，与 Obsidian 里打开它时看到的层次一致 */
+.stage { width:min(1180px,calc(100% - 32px)); margin:14px auto 40px; padding:26px;
+  border-radius:20px; background:var(--shell-veil); }
+.modal { background:var(--background-primary); border-radius:var(--radius-l); padding:20px 24px 16px;
+  box-shadow:0 22px 70px rgba(0,0,0,.34); margin:0 auto; }
+.modal-title { margin-bottom:14px; font-size:18px; font-weight:600; }
+
+/* Obsidian 的 Setting 原语：名字 + 说明在左，控件在右 */
+.setting-item { display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:.75em 0; border-top:1px solid var(--background-modifier-border); }
+.setting-item-info { margin-right:20px; }
+.setting-item-description { padding-top:2px; color:var(--text-muted); font-size:var(--font-ui-smaller);
+  line-height:1.5; }
+.setting-item-control { display:flex; align-items:center; justify-content:flex-end; flex:1 1 auto; gap:8px; }
+.setting-item-heading { padding-top:16px; }
+.setting-item-heading .setting-item-name { font-weight:700; font-size:13px; letter-spacing:.04em;
+  color:var(--text-muted); }
+input[type=text], select { padding:5px 8px; border:1px solid var(--background-modifier-border);
+  border-radius:var(--radius-s); background:var(--background-modifier-form-field);
+  color:var(--text-normal); font:inherit; }
+input[type=range] { accent-color:var(--interactive-accent); }
+.setting-item button { font:inherit; padding:6px 13px; border-radius:var(--radius-s); cursor:pointer;
+  border:1px solid var(--background-modifier-border); background:var(--interactive-normal);
+  color:var(--text-normal); }
+.setting-item button.mod-cta { background:var(--interactive-accent); color:var(--text-on-accent);
+  border-color:var(--interactive-accent); }
+.clickable-icon { padding:4px 9px !important; background:none !important; border:0 !important;
+  color:var(--text-muted) !important; }
+
+/* 演示专属：右下角那句回执，替代 Obsidian 的 Notice */
+.toast { position:fixed; right:20px; bottom:20px; max-width:340px; padding:12px 15px;
+  border-radius:var(--radius-m); background:var(--background-primary-alt); color:var(--text-normal);
+  border:1px solid var(--background-modifier-border); box-shadow:0 10px 30px rgba(0,0,0,.24);
+  opacity:0; transform:translateY(8px); transition:opacity .18s,transform .18s; pointer-events:none; }
+.toast.is-on { opacity:1; transform:none; }
+
+/* 演示里那张纸的正文排版，替代 Obsidian 的阅读视图样式 */
+.demo-body p { margin:0 0 14px; line-height:1.78; }
+.demo-body h2 { margin:26px 0 10px; font-size:21px; letter-spacing:-.01em; }
+.demo-body blockquote { margin:0 0 14px; padding:2px 0 2px 16px; color:var(--text-muted);
+  border-left:3px solid var(--interactive-accent); }
+.demo-body pre { margin:0 0 14px; padding:13px 15px; border-radius:7px; overflow:auto;
+  background:var(--background-secondary); font-size:13px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+.demo-body ul { margin:0 0 14px; padding-left:22px; }
+.demo-body li { margin:4px 0; }
+.demo-title { margin:0 0 16px; font-size:30px; font-weight:700; letter-spacing:-.02em; }
+</style>
+<style>
+/* ══════════════════════════════════════════════════════════════
+ * 以下整段逐字来自 vault/.obsidian/plugins/ziminos/styles.css，由 build.mjs 注入。
+ * 不要在这里手改任何一条——改了也会在下次生成时被覆盖，而真正的样式在插件那边。
+ * ══════════════════════════════════════════════════════════════ */
+{{PLUGIN_CSS}}
+</style>
+</head>
+<body>
+<div class="brief">
+  <h1>导出预览长什么样</h1>
+  <p>这是 ziminOS <code>导出当前笔记</code> 弹出来的那个窗口。左边是等比缩小的整张成品，右边是控件——<strong>拖一格就变一格</strong>。左边那张纸不是示意图，它就是等会儿被拍成 PNG / PDF 的那一个元素。</p>
+  <p>本页里的水印几何、页眉页脚排布与装饰逻辑，用的是插件源码里同一份 <code>applyDecorations</code>，由构建脚本从 <code>src/</code> 直接打包进来；外壳（遮罩、控件外观）是对 Obsidian 的近似。真插件里"选择图片"打开的是笔记库里的图片清单，本页换成了你本机的文件选择框，方便你直接拿自己的 logo 试。</p>
+  <div class="bar">
+    <button type="button" data-demo="theme">切换明暗</button>
+    <button type="button" data-demo="preset-brand">试一套：品牌落款</button>
+    <button type="button" data-demo="preset-guard">试一套：防转发平铺</button>
+    <button type="button" data-demo="reset">恢复默认</button>
+    <span class="hint">v{{VERSION}} · 单文件，可离线打开、可转发</span>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="modal ziminos-export-modal">
+    <div class="modal-title">导出当前笔记</div>
+    <div class="modal-content">
+      <div class="ziminos-export-layout">
+        <div class="ziminos-export-preview">
+          <div class="ziminos-export-meta" id="meta"></div>
+          <div class="ziminos-export-viewport" id="viewport">
+            <div class="ziminos-export-canvas" id="canvas"></div>
+          </div>
+        </div>
+        <div class="ziminos-export-controls" id="controls"></div>
+      </div>
+      <div class="setting-item ziminos-export-actions">
+        <div class="setting-item-info"></div>
+        <div class="setting-item-control" id="actions"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="picker" accept="image/*" hidden>
+
+<script>{{BUNDLE}}</script>
+<script>{{DRIVER}}</script>
+</body>
+</html>

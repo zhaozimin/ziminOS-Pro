@@ -1,9 +1,9 @@
 /*
  * ziminOS 视图样式
  *
- * 服务插件自渲染的二十三个笔记内视图、中国日历与最近文件两个 ItemView、外观开关浮层、
- * 文件浏览器里那串文件夹计数、状态栏那一块当前路径，
- * 以及设置页的九张标签页与开荒页尾的落款，
+ * 服务插件自渲染的二十四个笔记内视图、中国日历与最近文件两个 ItemView、外观开关浮层、
+ * 文件浏览器里那串文件夹计数、状态栏那一块当前路径、导出预览弹窗（连同会被拍进 PNG/PDF 的
+ * 页眉页脚），以及设置页的八张标签页与开荒页尾的落款，
  * 全部选择器都带 ziminos- 前缀，不碰用户笔记正文。
  * 除文末那一条藏边栏图标的规则外，不覆盖主题的任何既有规则——那一条的理由写在它自己头上。
  * 文件夹计数那两条以 .nav-folder-title 打头，看着像在碰主题，其实只选我们自己插进去的那个
@@ -1226,4 +1226,240 @@ a[href^="ziminos-eagle://"] {
     .ziminos-confetti {
         display: none;
     }
+}
+
+/* ============================================================
+ * 导出预览 · 弹窗
+ *
+ * 这一段服务两类东西，值得先分清，否则改错了没人当场发现：
+ * 前半段（modal / layout / viewport / picker …）只活在弹窗里，用户看完就关；
+ * 后半段（header / footer / image-fallback）会被 dom-to-image 连同计算样式一起
+ * **拍进最终的 PNG 与 PDF**——改它等于改交付物本身。
+ * 因此后半段只用相对单位与语义变量：纸的宽度由笔记决定，写死 px 会让宽窄两篇长得不一样。
+ * ============================================================ */
+
+.modal.ziminos-export-modal {
+    /* 预览要占掉大半个弹窗才看得清版式，默认的模态宽度装不下「纸 + 一列控件」 */
+    width: min(1120px, 94vw);
+    max-width: none;
+}
+
+.ziminos-export-layout {
+    display: flex;
+    gap: 18px;
+    align-items: stretch;
+    /* 高度写死在这一层而不是让弹窗自己长：纸可以有几千像素高，
+       不给边界的话弹窗会顶到屏幕外，而滚动条本该长在预览区里 */
+    height: min(64vh, 640px);
+}
+
+.ziminos-export-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ziminos-export-meta {
+    flex: 0 0 auto;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    /* 拖滑块时这行数字每帧都在变，等宽数字才不会让整行左右抖 */
+    font-variant-numeric: tabular-nums;
+}
+
+.ziminos-export-viewport {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    /* 这 12px 的左右内边距正是 modal.ts 里那个 VIEWPORT_PADDING 的另一半：
+       clientWidth 含内边距，两处必须对得上，否则纸不是溢出就是白留半边 */
+    padding: 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background: var(--background-secondary);
+}
+
+.ziminos-export-canvas {
+    position: relative;
+    margin: 0 auto;
+    /* 一道投影把「纸」从「底板」上分出来——没有它，白纸白底就看不出边界在哪 */
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+}
+
+.ziminos-export-controls {
+    flex: 0 0 320px;
+    min-width: 0;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.ziminos-export-controls .setting-item {
+    border-top: none;
+    padding: 10px 0;
+}
+
+/*
+ * 上面那条把每一行的分隔线都去掉了——三百二十像素一列，十几道横线只会把它切成碎片。
+ * 于是「页眉 / 页脚 / 水印」三道小标题重新拿回那根线：分隔留给分段，不留给每一行。
+ */
+.ziminos-export-controls .setting-item.setting-item-heading {
+    border-top: 1px solid var(--background-modifier-border);
+    margin-top: 8px;
+    padding-top: 18px;
+}
+
+/*
+ * 三百二十像素一列，Obsidian 默认的「名字在左、控件在右」会把滑块挤成一小段。
+ * 所以带 field 标记的行改成上下两层：说明在上，控件占满整行。
+ */
+.ziminos-export-controls .setting-item.ziminos-export-field {
+    display: block;
+}
+
+.ziminos-export-controls .ziminos-export-field .setting-item-info {
+    margin-right: 0;
+}
+
+.ziminos-export-controls .ziminos-export-field .setting-item-control {
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: 6px;
+}
+
+.ziminos-export-controls .ziminos-export-field input[type="text"],
+.ziminos-export-controls .ziminos-export-field select,
+.ziminos-export-controls .ziminos-export-field input[type="range"] {
+    width: 100%;
+}
+
+/*
+ * 标志那一行的说明位里显示的是库内路径，可能很长且没有空格可断。
+ * 不给它断行的余地，它会把整列撑宽、把预览挤扁——而那条路径本来只是个回执。
+ */
+.ziminos-export-controls .ziminos-export-logo .setting-item-description {
+    overflow-wrap: anywhere;
+}
+
+.ziminos-export-controls .ziminos-export-logo .setting-item-control {
+    gap: 6px;
+}
+
+.ziminos-export-value {
+    margin-left: 8px;
+    font-weight: normal;
+    color: var(--text-accent);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 位置这件事用位置来问：一排互斥按钮，而不是一个把空间压成一列文字的下拉框 */
+.ziminos-export-picker {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+}
+
+.ziminos-export-picker button {
+    flex: 1 1 0;
+    padding: 5px 0;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    background: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.ziminos-export-picker button:hover {
+    color: var(--text-normal);
+}
+
+.ziminos-export-picker button.is-active {
+    color: var(--text-on-accent);
+    background: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+}
+
+.ziminos-export-picker.ziminos-export-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 216px;
+}
+
+/*
+ * 那九个格子与那几根滑块是我们自己建的 DOM，Setting.setDisabled 够不着它们。
+ * 不补这一条，文字留空时控件看着还能点——点了却什么都不发生，比变灰难懂得多。
+ */
+.ziminos-export-controls .setting-item.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* 平铺的水印没有「位置」，那一行整行收起而不是变灰：
+   一个永远无效的控件留在那儿，用户会以为是它坏了 */
+.ziminos-export-controls .setting-item.ziminos-export-hidden {
+    display: none;
+}
+
+.ziminos-export-actions {
+    border-top: 1px solid var(--background-modifier-border);
+    padding-top: 14px;
+    margin-top: 4px;
+}
+
+@media (max-width: 820px) {
+    .ziminos-export-layout {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .ziminos-export-viewport {
+        height: 42vh;
+    }
+
+    .ziminos-export-controls {
+        flex: 1 1 auto;
+        max-height: 42vh;
+    }
+
+    .ziminos-export-picker.ziminos-export-grid {
+        max-width: none;
+    }
+}
+
+/* ── 以下三条会被拍进 PNG / PDF，改它们等于改交付物 ── */
+
+.ziminos-export-header,
+.ziminos-export-footer {
+    /* em 而不是 px：纸的正文字号随主题与用户选的阅读字体走，页眉页脚得跟着走 */
+    font-size: 0.82em;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+}
+
+/*
+ * 页眉页脚里那枚标志。高度由插件按用户拖的值内联写死、宽度随比例走，
+ * 这里只负责挡住主题可能加在 img 上的圆角、投影与外边距——
+ * 那些是给正文插图准备的，而这一枚是版式的一部分，不该被当成插图装饰。
+ */
+.ziminos-export-header img,
+.ziminos-export-footer img {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    max-width: none;
+}
+
+.ziminos-export-image-fallback {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    border: 1px dashed var(--background-modifier-border);
+    border-radius: var(--radius-s);
 }

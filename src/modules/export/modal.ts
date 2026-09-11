@@ -1,28 +1,100 @@
 /**
- * [INPUT]: 依赖 obsidian 的 App/Modal/Setting 公开界面原语，依赖 ./layout 的导出选项契约
- * [OUTPUT]: 对外提供 ExportOptionsModal，调用方通过 openAndGetValue 一次取得格式与三类装饰文本
- * [POS]: 导出模块唯一的人机交互面。它只收选择、不碰文件、不开始渲染；Esc、遮罩与取消
- *        全部收敛为 null，使“没导出”在调用侧只有一种语义
+ * [INPUT]: 依赖 obsidian 的 Modal/Setting/Notice/TFile 界面原语，依赖 core/exportStyle 的契约、标签表与滑块规格，
+ *          依赖 core/modals 的 ChoiceModal 选图，依赖 ./paper 的 ExportPaper、./decorate 的 applyDecorations、
+ *          ./logo 的 resolveLogo/isLogoFile、./layout 的 captureScale
+ * [OUTPUT]: 对外提供 ExportPreviewModal，调用方 openAndGetValue 一次取得整套导出风格
+ * [POS]: 导出模块唯一的人机交互面。它借来那张已经渲好的纸、缩放着摆进左边，
+ *        右边每一次拖动都只重放装饰、不碰内容，因此「实时」不是靠节流硬撑出来的。
+ *        它只收选择、只借纸、不碰文件也不开始截图；Esc、遮罩与取消全部收敛为 null，
+ *        使「没导出」在调用侧只有一种语义。
+ *        全部控件挂在 refreshers 一张表上：加一个控件就是多注册一个「照着 value 把自己画对」的闭包，
+ *        于是「恢复默认」不必逐个想起谁需要被同步——想不起来的那一个正是会出错的那一个。
+ *        滑块该不该变灰由 EXPORT_SLIDERS 的 requires 字段决定而不是在这里逐根判断，
+ *        因为那个判断一旦写错，用户会被锁在「要开标志得先拖那根滑块、而那根滑块正关着」里出不来
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { Modal, Setting } from 'obsidian';
-import type { App } from 'obsidian';
-import type { ExportFormat, ExportOptions } from './layout';
+import { Modal, Notice, Setting, TFile } from 'obsidian';
+import type { App, TextComponent } from 'obsidian';
+import {
+    DEFAULT_EXPORT_STYLE,
+    EXPORT_ALIGN_LABELS,
+    EXPORT_FORMAT_LABELS,
+    EXPORT_SLIDERS,
+    WATERMARK_ANCHOR_GRID,
+    WATERMARK_ANCHOR_LABELS,
+    WATERMARK_MODE_LABELS,
+} from '../../core/exportStyle';
+import type {
+    ExportAlign,
+    ExportFormat,
+    ExportSliderSpec,
+    ExportStyle,
+    WatermarkAnchor,
+    WatermarkMode,
+} from '../../core/exportStyle';
+import { ChoiceModal } from '../../core/modals';
+import { applyDecorations } from './decorate';
+import { captureScale } from './layout';
+import type { ExportTemplateContext } from './layout';
+import { isLogoFile, resolveLogo } from './logo';
+import type { ResolvedLogo } from './logo';
+import type { ExportPaper } from './paper';
 
-export class ExportOptionsModal extends Modal {
-    private readonly initial: ExportOptions;
-    private value: ExportOptions;
-    private resolver: ((value: ExportOptions | null) => void) | null = null;
+/** 预览区左右各留一点余白，纸不贴着框边，缩放比例照这个可用宽度算 */
+const VIEWPORT_PADDING = 24;
 
-    constructor(app: App, initial: ExportOptions) {
+/** 一根滑块和它的规格；规格随身带着，禁用规则才不必回头去查表 */
+interface SliderRow {
+    readonly spec: ExportSliderSpec;
+    readonly setting: Setting;
+}
+
+/** 一段装饰此刻手里有什么。三个布尔量正好对上 requires 的三种取值 */
+interface SectionState {
+    readonly text: boolean;
+    readonly logo: boolean;
+    readonly mark: boolean;
+}
+
+/**
+ * 只在真的不一样时才写回控件。
+ *
+ * 每改一个字都会把整张 refreshers 表跑一遍，其中就包括用户此刻正在打字的那个输入框。
+ * 往 input.value 写一个与现值相同的字符串，按 HTML 规范是要把光标挪到末尾的
+ * （Chromium 恰好在值没变时略过这一步，但那是实现的善意，不是承诺）。
+ * 一行判断就让「在句子中间插一个字，光标跳到行尾」这类 bug 在结构上不可能发生。
+ */
+function syncText(text: TextComponent, value: string): void {
+    if (text.getValue() !== value) text.setValue(value);
+}
+
+export class ExportPreviewModal extends Modal {
+    private readonly paper: ExportPaper;
+    private readonly initial: ExportStyle;
+    private readonly context: ExportTemplateContext;
+    private value: ExportStyle;
+    private resolver: ((value: ExportStyle | null) => void) | null = null;
+    private readonly refreshers: (() => void)[] = [];
+    private canvasEl: HTMLElement | null = null;
+    private viewportEl: HTMLElement | null = null;
+    private metaEl: HTMLElement | null = null;
+    private observer: ResizeObserver | null = null;
+    private frame: number | null = null;
+    private logo: ResolvedLogo | null = null;
+    /** 解析标志是异步的；只有最后一次请求有权写回结果，否则快速换两张图会画错那一张 */
+    private logoToken = 0;
+
+    constructor(app: App, paper: ExportPaper, initial: ExportStyle, context: ExportTemplateContext) {
         super(app);
 
+        this.paper = paper;
         this.initial = initial;
-        this.value = { ...initial };
+        this.context = context;
+        this.value = initial;
     }
 
-    openAndGetValue(): Promise<ExportOptions | null> {
+    openAndGetValue(): Promise<ExportStyle | null> {
         this.open();
 
         return new Promise((resolve) => {
@@ -31,32 +103,360 @@ export class ExportOptionsModal extends Modal {
     }
 
     onOpen(): void {
-        this.value = { ...this.initial };
+        this.value = this.initial;
+        this.logo = null;
+        this.refreshers.length = 0;
+        this.modalEl.addClass('ziminos-export-modal');
         this.titleEl.setText('导出当前笔记');
         this.contentEl.empty();
 
-        this.contentEl.createEl('p', {
-            text: '自动按当前文章的完整宽度与高度输出。页眉、页脚、水印留空即关闭；可用 {title}、{date}、{time}。',
-        });
+        const layout = this.contentEl.createDiv({ cls: 'ziminos-export-layout' });
 
-        new Setting(this.contentEl)
+        this.buildPreview(layout.createDiv({ cls: 'ziminos-export-preview' }));
+        this.buildControls(layout.createDiv({ cls: 'ziminos-export-controls' }));
+        this.buildActions();
+
+        this.syncControls();
+        this.redraw();
+        void this.loadLogo();
+    }
+
+    onClose(): void {
+        if (this.frame !== null) cancelAnimationFrame(this.frame);
+        this.frame = null;
+        this.logoToken += 1;
+        this.observer?.disconnect();
+        this.observer = null;
+        // 纸必须先回到离屏舞台：它在预览里是被 transform 缩过的，
+        // 而截图前的那一刻，被拍的元素头上不该压着任何一层缩放。
+        this.paper.unmount();
+        this.canvasEl = null;
+        this.viewportEl = null;
+        this.metaEl = null;
+        this.refreshers.length = 0;
+        this.contentEl.empty();
+        this.settle(null);
+    }
+
+    // ============================================================
+    // 预览
+    // ============================================================
+
+    private buildPreview(host: HTMLElement): void {
+        this.metaEl = host.createDiv({ cls: 'ziminos-export-meta' });
+        this.viewportEl = host.createDiv({ cls: 'ziminos-export-viewport' });
+        this.canvasEl = this.viewportEl.createDiv({ cls: 'ziminos-export-canvas' });
+
+        // 弹窗会随窗口一起变宽变窄，缩放比例是算出来的而不是写死的，
+        // 所以可用宽度一变就得重算——否则纸要么溢出、要么白留半边。
+        this.observer = new ResizeObserver(() => this.fitPreview());
+        this.observer.observe(this.viewportEl);
+    }
+
+    /** 只重放装饰，不碰内容。这是整个预览能做到实时的全部原因 */
+    private redraw(): void {
+        applyDecorations(this.paper.article, this.value, this.context, this.logo);
+        this.fitPreview();
+    }
+
+    private schedule(): void {
+        if (this.frame !== null) return;
+
+        this.frame = requestAnimationFrame(() => {
+            this.frame = null;
+            this.redraw();
+        });
+    }
+
+    private fitPreview(): void {
+        const viewport = this.viewportEl;
+        const canvas = this.canvasEl;
+
+        if (!viewport || !canvas) return;
+
+        const paper = this.paper.measure();
+        const available = Math.max(1, viewport.clientWidth - VIEWPORT_PADDING);
+        const scale = Math.min(1, available / paper.width);
+
+        this.paper.mount(canvas, scale);
+        canvas.style.width = `${Math.ceil(paper.width * scale)}px`;
+        canvas.style.height = `${Math.ceil(paper.height * scale)}px`;
+
+        // 把导出清晰度一并报出来：超长文会被主动降采样，那是诚实的退化，
+        // 但它必须在导出之前就写在脸上，而不是等用户拿到一张糊图才发现。
+        this.metaEl?.setText(
+            `纸面 ${paper.width.toLocaleString('zh-CN')} × ${paper.height.toLocaleString('zh-CN')} px` +
+            `　·　导出清晰度 ${captureScale(paper.width, paper.height).toFixed(1)}×` +
+            `　·　预览 ${Math.round(scale * 100)}%`,
+        );
+    }
+
+    // ============================================================
+    // 控件
+    // ============================================================
+
+    private buildControls(host: HTMLElement): void {
+        // 这一列只有三百二十像素宽，所以「说明在上、控件在下」是没有例外的一条规则：
+        // 留一行侧放，说明文字就会把它的控件挤成一小段，而那一行并没有因此更好读。
+        new Setting(host)
             .setName('格式')
-            .setDesc('PNG 是一整张长图；PDF 是只含一页的完整长页。')
+            .setDesc('PNG 是一整张长图；PDF 是只含一页的完整长页。两者拍的是同一张图。')
+            .setClass('ziminos-export-field')
             .addDropdown((dropdown) => {
-                dropdown
-                    .addOption('png', 'PNG 长图')
-                    .addOption('pdf', 'PDF 单页')
-                    .setValue(this.value.format)
-                    .onChange((format) => {
-                        this.value = { ...this.value, format: format as ExportFormat };
-                    });
+                for (const [format, label] of Object.entries(EXPORT_FORMAT_LABELS)) {
+                    dropdown.addOption(format, label);
+                }
+
+                dropdown.onChange((format) => this.update({ format: format as ExportFormat }));
+                this.refreshers.push(() => dropdown.setValue(this.value.format));
             });
 
-        this.addTextSetting('页眉', '显示在文章标题上方。', 'header');
-        this.addTextSetting('页脚', '显示在文章正文下方。', 'footer');
-        this.addTextSetting('水印', '以低透明度在整篇上重复铺开。', 'watermark');
+        this.buildLogoPicker(host);
+        this.buildLine(host, 'header', '页眉', '显示在文章标题上方。');
+        this.buildLine(host, 'footer', '页脚', '显示在文章正文下方。');
+        this.buildWatermark(host);
+    }
 
+    /**
+     * 选标志。库里的图片是一个封闭集合，因此走 ChoiceModal 而不是让人手打路径——
+     * 这条纪律与 core/modals 里那句「凡取值来自封闭集合一律走 ChoiceModal」同源：
+     * 手打出来的路径能通过一切非空校验，然后安静地渲不出图。
+     */
+    private buildLogoPicker(host: HTMLElement): void {
+        new Setting(host).setName('品牌标志').setHeading();
+
+        const setting = new Setting(host)
+            .setName('图片')
+            .setClass('ziminos-export-field')
+            .setClass('ziminos-export-logo')
+            .addButton((button) => {
+                button.setButtonText('选择图片…').onClick(() => void this.pickLogo());
+            })
+            .addExtraButton((button) => {
+                button
+                    .setIcon('x')
+                    .setTooltip('不用标志')
+                    .onClick(() => this.update({ logo: '' }));
+            });
+
+        this.refreshers.push(() => setting.setDesc(this.logoStatus()));
+    }
+
+    /** 三种状态各有各的话：没选过、选了但读不出、读出来了多大 */
+    private logoStatus(): string {
+        const path = this.value.logo.trim();
+
+        if (!path) {
+            return '选一张库内的图片。页眉、页脚与水印各自决定放多大，尺寸 0 就是那一处不放。';
+        }
+
+        if (!this.logo) return `这张图读不出来了（可能已被改名或删除）：${path}`;
+
+        return `${path}　·　${this.logo.width} × ${this.logo.height}`;
+    }
+
+    private async pickLogo(): Promise<void> {
+        const images = this.app.vault.getFiles().filter((file) => isLogoFile(file));
+
+        if (!images.length) {
+            new Notice('笔记库里还没有图片。先把标志放进库里，再回来选。');
+
+            return;
+        }
+
+        const picked = await new ChoiceModal<TFile>(this.app, {
+            title: '选一张图片当品牌标志',
+            items: images,
+            labelOf: (file) => file.path,
+        }).openAndGetChoice();
+
+        if (!picked) return;
+
+        this.update({ logo: picked.path });
+    }
+
+    /** 页眉与页脚是同一种东西的两个落点，所以只有一份画法 */
+    private buildLine(
+        host: HTMLElement,
+        section: 'header' | 'footer',
+        name: string,
+        description: string,
+    ): void {
+        const alignKey = section === 'header' ? 'headerAlign' : 'footerAlign';
+        const logoSizeKey = section === 'header' ? 'headerLogoSize' : 'footerLogoSize';
+
+        new Setting(host).setName(name).setHeading();
+
+        new Setting(host)
+            .setName('文字')
+            .setDesc(`${description}留空即不添加；可用 {title}、{date}、{time}。`)
+            .setClass('ziminos-export-field')
+            .addText((text) => {
+                text.setPlaceholder('留空即不添加')
+                    .onChange((input) => this.update({ [section]: input }));
+                this.refreshers.push(() => syncText(text, this.value[section]));
+            });
+
+        const alignSetting = new Setting(host).setName('位置').setClass('ziminos-export-field');
+
+        this.addPicker(
+            alignSetting,
+            ['left', 'center', 'right'],
+            EXPORT_ALIGN_LABELS,
+            () => this.value[alignKey],
+            (align: ExportAlign) => this.update({ [alignKey]: align }),
+        );
+
+        const rows = this.buildSliders(host, section);
+
+        this.refreshers.push(() => {
+            const state = this.stateOf(this.value[section], this.value[logoSizeKey]);
+
+            alignSetting.setDisabled(!state.mark);
+            applySliderState(rows, state);
+        });
+    }
+
+    private buildWatermark(host: HTMLElement): void {
+        new Setting(host).setName('水印').setHeading();
+
+        new Setting(host)
+            .setName('文字')
+            .setDesc('留空即不添加；可用 {title}、{date}、{time}。只放标志也成立。')
+            .setClass('ziminos-export-field')
+            .addText((text) => {
+                text.setPlaceholder('留空即不添加')
+                    .onChange((input) => this.update({ watermark: input }));
+                this.refreshers.push(() => syncText(text, this.value.watermark));
+            });
+
+        const modeSetting = new Setting(host)
+            .setName('排布')
+            .setDesc('平铺裁不掉，适合防转发；单个安静，适合当落款。')
+            .setClass('ziminos-export-field');
+
+        this.addPicker(
+            modeSetting,
+            ['tile', 'single'],
+            WATERMARK_MODE_LABELS,
+            () => this.value.watermarkMode,
+            (mode: WatermarkMode) => this.update({ watermarkMode: mode }),
+        );
+
+        const anchorSetting = new Setting(host)
+            .setName('位置')
+            .setDesc('单个落款落在纸的哪一格。')
+            .setClass('ziminos-export-field');
+
+        this.addPicker(
+            anchorSetting,
+            WATERMARK_ANCHOR_GRID.flat(),
+            WATERMARK_ANCHOR_LABELS,
+            () => this.value.watermarkAnchor,
+            (anchor: WatermarkAnchor) => this.update({ watermarkAnchor: anchor }),
+            'ziminos-export-grid',
+        );
+
+        const rows = this.buildSliders(host, 'watermark');
+
+        this.refreshers.push(() => {
+            const state = this.stateOf(this.value.watermark, this.value.watermarkLogoSize);
+
+            modeSetting.setDisabled(!state.mark);
+            // 平铺的水印没有「位置」——无限重复的图案只有疏密。
+            // 那一格因此不是变灰而是整行收起：留着一个永远无效的控件，用户会以为是它坏了。
+            anchorSetting.settingEl.toggleClass(
+                'ziminos-export-hidden',
+                !state.mark || this.value.watermarkMode !== 'single',
+            );
+            applySliderState(rows, state);
+        });
+    }
+
+    /**
+     * 一段装饰此刻有没有字、有没有图可用、整体显不显示。
+     *
+     * `logo` 问的是「选没选过一张读得出的图」而不是「这一处放不放」——
+     * 正因为如此，标志大小那根滑块在这一处尺寸为 0 时**依然可拖**，
+     * 否则它就是自己把自己锁死的那根滑块。
+     */
+    private stateOf(text: string, logoSize: number): SectionState {
+        const hasText = text.trim() !== '';
+        const hasLogo = this.logo !== null;
+
+        return {
+            text: hasText,
+            logo: hasLogo,
+            mark: hasText || (hasLogo && logoSize > 0),
+        };
+    }
+
+    /** 照 EXPORT_SLIDERS 那张表铺滑块。范围与验形区间同源，界面拖得到的值重启后一定还认 */
+    private buildSliders(host: HTMLElement, section: ExportSliderSpec['section']): SliderRow[] {
+        return EXPORT_SLIDERS.filter((spec) => spec.section === section).map((spec) => {
+            const setting = new Setting(host)
+                .setName(spec.name)
+                .setDesc(spec.desc)
+                .setClass('ziminos-export-field');
+            const readout = setting.nameEl.createSpan({ cls: 'ziminos-export-value' });
+
+            setting.addSlider((slider) => {
+                slider
+                    .setLimits(spec.min, spec.max, spec.step)
+                    .setInstant(true)
+                    .onChange((input) => this.update({ [spec.key]: input }));
+                this.refreshers.push(() => {
+                    if (slider.getValue() !== this.value[spec.key]) slider.setValue(this.value[spec.key]);
+                    readout.setText(`${this.value[spec.key]}${spec.unit}`);
+                });
+            });
+
+            return { spec, setting };
+        });
+    }
+
+    /**
+     * 一排互斥按钮。位置这件事该用位置来问：
+     * 下拉框把「左中右」和「九宫格」压成一列文字，而它们本来就是空间。
+     */
+    private addPicker<T extends string>(
+        setting: Setting,
+        values: readonly T[],
+        labels: Readonly<Record<T, string>>,
+        read: () => T,
+        write: (value: T) => void,
+        extraClass?: string,
+    ): void {
+        const group = setting.controlEl.createDiv({ cls: 'ziminos-export-picker' });
+
+        if (extraClass) group.addClass(extraClass);
+
+        const buttons = values.map((value) => {
+            const button = group.createEl('button', { text: labels[value], attr: { type: 'button' } });
+
+            button.addEventListener('click', () => write(value));
+
+            return { value, button };
+        });
+
+        this.refreshers.push(() => {
+            const current = read();
+
+            for (const entry of buttons) {
+                entry.button.toggleClass('is-active', entry.value === current);
+            }
+        });
+    }
+
+    private buildActions(): void {
         new Setting(this.contentEl)
+            .setClass('ziminos-export-actions')
+            .addExtraButton((button) => {
+                button
+                    .setIcon('rotate-ccw')
+                    .setTooltip('恢复默认风格')
+                    .onClick(() => this.update(DEFAULT_EXPORT_STYLE));
+            })
             .addButton((button) => {
                 button.setButtonText('取消').onClick(() => this.close());
             })
@@ -65,38 +465,52 @@ export class ExportOptionsModal extends Modal {
                     .setButtonText('导出')
                     .setCta()
                     .onClick(() => {
-                        this.settle({ ...this.value });
+                        this.settle(this.value);
                         this.close();
                     });
             });
     }
 
-    onClose(): void {
-        this.contentEl.empty();
-        this.settle(null);
+    // ============================================================
+    // 状态
+    // ============================================================
+
+    private update(patch: Partial<ExportStyle>): void {
+        const previous = this.value.logo;
+
+        this.value = { ...this.value, ...patch };
+
+        if (this.value.logo !== previous) void this.loadLogo();
+
+        this.syncControls();
+        this.schedule();
     }
 
-    private addTextSetting(
-        name: string,
-        description: string,
-        key: 'header' | 'footer' | 'watermark',
-    ): void {
-        new Setting(this.contentEl)
-            .setName(name)
-            .setDesc(description)
-            .addText((text) => {
-                text.setPlaceholder('留空即不添加')
-                    .setValue(this.value[key])
-                    .onChange((value) => {
-                        this.value = { ...this.value, [key]: value };
-                    });
-            });
+    /** 读盘是异步的，所以它自己排在预览之外；读完再同步一次控件与画面 */
+    private async loadLogo(): Promise<void> {
+        const token = ++this.logoToken;
+        const resolved = await resolveLogo(this.app, this.value.logo);
+
+        if (token !== this.logoToken) return;
+
+        this.logo = resolved;
+        this.syncControls();
+        this.schedule();
     }
 
-    private settle(value: ExportOptions | null): void {
+    private syncControls(): void {
+        for (const refresh of this.refreshers) refresh();
+    }
+
+    private settle(value: ExportStyle | null): void {
         const resolve = this.resolver;
 
         this.resolver = null;
         resolve?.(value);
     }
+}
+
+/** 谁该变灰由规格里的 requires 决定，不在调用处逐根写死 */
+function applySliderState(rows: readonly SliderRow[], state: SectionState): void {
+    for (const row of rows) row.setting.setDisabled(!state[row.spec.requires]);
 }

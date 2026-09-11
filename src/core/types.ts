@@ -3,7 +3,8 @@
  *          文件夹计数与最近文件的默认值/合法集合，
  *          依赖 ./device 的状态栏路径口径与 Eagle 本机参数，
  *          依赖 ./commands 的 DEFAULT_RIBBON_COMMANDS/normalizeRibbonCommands 与 CommandRegistry 类型，
- *          依赖 ./markdownStyle 的 DEFAULT_FORMAT_RULES/normalizeFormatRules，依赖 ./guard 的 SelfWriteGuard 类型，
+ *          依赖 ./markdownStyle 的 DEFAULT_FORMAT_RULES/normalizeFormatRules，
+ *          依赖 ./exportStyle 的 DEFAULT_EXPORT_STYLE/normalizeExportStyle，依赖 ./guard 的 SelfWriteGuard 类型，
  *          依赖 ./edition 的 EditionInfo 类型
  * [OUTPUT]: 对外提供 ZiminosSettings 设置契约、DEFAULT_SETTINGS 默认值、normalizeSettings 持久化边界验形、
  *           ZiminosContext 运行时上下文、开荒贡献契约 VaultSeed/VaultSeedNote，
@@ -42,6 +43,8 @@ import type {
 import { EAGLE_DEFAULTS, EAGLE_PORT_RANGE, FILE_PATH_DEFAULTS, FILE_PATH_SCOPES } from './device';
 import type { FilePathScope } from './device';
 import type { EditionInfo } from './edition';
+import { DEFAULT_EXPORT_STYLE, normalizeExportStyle } from './exportStyle';
+import type { ExportStyle } from './exportStyle';
 import type { SelfWriteGuard } from './guard';
 
 /** 插件设置，持久化在 vault/.obsidian/plugins/ziminos/data.json */
@@ -202,6 +205,16 @@ export interface ZiminosSettings {
      * 与 data.json 分家（理由见那个常量的注释）。这里只有「要不要记」这一个开关。
      */
     rememberCursor: boolean;
+    /**
+     * 上一次导出用的那套风格：格式、页眉页脚、水印的文字与几何。
+     *
+     * 它落盘而不是只活在本次会话，因为这套值的用途是**品牌**——
+     * 品牌的定义就是每次都一样。每次重启都要重打一遍水印文字、重拖六根滑块的话，
+     * 用户第三次就会放弃加水印，而那正是他当初要这个功能的全部理由。
+     * 它是设置里唯一一个嵌套对象：十五个字段平铺进来会让这张契约表一眼望不到头，
+     * 而它们只被一个弹窗读写，天生是一个整体。
+     */
+    exportStyle: ExportStyle;
     /** 首次开荒完成的时间戳；空字符串表示尚未初始化，是「首次」与「补齐」的唯一判据 */
     initializedAt: string;
 }
@@ -244,6 +257,7 @@ export const DEFAULT_SETTINGS: ZiminosSettings = {
     eaglePort: EAGLE_DEFAULTS.port,
     eagleFolderId: EAGLE_DEFAULTS.folderId,
     rememberCursor: true,
+    exportStyle: DEFAULT_EXPORT_STYLE,
     initializedAt: '',
 };
 
@@ -319,6 +333,7 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
         eaglePort,
         eagleFolderId: stringValue('eagleFolderId'),
         rememberCursor: booleanValue('rememberCursor'),
+        exportStyle: normalizeExportStyle(stored.exportStyle),
         initializedAt: stringValue('initializedAt'),
     };
 }

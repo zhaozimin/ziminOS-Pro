@@ -11,5 +11,5 @@
     "importHelpers": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "docs/export-demo/entry.ts"]
 }

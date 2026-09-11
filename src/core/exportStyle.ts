@@ -1,0 +1,373 @@
+/**
+ * [INPUT]: 不依赖任何模块——它只回答「一套导出风格长什么样、哪些取值算数」
+ * [OUTPUT]: 对外提供 ExportFormat/ExportAlign/WatermarkMode/WatermarkAnchor 四个枚举与它们的中文标签，
+ *           ExportStyle 契约（含品牌标志路径与三处各自的尺寸）、DEFAULT_EXPORT_STYLE 默认值、
+ *           滑块规格表 EXPORT_SLIDERS、九宫格排布 WATERMARK_ANCHOR_GRID，以及读取侧兜底 normalizeExportStyle
+ * [POS]: core 的导出口径层，与 markdownStyle/device 同列：模块自己的设置形状必须住在 core，
+ *        否则 normalizeSettings 就得反向 import 一个功能模块，依赖图从树变成网。
+ *        本文件最要紧的设计是 EXPORT_SLIDERS——它同时是界面的滑块范围与持久化的验形区间，
+ *        一份事实两处使用，因此「界面能拖到的值」与「重启后还认的值」永远不可能对不上
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+
+// ============================================================
+// 枚举：四个闭合集合
+// ============================================================
+
+/** 当前支持的两个交付格式；图片只交付无损 PNG，避免再长出一排近义选项 */
+export type ExportFormat = 'png' | 'pdf';
+
+/** 页眉、页脚这类单行装饰的横向落点。它们永远贴着纸的上下缘，所以「位置」只剩左右 */
+export type ExportAlign = 'left' | 'center' | 'right';
+
+/**
+ * 水印的排布方式。两者不是同一件事的浓淡，是两个目的：
+ * 平铺防的是「截一段转发出去」，裁不掉；单个求的是落款，安静、不挡字。
+ */
+export type WatermarkMode = 'tile' | 'single';
+
+/** 单个水印的九宫格落点。平铺时无意义——无限重复的图案没有「位置」，只有疏密 */
+export type WatermarkAnchor =
+    | 'top-left' | 'top-center' | 'top-right'
+    | 'middle-left' | 'middle-center' | 'middle-right'
+    | 'bottom-left' | 'bottom-center' | 'bottom-right';
+
+export const EXPORT_FORMAT_LABELS: Readonly<Record<ExportFormat, string>> = {
+    png: 'PNG 长图',
+    pdf: 'PDF 单页',
+};
+
+export const EXPORT_ALIGN_LABELS: Readonly<Record<ExportAlign, string>> = {
+    left: '靠左',
+    center: '居中',
+    right: '靠右',
+};
+
+export const WATERMARK_MODE_LABELS: Readonly<Record<WatermarkMode, string>> = {
+    tile: '平铺整篇',
+    single: '单个落款',
+};
+
+/** 九宫格按屏幕上的样子排成三行三列，界面直接照着铺格子，不再自己拼一次顺序 */
+export const WATERMARK_ANCHOR_GRID: readonly (readonly WatermarkAnchor[])[] = [
+    ['top-left', 'top-center', 'top-right'],
+    ['middle-left', 'middle-center', 'middle-right'],
+    ['bottom-left', 'bottom-center', 'bottom-right'],
+];
+
+export const WATERMARK_ANCHOR_LABELS: Readonly<Record<WatermarkAnchor, string>> = {
+    'top-left': '左上',
+    'top-center': '正上',
+    'top-right': '右上',
+    'middle-left': '左中',
+    'middle-center': '正中',
+    'middle-right': '右中',
+    'bottom-left': '左下',
+    'bottom-center': '正下',
+    'bottom-right': '右下',
+};
+
+// ============================================================
+// 契约与默认值
+// ============================================================
+
+/**
+ * 一套导出风格。字段一律只读，与 ribbonCommands/formatRules 同因：
+ * 用户没调过时它与 DEFAULT_EXPORT_STYLE 共享同一个对象引用，
+ * 若允许原地改字段，第一次拖滑块就把默认值本身改掉了，此后连「恢复默认」都恢复不回来。
+ * 只读之后改动就只能是造一个新对象，这条约束由编译器执行，不靠人记得。
+ */
+export interface ExportStyle {
+    readonly format: ExportFormat;
+    readonly header: string;
+    readonly headerAlign: ExportAlign;
+    /** 页眉与正文标题之间的留白 */
+    readonly headerGap: number;
+    readonly footer: string;
+    readonly footerAlign: ExportAlign;
+    /** 页脚与正文末尾之间的留白 */
+    readonly footerGap: number;
+    readonly watermark: string;
+    readonly watermarkMode: WatermarkMode;
+    readonly watermarkAnchor: WatermarkAnchor;
+    readonly watermarkSize: number;
+    /** 平铺时是两列之间的距离；单个时是离左右纸边的距离 */
+    readonly watermarkGapX: number;
+    /** 平铺时是两行之间的距离；单个时是离上下纸边的距离 */
+    readonly watermarkGapY: number;
+    readonly watermarkAngle: number;
+    /** 百分数。水印的成败全在这个数：太淡等于没有，太浓等于毁了正文 */
+    readonly watermarkOpacity: number;
+    /**
+     * 品牌标志的库内路径，空即没有标志。
+     *
+     * 只有一个而不是三个——你只有一个 logo，让人在三处各选一遍同一张图不是灵活，是重复劳动。
+     * 三处各自用下面那个尺寸决定放多大，**0 就是这一处不放**；
+     * 这与「文字留空即关闭」是同一条语法，学员不必为标志再学一套开关。
+     */
+    readonly logo: string;
+    readonly headerLogoSize: number;
+    readonly footerLogoSize: number;
+    readonly watermarkLogoSize: number;
+}
+
+/**
+ * 默认值刻意等于 v0.23.0 那套写死的观感（-28 度、14% 不透明度），
+ * 于是老用户升级后第一次打开预览，看见的就是他已经熟悉的那张图，而不是一张陌生的。
+ */
+export const DEFAULT_EXPORT_STYLE: ExportStyle = {
+    format: 'png',
+    header: '',
+    headerAlign: 'center',
+    headerGap: 24,
+    footer: '',
+    footerAlign: 'center',
+    footerGap: 32,
+    watermark: '',
+    watermarkMode: 'tile',
+    watermarkAnchor: 'bottom-right',
+    watermarkSize: 18,
+    watermarkGapX: 140,
+    watermarkGapY: 100,
+    watermarkAngle: -28,
+    watermarkOpacity: 14,
+    logo: '',
+    // 三个尺寸默认 0：老库升级之后，没选过标志的人导出的那张图与升级前逐像素相同。
+    // 新功能的默认值应当是「不发生」，而不是「替他做了个决定」。
+    headerLogoSize: 0,
+    footerLogoSize: 0,
+    watermarkLogoSize: 0,
+};
+
+// ============================================================
+// 滑块规格：界面范围与验形区间的唯一事实源
+// ============================================================
+
+/**
+ * 能用滑块调的键，由 ExportStyle 的数字字段**推导**而来而不是另抄一份。
+ * 于是往契约里加一个数字字段，编译器会立刻在下面的种子表上指出「你还没给它一根滑块」。
+ */
+export type ExportSliderKey = {
+    [K in keyof ExportStyle]: ExportStyle[K] extends number ? K : never;
+}[keyof ExportStyle];
+
+export interface ExportSliderSpec {
+    readonly key: ExportSliderKey;
+    /** 归哪一段：决定它出现在面板的哪一组下面 */
+    readonly section: 'header' | 'footer' | 'watermark';
+    readonly name: string;
+    readonly desc: string;
+    readonly min: number;
+    readonly max: number;
+    readonly step: number;
+    readonly unit: string;
+    /**
+     * 这根滑块得先有什么，才谈得上有意义：
+     * text 只作用于文字（字号），logo 只作用于标志（标志大小），mark 作用于整个标记（间距、角度…）。
+     *
+     * 它不是装饰性的元数据——界面照它决定谁该变灰。没有它的话，
+     * 「文字留空时把标志大小也一起禁掉」这种 bug 会让用户永远打不开标志：
+     * 要开标志得先拖那根滑块，而那根滑块恰恰被关着。
+     */
+    readonly requires: 'text' | 'logo' | 'mark';
+}
+
+export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
+    {
+        key: 'headerLogoSize',
+        section: 'header',
+        name: '标志大小',
+        desc: '页眉里那枚标志多高。0 就是页眉不放标志。',
+        min: 0,
+        max: 160,
+        step: 2,
+        unit: 'px',
+        requires: 'logo',
+    },
+    {
+        key: 'headerGap',
+        section: 'header',
+        name: '与正文的距离',
+        desc: '页眉离标题多远。0 就是紧贴着标题。',
+        min: 0,
+        max: 120,
+        step: 2,
+        unit: 'px',
+        requires: 'mark',
+    },
+    {
+        key: 'footerLogoSize',
+        section: 'footer',
+        name: '标志大小',
+        desc: '页脚里那枚标志多高。0 就是页脚不放标志。',
+        min: 0,
+        max: 160,
+        step: 2,
+        unit: 'px',
+        requires: 'logo',
+    },
+    {
+        key: 'footerGap',
+        section: 'footer',
+        name: '与正文的距离',
+        desc: '页脚离最后一行多远。',
+        min: 0,
+        max: 120,
+        step: 2,
+        unit: 'px',
+        requires: 'mark',
+    },
+    {
+        key: 'watermarkLogoSize',
+        section: 'watermark',
+        name: '标志大小',
+        desc: '水印里那枚标志多高。0 就是水印只有文字。',
+        min: 0,
+        max: 320,
+        step: 4,
+        unit: 'px',
+        requires: 'logo',
+    },
+    {
+        key: 'watermarkSize',
+        section: 'watermark',
+        name: '字号',
+        desc: '水印文字本身多大。',
+        min: 10,
+        max: 120,
+        step: 1,
+        unit: 'px',
+        requires: 'text',
+    },
+    {
+        key: 'watermarkGapX',
+        section: 'watermark',
+        name: '横向间距',
+        desc: '平铺时是左右两个水印之间的距离；单个时是离左右纸边的距离。',
+        min: 0,
+        max: 480,
+        step: 4,
+        unit: 'px',
+        requires: 'mark',
+    },
+    {
+        key: 'watermarkGapY',
+        section: 'watermark',
+        name: '纵向间距',
+        desc: '平铺时是上下两个水印之间的距离；单个时是离上下纸边的距离。',
+        min: 0,
+        max: 480,
+        step: 4,
+        unit: 'px',
+        requires: 'mark',
+    },
+    {
+        key: 'watermarkAngle',
+        section: 'watermark',
+        name: '倾斜角度',
+        desc: '负数往左倒，正数往右倒，0 是水平。标志与文字一起转。',
+        min: -90,
+        max: 90,
+        step: 1,
+        unit: '°',
+        requires: 'mark',
+    },
+    {
+        key: 'watermarkOpacity',
+        section: 'watermark',
+        name: '不透明度',
+        desc: '越低越像纸纹，越高越难被裁掉——但也越挡字。标志与文字同一个数。',
+        min: 1,
+        max: 100,
+        step: 1,
+        unit: '%',
+        requires: 'mark',
+    },
+];
+
+// ============================================================
+// 读取侧兜底
+// ============================================================
+
+/** 持久化 JSON 只在这里被当作未知输入；出去之后每个字段都已经是契约形态 */
+export function normalizeExportStyle(input: unknown): ExportStyle {
+    const stored = isRecord(input) ? input : {};
+    // 七个默认值显式列一遍而不是遍历生成：Record 的完整性由编译器检查，
+    // 于是「加了字段却忘了给它验形」会在编译期就断，而不是等用户的 data.json 里出现一个 NaN。
+    const numbers: Record<ExportSliderKey, number> = {
+        headerGap: DEFAULT_EXPORT_STYLE.headerGap,
+        footerGap: DEFAULT_EXPORT_STYLE.footerGap,
+        watermarkSize: DEFAULT_EXPORT_STYLE.watermarkSize,
+        watermarkGapX: DEFAULT_EXPORT_STYLE.watermarkGapX,
+        watermarkGapY: DEFAULT_EXPORT_STYLE.watermarkGapY,
+        watermarkAngle: DEFAULT_EXPORT_STYLE.watermarkAngle,
+        watermarkOpacity: DEFAULT_EXPORT_STYLE.watermarkOpacity,
+        headerLogoSize: DEFAULT_EXPORT_STYLE.headerLogoSize,
+        footerLogoSize: DEFAULT_EXPORT_STYLE.footerLogoSize,
+        watermarkLogoSize: DEFAULT_EXPORT_STYLE.watermarkLogoSize,
+    };
+
+    for (const spec of EXPORT_SLIDERS) {
+        numbers[spec.key] = clampSlider(stored[spec.key], spec, numbers[spec.key]);
+    }
+
+    return {
+        format: isFormat(stored.format) ? stored.format : DEFAULT_EXPORT_STYLE.format,
+        header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
+        headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
+        headerGap: numbers.headerGap,
+        footer: text(stored.footer, DEFAULT_EXPORT_STYLE.footer),
+        footerAlign: isAlign(stored.footerAlign) ? stored.footerAlign : DEFAULT_EXPORT_STYLE.footerAlign,
+        footerGap: numbers.footerGap,
+        watermark: text(stored.watermark, DEFAULT_EXPORT_STYLE.watermark),
+        watermarkMode: isMode(stored.watermarkMode) ? stored.watermarkMode : DEFAULT_EXPORT_STYLE.watermarkMode,
+        watermarkAnchor: isAnchor(stored.watermarkAnchor)
+            ? stored.watermarkAnchor
+            : DEFAULT_EXPORT_STYLE.watermarkAnchor,
+        watermarkSize: numbers.watermarkSize,
+        watermarkGapX: numbers.watermarkGapX,
+        watermarkGapY: numbers.watermarkGapY,
+        watermarkAngle: numbers.watermarkAngle,
+        watermarkOpacity: numbers.watermarkOpacity,
+        logo: text(stored.logo, DEFAULT_EXPORT_STYLE.logo),
+        headerLogoSize: numbers.headerLogoSize,
+        footerLogoSize: numbers.footerLogoSize,
+        watermarkLogoSize: numbers.watermarkLogoSize,
+    };
+}
+
+/**
+ * 越界的数字**夹回区间**而不是回落默认：手改过 data.json 的人想要的是「尽量大」，
+ * 把 999 读成默认的 140 会让他以为设置没保存，夹成上限 480 才是回答了他的意图。
+ * 但不是数字、是 NaN 或是 Infinity 时没有意图可言，那时才回落默认。
+ */
+function clampSlider(value: unknown, spec: ExportSliderSpec, fallback: number): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+
+    return Math.min(spec.max, Math.max(spec.min, Math.round(value)));
+}
+
+function text(value: unknown, fallback: string): string {
+    return typeof value === 'string' ? value : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isFormat(value: unknown): value is ExportFormat {
+    return value === 'png' || value === 'pdf';
+}
+
+function isAlign(value: unknown): value is ExportAlign {
+    return value === 'left' || value === 'center' || value === 'right';
+}
+
+function isMode(value: unknown): value is WatermarkMode {
+    return value === 'tile' || value === 'single';
+}
+
+function isAnchor(value: unknown): value is WatermarkAnchor {
+    return typeof value === 'string' &&
+        WATERMARK_ANCHOR_GRID.some((row) => row.some((anchor) => anchor === value));
+}
