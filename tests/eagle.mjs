@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
 import { createRequire } from 'node:module';
@@ -187,8 +187,12 @@ test('Eagle 安装包可解压，根层交付物齐全', () => {
     assert.ok(packager.includes('chmod 0644'));
 });
 
-test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不诱导读取凭据', () => {
-    const guide = readFileSync(path.join(ROOT, 'docs/Eagle附件桥接安装与使用指南.html'), 'utf8');
+// 学员指南住在 docs/，而 publish-v1.sh 的共享清单里没有 docs/——
+// 两个仓库各自把话说给各自的读者听。因此这条在第一版仓库里没有对象。
+const guidePath = path.join(ROOT, 'docs/Eagle附件桥接安装与使用指南.html');
+
+test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不诱导读取凭据', { skip: !existsSync(guidePath) }, () => {
+    const guide = readFileSync(guidePath, 'utf8');
     const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
     for (const anchor of ['id="upgrade"', 'id="install"', 'id="pair"', 'id="organize"', 'id="verify"', 'id="troubleshoot"']) {

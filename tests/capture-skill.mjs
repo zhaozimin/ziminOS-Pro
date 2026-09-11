@@ -6,15 +6,21 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const source = readFileSync(path.join(ROOT, 'skill-pro/capture/SKILL.md'), 'utf8');
 
-test('微信快捷收集只调用 inspiration，剪藏归浏览器插件', () => {
+// 整份文件验的都是第二版契约，而 publish-v1.sh 把 tests/ 整份同步到第一版仓库、
+// 又不搬 skill-pro/。顶层直接 readFileSync 会让整个文件在那边加载即崩，
+// 连 skip 都来不及——所以读盘必须推迟到闸门之后。
+const contractPath = path.join(ROOT, 'skill-pro/capture/SKILL.md');
+const isProRepo = existsSync(contractPath);
+const source = isProRepo ? readFileSync(contractPath, 'utf8') : '';
+
+test('微信快捷收集只调用 inspiration，剪藏归浏览器插件', { skip: !isProRepo }, () => {
     const commandLines = source
         .split('\n')
         .filter((line) => line.includes('notectl.py') && !line.includes('执行一律调用'));

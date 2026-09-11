@@ -66,6 +66,16 @@ const { coalesceHighlights, normalizedHighlightKey } = await loadTypeScript(
 const { dayText, periodOfTitle } = await loadTypeScript('src/core/time.ts', {
     stubObsidian: true,
 });
+
+/**
+ * 这份源码此刻躺在哪个仓库里。
+ *
+ * 两个 Gitee 仓库的 src/ 逐字节相同（第二版那部分被装配期开关关着），
+ * 所以拿代码当判据认不出来；真正区分两者的是**交付物**——只有第二版仓库有那份契约。
+ * publish-v1.sh 会把 tests/ 整份同步过去并要求它在那边自己跑得过，
+ * 因此每一条读 skill-pro/ 或 vault-pro/ 的断言都必须经这道闸，漏一条就卡死整条发布通道。
+ */
+const isProRepo = existsSync(path.join(ROOT, 'skill-pro/SKILL.md'));
 const { DEFAULT_SETTINGS, normalizeSettings } = await loadTypeScript('src/core/types.ts');
 const { attachmentRouteOfNotePath } = await loadTypeScript('src/modules/projects/location.ts', {
     obsidianStub: 'export class TFolder {} export const normalizePath = (value) => String(value);',
@@ -490,7 +500,7 @@ test('损坏的 appearance.json 被拒绝，不覆盖用户外观配置', async 
     assert.equal(writes, 0);
 });
 
-test('废弃内容与其中双链在编辑阅读两态分层示警，三本库默认同步开启', () => {
+test('废弃内容与其中双链在编辑阅读两态分层示警，随库外观默认开启', () => {
     const snippetName = '【编辑-删除线】突出废弃内容';
     const snippetDir = path.join(ROOT, 'vault/.obsidian/snippets');
     const source = readFileSync(
@@ -517,10 +527,19 @@ test('废弃内容与其中双链在编辑阅读两态分层示警，三本库�
         '共享外观包应当恰好交付十三个 CSS 片段',
     );
 
+    // 第二版那两本库与那份契约只住在第二版仓库里：publish-v1.sh 不搬 vault-pro/
+    // 与 skill-pro/，所以它们在第一版仓库里没有对象。判据沿用本文件已经写下的那条——
+    // 区分两个仓库的是**交付物**而不是 src/，因为 src/ 两边逐字节相同。
+    // 闸是「这是不是第二版仓库」而不是「这个文件在不在」：后者会在 vault-pro 改名时
+    // 静默跳过，把一条本该变红的测试变成一条永远绿的测试。
     for (const relativePath of [
         'vault/.obsidian/appearance.json',
-        'vault-pro/兼收并蓄/.obsidian/appearance.json',
-        'vault-pro/赛博永生/.obsidian/appearance.json',
+        ...(isProRepo
+            ? [
+                  'vault-pro/兼收并蓄/.obsidian/appearance.json',
+                  'vault-pro/赛博永生/.obsidian/appearance.json',
+              ]
+            : []),
     ]) {
         const appearance = JSON.parse(readFileSync(path.join(ROOT, relativePath), 'utf8'));
 
@@ -531,7 +550,7 @@ test('废弃内容与其中双链在编辑阅读两态分层示警，三本库�
         assert.equal(appearance.enabledCssSnippets.length, 11);
     }
 
-    for (const relativePath of ['skill/SKILL.md', 'skill-pro/SKILL.md']) {
+    for (const relativePath of ['skill/SKILL.md', ...(isProRepo ? ['skill-pro/SKILL.md'] : [])]) {
         const contract = readFileSync(path.join(ROOT, relativePath), 'utf8');
 
         assert.match(contract, new RegExp(snippetName));
