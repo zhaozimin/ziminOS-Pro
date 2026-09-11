@@ -18,7 +18,8 @@ import { Notice, Platform, TFile } from 'obsidian';
 import { EXPORT_COMMAND } from '../../core/commands';
 import type { ExportFormat, ExportStyle } from '../../core/exportStyle';
 import type { ZiminosContext } from '../../core/types';
-import { applyDecorations } from './decorate';
+import { applyDecorations, linkRegions } from './decorate';
+import type { LinkRegion } from './decorate';
 import { captureScale, pdfPageSize, safeExportName } from './layout';
 import type { ExportTemplateContext } from './layout';
 import { resolveLogo } from './logo';
@@ -118,18 +119,35 @@ async function capture(
 
     if (!blob) throw new Error('浏览器没有生成图片数据');
 
+    const links = linkRegions(paper.article, style);
     const bytes = style.format === 'png'
         ? new Uint8Array(await blob.arrayBuffer())
-        : await pdfBytes(blob, width, height);
+        : await pdfBytes(blob, width, height, links);
+    const saved = await saveExport(ctx, file, style.format, bytes);
 
-    return saveExport(ctx, file, style.format, bytes);
+    // PNG 就是一堆像素，「可点」这个概念在它那里不存在。用户填了链接却什么都没发生时，
+    // 他会以为是链接写错了——所以这句话必须在他刚拿到文件的那一刻说，而不是只写在设置旁边。
+    if (saved && style.format === 'png' && links.length) {
+        new Notice('页眉/页脚的链接没有写进 PNG——图片点不了。要可点的链接，导出成 PDF。');
+    }
+
+    return saved;
 }
 
 function backgroundColorOf(element: HTMLElement): string {
     return getComputedStyle(element).backgroundColor || '#ffffff';
 }
 
-async function pdfBytes(image: Blob, width: number, height: number): Promise<Uint8Array> {
+/**
+ * 整页就是一张图，链接却照样能点：PDF 的链接注解与页面内容是两回事，
+ * 它只是盖在坐标上的一块矩形。因此「一张长图」与「可点的页眉」并不冲突。
+ */
+async function pdfBytes(
+    image: Blob,
+    width: number,
+    height: number,
+    links: readonly LinkRegion[],
+): Promise<Uint8Array> {
     const page = pdfPageSize(width, height);
     const pdf = new jsPDF({
         unit: 'pt',
@@ -148,6 +166,16 @@ async function pdfBytes(image: Blob, width: number, height: number): Promise<Uin
         undefined,
         'FAST',
     );
+
+    // 纸张坐标可能被等比缩过（极长文超出单页 14,400pt 时），链接必须跟着同一个比例走，
+    // 否则可点区域会停在图上别的地方——而那种错没有任何视觉提示。
+    const factor = page.width / Math.max(1, width);
+
+    for (const link of links) {
+        pdf.link(link.x * factor, link.y * factor, link.width * factor, link.height * factor, {
+            url: link.url,
+        });
+    }
 
     return new Uint8Array(pdf.output('arraybuffer'));
 }

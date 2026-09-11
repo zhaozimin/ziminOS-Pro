@@ -1,7 +1,8 @@
 /**
  * [INPUT]: 依赖 core/exportStyle 的 WatermarkAnchor 类型；其余只认调用方给出的数字与文本
- * [OUTPUT]: 对外提供 ExportTemplateContext 契约与七个纯函数——resolveExportText / safeExportName /
- *           captureScale / pdfPageSize / watermarkMark / watermarkTile / watermarkSvg / watermarkPosition
+ * [OUTPUT]: 对外提供 ExportTemplateContext 契约与八个纯函数——resolveExportText / safeExportName /
+ *           captureScale / pdfPageSize / exportLinkUrl / watermarkMark / watermarkTile / watermarkSvg /
+ *           watermarkPosition
  * [POS]: 导出模块的无 DOM 口径层。浏览器画布上限、PDF 单页上限、占位符、文件名规则与水印几何
  *        都在这里收口，使渲染器只负责拿事实，不再夹带一套难以单测的尺寸算法。
  *        水印几何刻意不在这里量文字宽度——测宽要 canvas，而 canvas 一进来整层就不再可单测；
@@ -235,6 +236,36 @@ export function watermarkPosition(anchor: WatermarkAnchor, gapX: number, gapY: n
         : vertical === 'bottom' ? `calc(100% - ${Math.max(0, gapY)}px)` : '50%';
 
     return `${x} ${y}`;
+}
+
+/**
+ * 把用户填的那一行收成一个可以安全放进 PDF 链接注解的网址，收不成就返回空串。
+ *
+ * 两条规矩，各有各的理由：
+ *
+ * 其一，**不带协议就补 `https://`**。用户想推广的是 `edu.zhaozimin.cn` 这种写法——
+ * 逼他先学会「链接必须带 https://」，是把实现细节当成了功课。
+ *
+ * 其二，**只认 http 与 https**。这串字会原样变成 PDF 里的一个动作，
+ * 而 PDF 阅读器对 `javascript:`、`file:` 这类 scheme 的处置各不相同；
+ * 白名单之外一律判为「没填链接」，不是「填错了就凑合执行」。
+ */
+export function exportLinkUrl(raw: string): string {
+    const trimmed = raw.trim();
+
+    if (!trimmed) return '';
+
+    const candidate = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+    try {
+        const url = new URL(candidate);
+
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+
+        return url.href;
+    } catch {
+        return '';
+    }
 }
 
 function escapeXml(text: string): string {

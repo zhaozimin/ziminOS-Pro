@@ -354,6 +354,86 @@ test('导出命令截图前照终值再施一次风格，并只在确认后记�
     assert.equal(pkg.dependencies.jspdf, '4.2.1');
 });
 
+test('页眉页脚的链接补协议、只放 http(s) 过去', () => {
+    // 用户想推广的是这种写法；逼他先学会「链接必须带 https://」是把实现细节当成了功课
+    assert.equal(layout.exportLinkUrl('edu.zhaozimin.cn'), 'https://edu.zhaozimin.cn/');
+    assert.equal(layout.exportLinkUrl('  zhaozimin.cn/课程  '), 'https://zhaozimin.cn/%E8%AF%BE%E7%A8%8B');
+    assert.equal(layout.exportLinkUrl('http://example.com/a?b=1'), 'http://example.com/a?b=1');
+
+    // 这串字会原样变成 PDF 里的一个动作，白名单之外一律判成「没填」，不是「填错了就凑合执行」
+    assert.equal(layout.exportLinkUrl('javascript:alert(1)'), '');
+    assert.equal(layout.exportLinkUrl('file:///etc/passwd'), '');
+    assert.equal(layout.exportLinkUrl('   '), '');
+    assert.equal(layout.exportLinkUrl(''), '');
+});
+
+test('颜色只认十六进制色号，其余一律回落「跟随正文色」', () => {
+    const kept = style.normalizeExportStyle({
+        headerColor: '#FF8800',
+        footerColor: '#abc',
+        watermarkColor: '#11223344',
+    });
+
+    assert.equal(kept.headerColor, '#ff8800');
+    assert.equal(kept.footerColor, '#abc');
+    assert.equal(kept.watermarkColor, '#11223344');
+
+    // 空串是一个**有意义的状态**（跟随正文色），因此坏值回落到它而不是回落到某个具体色号
+    const rejected = style.normalizeExportStyle({
+        headerColor: 'red; content: url(x)',
+        footerColor: 'rgb(1,2,3)',
+        watermarkColor: 42,
+    });
+
+    assert.equal(rejected.headerColor, '');
+    assert.equal(rejected.footerColor, '');
+    assert.equal(rejected.watermarkColor, '');
+    assert.equal(style.DEFAULT_EXPORT_STYLE.headerColor, '');
+});
+
+test('列表参考线默认开，但它是用户点名要的观感，不是插件替他做的决定', () => {
+    assert.equal(style.DEFAULT_EXPORT_STYLE.listGuides, true);
+    assert.equal(style.normalizeExportStyle({ listGuides: false }).listGuides, false);
+    // 升级前写下的设置里没有这个键，读回来取默认
+    assert.equal(style.normalizeExportStyle({ format: 'png' }).listGuides, true);
+    // 不是布尔就不是回答
+    assert.equal(style.normalizeExportStyle({ listGuides: 'yes' }).listGuides, true);
+});
+
+test('纸的宽度、留白与字号量自编辑区，不再有任何一个凭空定的数', () => {
+    const paper = code('src/modules/export/paper.ts');
+
+    assert.match(paper, /measureSource/);
+    assert.match(paper, /getComputedStyle\(element\)/);
+    assert.match(paper, /\.markdown-preview-sizer, \.cm-sizer/);
+
+    // 三处旧的发明：夹取区间、写死的内边距、按 scrollWidth 把纸加宽
+    assert.doesNotMatch(paper, /ARTICLE_WIDTH_MIN|ARTICLE_WIDTH_MAX/);
+    assert.doesNotMatch(paper, /padding: '48px 56px'/);
+    assert.doesNotMatch(paper, /naturalWidth/);
+
+    // 兜底仍然存在，但它是「连编辑区都探不到」时的最后一手，不是默认版面
+    assert.match(paper, /FALLBACK_METRICS/);
+});
+
+test('链接只写进 PDF，PNG 当场说自己点不了', () => {
+    const exporter = code('src/modules/export/exporter.ts');
+
+    // 链接注解与页面内容是两回事，所以「整页一张图」与「可点的页眉」并不冲突
+    assert.match(exporter, /pdf\.link\(/);
+    // 纸张被等比缩过时链接得跟着同一个比例，否则可点区域会停在图上别的地方
+    assert.match(exporter, /const factor = page\.width/);
+    // PNG 下必须当场告知，而不是只写在设置旁边
+    assert.match(exporter, /style\.format === 'png' && links\.length/);
+
+    const decorate = code('src/modules/export/decorate.ts');
+
+    // 量的是那一行里真正有墨的部分，不是整行的盒子——一行 flex 横跨整张纸宽
+    assert.match(decorate, /function inkWithin/);
+    // 用布局值而不是 getBoundingClientRect：后者会把预览那层缩放一起算进去
+    assert.doesNotMatch(decorate, /getBoundingClientRect/);
+});
+
 test('演示页是生成物：改了插件却忘了重新生成，这里当场变红', async () => {
     const generated = await buildExportDemo();
     const committed = readFileSync(DEMO_PATH, 'utf8');

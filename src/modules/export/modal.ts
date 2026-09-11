@@ -39,6 +39,7 @@ import { captureScale } from './layout';
 import type { ExportTemplateContext } from './layout';
 import { isLogoFile, resolveLogo } from './logo';
 import type { ResolvedLogo } from './logo';
+import { canImportLogo, importLogoFromDisk } from './logoImport';
 import type { ExportPaper } from './paper';
 
 /** 预览区左右各留一点余白，纸不贴着框边，缩放比例照这个可用宽度算 */
@@ -49,6 +50,9 @@ interface SliderRow {
     readonly spec: ExportSliderSpec;
     readonly setting: Setting;
 }
+
+/** 三处可调颜色的键。收成一个联合类型，加一处颜色却忘了给它控件会是编译错 */
+type ColorKey = 'headerColor' | 'footerColor' | 'watermarkColor';
 
 /** 一段装饰此刻手里有什么。三个布尔量正好对上 requires 的三种取值 */
 interface SectionState {
@@ -211,6 +215,17 @@ export class ExportPreviewModal extends Modal {
                 this.refreshers.push(() => dropdown.setValue(this.value.format));
             });
 
+        new Setting(host).setName('正文').setHeading();
+
+        new Setting(host)
+            .setName('列表参考线')
+            .setDesc('给列表画上缩进参考线，一眼看得出哪几条是同一层。')
+            .setClass('ziminos-export-field')
+            .addToggle((toggle) => {
+                toggle.onChange((on) => this.update({ listGuides: on }));
+                this.refreshers.push(() => toggle.setValue(this.value.listGuides));
+            });
+
         this.buildLogoPicker(host);
         this.buildLine(host, 'header', '页眉', '显示在文章标题上方。');
         this.buildLine(host, 'footer', '页脚', '显示在文章正文下方。');
@@ -218,28 +233,60 @@ export class ExportPreviewModal extends Modal {
     }
 
     /**
-     * 选标志。库里的图片是一个封闭集合，因此走 ChoiceModal 而不是让人手打路径——
-     * 这条纪律与 core/modals 里那句「凡取值来自封闭集合一律走 ChoiceModal」同源：
-     * 手打出来的路径能通过一切非空校验，然后安静地渲不出图。
+     * 选标志。两条路，各答一个不同的问题。
+     *
+     * **从电脑选**是主路：用户的 logo 本来就在电脑上，逼他先把图拖进笔记库、再回来选一遍，
+     * 是把实现细节（「我只认库内路径」）当成了他的工序。选完由插件复制进库，
+     * 于是那条路径仍然是库内路径——可同步、换台电脑还认得、手机上也画得出来。
+     *
+     * **从库里选**是次路，也是手机上唯一的一条：库里的图片是一个封闭集合，
+     * 因此走 ChoiceModal 而不是让人手打路径——这条纪律与 core/modals 里那句
+     * 「凡取值来自封闭集合一律走 ChoiceModal」同源：手打出来的路径能通过一切非空校验，
+     * 然后安静地渲不出图。
      */
     private buildLogoPicker(host: HTMLElement): void {
         new Setting(host).setName('品牌标志').setHeading();
 
+        const fromDisk = canImportLogo();
         const setting = new Setting(host)
             .setName('图片')
             .setClass('ziminos-export-field')
-            .setClass('ziminos-export-logo')
-            .addButton((button) => {
-                button.setButtonText('选择图片…').onClick(() => void this.pickLogo());
-            })
-            .addExtraButton((button) => {
-                button
-                    .setIcon('x')
-                    .setTooltip('不用标志')
-                    .onClick(() => this.update({ logo: '' }));
+            .setClass('ziminos-export-logo');
+
+        if (fromDisk) {
+            setting.addButton((button) => {
+                button.setButtonText('从电脑选…').setCta().onClick(() => void this.importLogo());
             });
+        }
+
+        setting.addButton((button) => {
+            button
+                .setButtonText(fromDisk ? '从库里选' : '选择图片…')
+                .onClick(() => void this.pickFromVault());
+        });
+
+        setting.addExtraButton((button) => {
+            button
+                .setIcon('x')
+                .setTooltip('不用标志')
+                .onClick(() => this.update({ logo: '' }));
+        });
 
         this.refreshers.push(() => setting.setDesc(this.logoStatus()));
+    }
+
+    /** 从电脑上挑一张，复制进库。取消什么都不做；失败如实说一句，不静默 */
+    private async importLogo(): Promise<void> {
+        try {
+            const path = await importLogoFromDisk(this.app);
+
+            if (!path) return;
+
+            this.update({ logo: path });
+            new Notice(`标志已放进笔记库：${path}`);
+        } catch (error) {
+            new Notice(`选图失败：${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /** 三种状态各有各的话：没选过、选了但读不出、读出来了多大 */
@@ -247,7 +294,9 @@ export class ExportPreviewModal extends Modal {
         const path = this.value.logo.trim();
 
         if (!path) {
-            return '选一张库内的图片。页眉、页脚与水印各自决定放多大，尺寸 0 就是那一处不放。';
+            return canImportLogo()
+                ? '从电脑上挑一张（会复制进笔记库），或从库里已有的图片里选。页眉、页脚与水印各自决定放多大，尺寸 0 就是那一处不放。'
+                : '从库里已有的图片里选一张。页眉、页脚与水印各自决定放多大，尺寸 0 就是那一处不放。';
         }
 
         if (!this.logo) return `这张图读不出来了（可能已被改名或删除）：${path}`;
@@ -255,11 +304,13 @@ export class ExportPreviewModal extends Modal {
         return `${path}　·　${this.logo.width} × ${this.logo.height}`;
     }
 
-    private async pickLogo(): Promise<void> {
+    private async pickFromVault(): Promise<void> {
         const images = this.app.vault.getFiles().filter((file) => isLogoFile(file));
 
         if (!images.length) {
-            new Notice('笔记库里还没有图片。先把标志放进库里，再回来选。');
+            new Notice(canImportLogo()
+                ? '笔记库里还没有图片。用「从电脑选…」直接挑一张，插件会替你复制进库。'
+                : '笔记库里还没有图片。先把标志放进库里，再回来选。');
 
             return;
         }
@@ -297,6 +348,29 @@ export class ExportPreviewModal extends Modal {
                 this.refreshers.push(() => syncText(text, this.value[section]));
             });
 
+        const linkKey = section === 'header' ? 'headerLink' : 'footerLink';
+        const colorKey = section === 'header' ? 'headerColor' : 'footerColor';
+
+        new Setting(host)
+            .setName('链接')
+            .setDesc('填一个网址，这一行在 PDF 里整段可点（不带 https:// 也认）。')
+            .setClass('ziminos-export-field')
+            .addText((text) => {
+                text.setPlaceholder('edu.example.com')
+                    .onChange((input) => this.update({ [linkKey]: input }));
+                this.refreshers.push(() => syncText(text, this.value[linkKey]));
+            })
+            .then((setting) => this.refreshers.push(() => {
+                // 格式一换，这句话的真假就变了。PNG 下它必须当场说自己不成立，
+                // 否则用户填了链接、导出、发现点不动，只会怀疑是网址写错了。
+                setting.descEl.toggleClass('ziminos-export-warn', this.value.format === 'png');
+                setting.setDesc(this.value.format === 'png'
+                    ? 'PNG 是图片，点不了。要可点的链接，把格式换成 PDF。'
+                    : '填一个网址，这一行在 PDF 里整段可点（不带 https:// 也认）。');
+            }));
+
+        this.addColor(host, colorKey, '文字颜色');
+
         const alignSetting = new Setting(host).setName('位置').setClass('ziminos-export-field');
 
         this.addPicker(
@@ -329,6 +403,8 @@ export class ExportPreviewModal extends Modal {
                     .onChange((input) => this.update({ watermark: input }));
                 this.refreshers.push(() => syncText(text, this.value.watermark));
             });
+
+        this.addColor(host, 'watermarkColor', '文字颜色');
 
         const modeSetting = new Setting(host)
             .setName('排布')
@@ -371,6 +447,37 @@ export class ExportPreviewModal extends Modal {
             );
             applySliderState(rows, state);
         });
+    }
+
+    /**
+     * 一个颜色栏。空串＝跟随正文色，因此它比一个普通取色器多一个「退回去」的按钮。
+     *
+     * 取色器本身没有空态：它永远握着一个具体色号。所以「跟随主题」只能由我们自己表达——
+     * 值为空时把当前正文色填进色块（看着是对的），状态却仍是空串（行为是对的），
+     * 旁边那枚 ✕ 是唯一能回到空串的路。少了它，用户点过一次取色器就再也回不到跟随主题。
+     */
+    private addColor(host: HTMLElement, key: ColorKey, name: string): void {
+        const setting = new Setting(host).setName(name).setClass('ziminos-export-field');
+
+        setting.addColorPicker((picker) => {
+            picker.onChange((value) => this.update({ [key]: value }));
+            this.refreshers.push(() => picker.setValue(this.value[key] || this.inheritedColor()));
+        });
+        setting.addExtraButton((button) => {
+            button
+                .setIcon('rotate-ccw')
+                .setTooltip('跟随正文色')
+                .onClick(() => this.update({ [key]: '' }));
+        });
+
+        this.refreshers.push(() => setting.setDesc(
+            this.value[key] ? `用这个色：${this.value[key]}` : '跟随正文色（明暗两套主题下都读得出）。',
+        ));
+    }
+
+    /** 正文此刻是什么色，用来给「跟随主题」那个状态填一个看着对的色块 */
+    private inheritedColor(): string {
+        return hexOf(getComputedStyle(this.paper.article).color) || '#6b7280';
     }
 
     /**
@@ -508,6 +615,20 @@ export class ExportPreviewModal extends Modal {
         this.resolver = null;
         resolve?.(value);
     }
+}
+
+/**
+ * `rgb(43, 49, 56)` 换成 `#2b3138`。取色器只吃十六进制，而计算样式只吐 rgb()。
+ * 认不出就返回空串，让调用方用自己的兜底色——这里不替它决定「认不出时该是什么颜色」。
+ */
+function hexOf(color: string): string {
+    const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(color.trim());
+
+    if (!match) return /^#[0-9a-f]{3,8}$/i.test(color.trim()) ? color.trim().toLowerCase() : '';
+
+    return `#${[match[1], match[2], match[3]]
+        .map((part) => Number(part).toString(16).padStart(2, '0'))
+        .join('')}`;
 }
 
 /** 谁该变灰由规格里的 requires 决定，不在调用处逐根写死 */

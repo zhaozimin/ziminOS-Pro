@@ -3,14 +3,14 @@
   真源在 docs/export-demo/ —— 外壳 shell.html、驱动 driver.js、与 src/ 的接缝 entry.ts。
   页内的导出样式逐字来自 vault/.obsidian/plugins/ziminos/styles.css，
   几何与装饰逻辑由 esbuild 从 src/ 直接打包，因此它与插件里跑的是同一份判断。
-  ziminOS v0.24.0
+  ziminOS v0.25.0
 -->
 <!doctype html>
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ziminOS 导出预览｜交互演示 v0.24.0</title>
+<title>ziminOS 导出预览｜交互演示 v0.25.0</title>
 <style>
 /* ── 外壳：近似 Obsidian app.css 与 Minimal 主题的那几条变量与控件样式 ── */
 :root[data-theme="light"] {
@@ -1532,7 +1532,46 @@ a[href^="ziminos-eagle://"] {
     }
 }
 
-/* ── 以下三条会被拍进 PNG / PDF，改它们等于改交付物 ── */
+/* PNG 下那条「链接点不了」的说明，得看起来像一句提醒而不是一句补充 */
+.ziminos-export-controls .ziminos-export-warn {
+    color: var(--text-warning, #b66a08);
+}
+
+/* ── 以下四条会被拍进 PNG / PDF，改它们等于改交付物 ── */
+
+/*
+ * 列表缩进参考线。
+ *
+ * 用绝对定位的伪元素而不是给 ul 加 border-left：加边框会把整列内容往右推，
+ * 于是「开了参考线」的那张图与编辑区里的行宽对不上——而对齐编辑区正是这一版的主线要求。
+ * 伪元素不占位，开关它不会动任何一个字的位置。
+ * 偏移收成一个变量，因为它唯一合理的取值取决于主题的 --list-indent，改这一处即可对齐。
+ */
+.ziminos-export-guides {
+    --ziminos-guide-offset: 0.9em;
+    /*
+     * 取「淡字灰」而不是「分隔线灰」：后者是给相邻两块内容之间用的，一根一像素的线
+     * 在导出的图被缩到手机屏幕上时会直接消失，而一条看不见的参考线不如没有。
+     * 淡字灰在明暗两套主题下都是「安静但确实在那儿」，正是参考线该有的分量。
+     */
+    --ziminos-guide-color: var(--text-faint);
+}
+
+.ziminos-export-guides .ziminos-export-markdown ul,
+.ziminos-export-guides .ziminos-export-markdown ol {
+    position: relative;
+}
+
+.ziminos-export-guides .ziminos-export-markdown ul::before,
+.ziminos-export-guides .ziminos-export-markdown ol::before {
+    content: "";
+    position: absolute;
+    top: 0.2em;
+    bottom: 0.3em;
+    left: calc(var(--ziminos-guide-offset) * -1);
+    border-left: 1px solid var(--ziminos-guide-color);
+}
+
 
 .ziminos-export-header,
 .ziminos-export-footer {
@@ -1578,7 +1617,7 @@ a[href^="ziminos-eagle://"] {
     <button type="button" data-demo="preset-brand">试一套：品牌落款</button>
     <button type="button" data-demo="preset-guard">试一套：防转发平铺</button>
     <button type="button" data-demo="reset">恢复默认</button>
-    <span class="hint">v0.24.0 · 单文件，可离线打开、可转发</span>
+    <span class="hint">v0.25.0 · 单文件，可离线打开、可转发</span>
   </div>
 </div>
 
@@ -1689,12 +1728,19 @@ var ZExport = (() => {
     watermarkGapY: 100,
     watermarkAngle: -28,
     watermarkOpacity: 14,
+    // 三处颜色默认空串＝跟随正文色，也就是升级之前唯一的行为
+    headerColor: "",
+    headerLink: "",
+    footerColor: "",
+    footerLink: "",
+    watermarkColor: "",
     logo: "",
     // 三个尺寸默认 0：老库升级之后，没选过标志的人导出的那张图与升级前逐像素相同。
     // 新功能的默认值应当是「不发生」，而不是「替他做了个决定」。
     headerLogoSize: 0,
     footerLogoSize: 0,
-    watermarkLogoSize: 0
+    watermarkLogoSize: 0,
+    listGuides: true
   };
   var EXPORT_SLIDERS = [
     {
@@ -1841,6 +1887,12 @@ var ZExport = (() => {
       watermarkGapY: numbers.watermarkGapY,
       watermarkAngle: numbers.watermarkAngle,
       watermarkOpacity: numbers.watermarkOpacity,
+      headerColor: color(stored.headerColor),
+      headerLink: text(stored.headerLink, DEFAULT_EXPORT_STYLE.headerLink),
+      footerColor: color(stored.footerColor),
+      footerLink: text(stored.footerLink, DEFAULT_EXPORT_STYLE.footerLink),
+      watermarkColor: color(stored.watermarkColor),
+      listGuides: typeof stored.listGuides === "boolean" ? stored.listGuides : DEFAULT_EXPORT_STYLE.listGuides,
       logo: text(stored.logo, DEFAULT_EXPORT_STYLE.logo),
       headerLogoSize: numbers.headerLogoSize,
       footerLogoSize: numbers.footerLogoSize,
@@ -1853,6 +1905,9 @@ var ZExport = (() => {
   }
   function text(value, fallback) {
     return typeof value === "string" ? value : fallback;
+  }
+  function color(value) {
+    return typeof value === "string" && /^#[0-9a-f]{3,8}$/i.test(value.trim()) ? value.trim().toLowerCase() : "";
   }
   function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -1965,9 +2020,11 @@ var ZExport = (() => {
     const content = article.querySelector(".markdown-preview-sizer");
     if (!content) return;
     article.querySelectorAll(DECORATION_SELECTOR).forEach((node) => node.remove());
+    article.toggleClass("ziminos-export-guides", style.listGuides);
     const header = buildLine(content, "ziminos-export-header", {
       text: resolveExportText(style.header.trim(), context),
       align: style.headerAlign,
+      color: style.headerColor,
       logo,
       logoSize: style.headerLogoSize
     });
@@ -1978,6 +2035,7 @@ var ZExport = (() => {
     const footer = buildLine(content, "ziminos-export-footer", {
       text: resolveExportText(style.footer.trim(), context),
       align: style.footerAlign,
+      color: style.footerColor,
       logo,
       logoSize: style.footerLogoSize
     });
@@ -1996,6 +2054,7 @@ var ZExport = (() => {
       gap: "0.55em",
       justifyContent: JUSTIFY[input.align]
     });
+    if (input.color) line.style.color = input.color;
     if (showLogo && input.logo) {
       const image = line.createEl("img", { attr: { src: input.logo.dataUrl, alt: "" } });
       Object.assign(image.style, {
@@ -2037,9 +2096,10 @@ var ZExport = (() => {
       tile,
       fontSize: style.watermarkSize,
       angle: style.watermarkAngle,
-      // 水印文字取正文色而不是单开一个取色器：它在明暗两套主题里都读得出，
-      // 而一个写死的品牌色在暗色主题下会变成一块看不见的东西。标志自带颜色，不受这条影响。
-      color: computed.color || "#6b7280",
+      // 用户挑了色就用他的；没挑（空串）才跟随正文色。
+      // 默认必须是后者：「跟随主题」在明暗两套配色下各自成立，
+      // 而任何一个写死的色号只在其中一套里成立。标志自带颜色，不受这条影响。
+      color: style.watermarkColor || computed.color || "#6b7280",
       fontFamily,
       opacity: style.watermarkOpacity
     });
@@ -2096,6 +2156,10 @@ var ZExport = (() => {
     HTMLElement.prototype.createEl = function (tag, o) {
         return this.appendChild(apply(document.createElement(tag), o));
     };
+    HTMLElement.prototype.toggleClass = function (cls, on) {
+        this.classList.toggle(cls, !!on);
+        return this;
+    };
 
     function apply(el, o) {
         if (!o) return el;
@@ -2127,6 +2191,7 @@ var ZExport = (() => {
         watermarkOpacity: 13,
         headerLogoSize: 26,
         watermarkLogoSize: 34,
+        headerLink: 'edu.zhaozimin.cn',
     });
 
     var PRESETS = {
@@ -2197,7 +2262,9 @@ var ZExport = (() => {
 
         title.textContent = CONTEXT.title;
 
-        var body = content.createDiv({ cls: 'demo-body' });
+        // 正文容器必须与 paper.ts 用同一个类名：插件的参考线等样式是按它选中的，
+        // 演示页换个类名就会「这里好看、装上去不是那样」——而那正是这份演示页要杜绝的事。
+        var body = content.createDiv({ cls: 'ziminos-export-markdown demo-body' });
 
         body.innerHTML = [
             '<p>你问我：把答案整理好发给客户，对方转手就发给了别人，我还剩下什么。</p>',
@@ -2205,7 +2272,9 @@ var ZExport = (() => {
             '<p>贴一层半透明的字上去，谁都会。难的是让它<strong>既裁不掉、又不挡字</strong>——这两件事互相拉扯，只有你亲眼看着调，才知道停在哪儿。所以这个功能的第一性不是"能加水印"，是"边看边调"。</p>',
             '<blockquote><p>左边那张纸，就是等会儿被拍下来的那一个元素。不是示意图。</p></blockquote>',
             '<p>平铺适合防转发：整篇铺满，截哪一段都带着你的名字。单个落款适合署名：安静地待在一角，像信纸下方那一行。两者不是浓淡之别，是两个目的。</p>',
-            '<ul><li>页眉页脚：对齐、与正文的距离、可以只放标志不写字</li><li>水印：排布、九宫格落点、字号、横纵间距、角度、不透明度</li><li>标志：选一张库内图片，三处各自决定放多大，0 就是不放</li></ul>',
+            '<ul><li>页眉页脚<ul><li>对齐与离正文多远</li><li>文字颜色，或跟随主题</li><li>可以只放标志不写字</li></ul></li>'
+             + '<li>水印<ul><li>排布：平铺 / 单个落款</li><li>九宫格落点、字号、横纵间距</li><li>角度与不透明度<ul><li>太淡等于没有</li><li>太浓等于毁了正文</li></ul></li></ul></li>'
+             + '<li>标志：一条路径，三处各自决定放多大，0 就是不放</li></ul>',
             '<pre><code>applyDecorations(article, style, context, logo)</code></pre>',
             '<p>整套风格会被记住。水印是你的品牌，而品牌的意思就是每次都一样。</p>',
         ].join('');
@@ -2311,6 +2380,49 @@ var ZExport = (() => {
         });
     }
 
+    /**
+     * 一个颜色栏。空串＝跟随正文色，所以它比一个普通取色器多一个「退回去」的按钮——
+     * 取色器本身没有空态，少了那枚按钮，点过一次就再也回不到跟随主题。
+     */
+    function colorRow(key, name) {
+        var cell = row('ziminos-export-field', name, '');
+        var input = cell.control.createEl('input', { attr: { type: 'color' } });
+        var reset = cell.control.createEl('button', { attr: { type: 'button' } });
+
+        reset.textContent = '↺';
+        reset.className = 'clickable-icon';
+        reset.title = '跟随正文色';
+
+        input.addEventListener('input', function () {
+            var patch = {};
+
+            patch[key] = input.value;
+            update(patch);
+        });
+        reset.addEventListener('click', function () {
+            var patch = {};
+
+            patch[key] = '';
+            update(patch);
+        });
+        refreshers.push(function () {
+            input.value = style[key] || inheritedColor();
+            cell.desc.textContent = style[key]
+                ? '用这个色：' + style[key]
+                : '跟随正文色（明暗两套主题下都读得出）。';
+        });
+    }
+
+    function inheritedColor() {
+        var match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(article).color || '');
+
+        if (!match) return '#6b7280';
+
+        return '#' + [match[1], match[2], match[3]].map(function (part) {
+            return Number(part).toString(16).padStart(2, '0');
+        }).join('');
+    }
+
     /** 一段（页眉/页脚/水印）此刻有没有东西，与 modal.ts 的 stateOf 同一套判据 */
     function stateOf(textKey, logoSizeKey) {
         var hasText = String(style[textKey]).trim() !== '';
@@ -2365,6 +2477,17 @@ var ZExport = (() => {
         refreshers.push(function () { select.value = style.format; });
     })();
 
+    // 正文
+    (function () {
+        heading('正文');
+
+        var cell = row('ziminos-export-field', '列表参考线', '给列表画上缩进参考线，一眼看得出哪几条是同一层。');
+        var box = cell.control.createEl('input', { attr: { type: 'checkbox' } });
+
+        box.addEventListener('change', function () { update({ listGuides: box.checked }); });
+        refreshers.push(function () { box.checked = !!style.listGuides; });
+    })();
+
     // 品牌标志
     (function () {
         heading('品牌标志');
@@ -2410,6 +2533,22 @@ var ZExport = (() => {
         textbox(row('ziminos-export-field', '文字', where + '留空即不添加；可用 {title}、{date}、{time}。').control,
             section, '留空即不添加');
 
+        var linkKey = section === 'header' ? 'headerLink' : 'footerLink';
+        var colorKey = section === 'header' ? 'headerColor' : 'footerColor';
+        var linkCell = row('ziminos-export-field', '链接', '');
+
+        textbox(linkCell.control, linkKey, 'edu.example.com');
+        refreshers.push(function () {
+            var png = style.format === 'png';
+
+            linkCell.desc.textContent = png
+                ? 'PNG 是图片，点不了。要可点的链接，把格式换成 PDF。'
+                : '填一个网址，这一行在 PDF 里整段可点（不带 https:// 也认）。';
+            linkCell.desc.classList.toggle('ziminos-export-warn', png);
+        });
+
+        colorRow(colorKey, '文字颜色');
+
         var alignCell = row('ziminos-export-field', '位置', '');
 
         picker3(alignCell.control, ['left', 'center', 'right'], Z.EXPORT_ALIGN_LABELS,
@@ -2431,6 +2570,8 @@ var ZExport = (() => {
         heading('水印');
         textbox(row('ziminos-export-field', '文字', '留空即不添加；可用 {title}、{date}、{time}。只放标志也成立。').control,
             'watermark', '留空即不添加');
+
+        colorRow('watermarkColor', '文字颜色');
 
         var modeCell = row('ziminos-export-field', '排布', '平铺裁不掉，适合防转发；单个安静，适合当落款。');
 

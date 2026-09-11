@@ -3,6 +3,8 @@
  *          依赖 core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 ExportPaper 契约与 renderPaper——把一篇笔记渲成一张可以被截图的纸
  * [POS]: 导出模块的内容层，只回答「这篇笔记铺开来是什么样、有多大」，不认识页眉页脚水印。
+ *        它的版面口径全部**量自用户此刻那个编辑区**（宽度、左右留白、字号、行高），一个数都不是这里定的——
+ *        发明尺寸就是在替用户排版，而那件事他已经在 Obsidian 的设置里回答过一次了。
  *        它与 decorate.ts 分家是整个预览功能的根：内容渲染昂贵且只该发生一次
  *        （解析 Markdown、内联远端图、等字体与版面稳定），装饰廉价却要在每一次拖动滑块时重来。
  *        两者原本焊在一个函数里，于是「实时」只能靠整篇重渲染，而那是卡顿的另一个名字。
@@ -27,9 +29,37 @@ export interface ExportPaper {
     release(): void;
 }
 
-const ARTICLE_WIDTH_FALLBACK = 760;
-const ARTICLE_WIDTH_MIN = 480;
-const ARTICLE_WIDTH_MAX = 1_600;
+/**
+ * 一张纸的版面口径，全部**量自用户此刻那个编辑区**，一个数都不是这里定的。
+ *
+ * 这层东西以前是三个常量（760 / 480 / 1600）加一句写死的 `padding: 48px 56px`，
+ * 于是导出的纸与屏幕上那一篇宽窄不同、字号也可能不同。用户的判决很直接：
+ * 按编辑区原来的字体大小与宽度，不许自己加宽。**发明尺寸就是在替用户排版**，
+ * 而排版这件事他已经在 Obsidian 的设置里回答过一次了。
+ */
+interface PaperMetrics {
+    /** 纸面宽（含左右内边距），取自那个 sizer 的 border-box */
+    readonly width: number;
+    readonly paddingLeft: number;
+    readonly paddingRight: number;
+    readonly paddingY: number;
+    /** 空串＝不覆盖，让主题自己说了算 */
+    readonly fontSize: string;
+    readonly fontFamily: string;
+    readonly lineHeight: string;
+}
+
+/** 只有在连编辑区都探不到时才用的兜底：它是「没有事实可依」时的最后一手，不是默认版面 */
+const FALLBACK_METRICS: PaperMetrics = {
+    width: 760,
+    paddingLeft: 56,
+    paddingRight: 56,
+    paddingY: 48,
+    fontSize: '',
+    fontFamily: '',
+    lineHeight: '',
+};
+
 const IMAGE_TIMEOUT_MS = 6_000;
 const LAYOUT_TIMEOUT_MS = 3_000;
 
@@ -44,11 +74,11 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
         cls: 'markdown-preview-view markdown-rendered ziminos-export-article',
     });
     const content = article.createDiv({ cls: 'markdown-preview-sizer' });
-    const desiredWidth = articleWidthOf(ctx, file);
+    const metrics = measureSource(ctx, file);
 
     component.load();
     parkStage(stage);
-    styleArticle(article, content, desiredWidth);
+    styleArticle(article, content, metrics);
 
     content.createDiv({ cls: 'inline-title', text: file.basename });
 
@@ -66,12 +96,11 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
     await document.fonts?.ready;
     await waitForStableLayout(article);
 
-    // 宽表格与长代码行可以真实撑宽文章；再按 scrollWidth 回填一次，随后重算最终高度。
-    const naturalWidth = Math.ceil(Math.max(desiredWidth, article.scrollWidth));
-
-    article.style.width = `${naturalWidth}px`;
-    content.style.width = `${naturalWidth}px`;
-    await waitForStableLayout(article);
+    // 这里**刻意不再**按 scrollWidth 把纸加宽。
+    // 旧版遇到宽表格或长代码行时会把整张纸撑开，好处是一个字都不丢，
+    // 代价是导出的图比屏幕上那一篇宽——而用户要的正是「跟编辑区一样宽」。
+    // 于是超宽内容与它在 Obsidian 里的样子一致：留在自己那个横向滚动的盒子里，
+    // 到列宽为止。这是一次有意的取舍，不是遗漏。
 
     return {
         article,
@@ -116,38 +145,79 @@ function parkStage(stage: HTMLElement): void {
     });
 }
 
-/** 从当前笔记实际显示宽度取数；源码/阅读两态都探不到时才回落 760px */
-function articleWidthOf(ctx: ZiminosContext, file: TFile): number {
+/**
+ * 量当前这篇笔记正显示成什么样：多宽、左右留多少、字多大。
+ *
+ * 阅读态量 `.markdown-preview-sizer`，编辑态量 `.cm-sizer`——两者都是「正文那一栏连同它的留白」，
+ * 也正是 Obsidian 把「可读行宽」这个设置作用上去的那个元素。因此这里既不夹取也不取整成好看的数：
+ * 用户把行宽调到 612px，导出的纸就是 612px。
+ *
+ * 探不到（笔记没开着、或那两个类名都不在）才回落 FALLBACK_METRICS，并且如实回落整套，
+ * 不做「宽度用量到的、内边距用写死的」这种一半一半——那会拼出一个哪儿都不存在的版面。
+ */
+function measureSource(ctx: ZiminosContext, file: TFile): PaperMetrics {
     const view = ctx.app.workspace.getActiveViewOfType(MarkdownView);
 
-    if (!view || view.file?.path !== file.path) return ARTICLE_WIDTH_FALLBACK;
+    if (!view || view.file?.path !== file.path) return FALLBACK_METRICS;
 
     const element = view.contentEl.querySelector<HTMLElement>('.markdown-preview-sizer, .cm-sizer');
-    const measured = element?.getBoundingClientRect().width ?? 0;
 
-    return Math.round(
-        Math.min(ARTICLE_WIDTH_MAX, Math.max(ARTICLE_WIDTH_MIN, measured || ARTICLE_WIDTH_FALLBACK)),
-    );
+    if (!element) return FALLBACK_METRICS;
+
+    const box = element.getBoundingClientRect();
+    const computed = getComputedStyle(element);
+    const width = Math.round(box.width);
+
+    if (!Number.isFinite(width) || width < 1) return FALLBACK_METRICS;
+
+    const paddingLeft = pixels(computed.paddingLeft);
+    const paddingRight = pixels(computed.paddingRight);
+    const paddingTop = pixels(computed.paddingTop);
+
+    return {
+        width,
+        paddingLeft,
+        paddingRight,
+        // 上下留白取真实值；真实值是 0 时跟左右一样宽——
+        // 那不是发明，是「这一栏的留白就这么宽」在另一个方向上的同一句话。
+        paddingY: paddingTop > 0 ? paddingTop : Math.max(paddingLeft, paddingRight),
+        fontSize: computed.fontSize,
+        fontFamily: computed.fontFamily,
+        lineHeight: computed.lineHeight,
+    };
 }
 
-function styleArticle(article: HTMLElement, content: HTMLElement, width: number): void {
+function pixels(value: string): number {
+    const parsed = Number.parseFloat(value);
+
+    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
+}
+
+function styleArticle(article: HTMLElement, content: HTMLElement, metrics: PaperMetrics): void {
     Object.assign(article.style, {
         boxSizing: 'border-box',
         position: 'relative',
-        width: `${width}px`,
+        width: `${metrics.width}px`,
         minHeight: '1px',
         height: 'auto',
         overflow: 'visible',
         color: 'var(--text-normal)',
         background: 'var(--background-primary)',
     });
+
+    // 字号与字体照抄编辑区。理论上主题变量会自己传下来，但这张纸挂在 body 上而不是
+    // 工作区叶子里，主题那些以容器打头的选择器未必够得着它——抄一遍是这件事唯一确定的做法。
+    if (metrics.fontSize) article.style.fontSize = metrics.fontSize;
+    if (metrics.fontFamily) article.style.fontFamily = metrics.fontFamily;
+    if (metrics.lineHeight) article.style.lineHeight = metrics.lineHeight;
+
     Object.assign(content.style, {
         boxSizing: 'border-box',
         position: 'relative',
-        width: `${width}px`,
+        width: `${metrics.width}px`,
         maxWidth: 'none',
         minHeight: '1px',
-        padding: '48px 56px',
+        padding: `${metrics.paddingY}px ${metrics.paddingRight}px ${metrics.paddingY}px ${metrics.paddingLeft}px`,
     });
 }
 

@@ -1,7 +1,8 @@
 /**
  * [INPUT]: 依赖 core/exportStyle 的 ExportStyle 契约，依赖 ./layout 的占位符与水印几何纯函数，
  *          依赖 ./logo 的 ResolvedLogo（已经解析好的字节，本层不读盘）
- * [OUTPUT]: 对外提供 applyDecorations——把一套风格施加到一张已经渲好的纸上
+ * [OUTPUT]: 对外提供 applyDecorations——把一套风格施加到一张已经渲好的纸上，
+ *           以及 LinkRegion/linkRegions——页眉页脚那块可点区域在纸上的坐标（只有 PDF 用得上）
  * [POS]: 导出模块的装饰层，与 paper.ts 严格分工：那边回答「这篇笔记有多大」，这边回答「它周围写什么」。
  *        本文件唯一的设计承诺是**幂等**：同一张纸连调十次与调一次结果一字不差。
  *        幂等不是性质而是前提——预览每拖动一次滑块就重放一次，而用户拖完立刻点导出时，
@@ -13,6 +14,7 @@
 
 import type { ExportStyle } from '../../core/exportStyle';
 import {
+    exportLinkUrl,
     resolveExportText,
     watermarkMark,
     watermarkPosition,
@@ -24,6 +26,20 @@ import type { ResolvedLogo } from './logo';
 
 const DECORATION_SELECTOR =
     '.ziminos-export-header, .ziminos-export-footer, .ziminos-export-watermark';
+
+/**
+ * PDF 里那块看不见的可点区域，坐标以文章左上角为原点、单位是 CSS 像素。
+ *
+ * 它是本层交给导出器的**唯一**一样不是 DOM 的东西，理由是位置只有这里知道：
+ * 页眉页脚落在哪一行、那一行里真正有墨的是哪一段，都是刚刚排完版才成立的事实。
+ */
+export interface LinkRegion {
+    readonly url: string;
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+}
 
 /** 页眉页脚是一行 flex，所以「靠左」说的是 justify-content 而不是 text-align */
 const JUSTIFY: Readonly<Record<ExportStyle['headerAlign'], string>> = {
@@ -53,9 +69,14 @@ export function applyDecorations(
 
     article.querySelectorAll(DECORATION_SELECTOR).forEach((node) => node.remove());
 
+    // 参考线不是装饰节点而是正文的一种呈现，所以它只翻一个类、不参与上面那次清场；
+    // 翻类本身幂等，与本函数的承诺一致。
+    article.toggleClass('ziminos-export-guides', style.listGuides);
+
     const header = buildLine(content, 'ziminos-export-header', {
         text: resolveExportText(style.header.trim(), context),
         align: style.headerAlign,
+        color: style.headerColor,
         logo,
         logoSize: style.headerLogoSize,
     });
@@ -68,6 +89,7 @@ export function applyDecorations(
     const footer = buildLine(content, 'ziminos-export-footer', {
         text: resolveExportText(style.footer.trim(), context),
         align: style.footerAlign,
+        color: style.footerColor,
         logo,
         logoSize: style.footerLogoSize,
     });
@@ -80,6 +102,8 @@ export function applyDecorations(
 interface LineInput {
     readonly text: string;
     readonly align: ExportStyle['headerAlign'];
+    /** 空串＝跟随正文色，也就是不往元素上写任何颜色，让主题自己说了算 */
+    readonly color: string;
     readonly logo: ResolvedLogo | null;
     readonly logoSize: number;
 }
@@ -103,6 +127,8 @@ function buildLine(host: HTMLElement, cls: string, input: LineInput): HTMLElemen
         gap: '0.55em',
         justifyContent: JUSTIFY[input.align],
     });
+
+    if (input.color) line.style.color = input.color;
 
     if (showLogo && input.logo) {
         const image = line.createEl('img', { attr: { src: input.logo.dataUrl, alt: '' } });
@@ -159,9 +185,10 @@ function applyWatermark(
         tile,
         fontSize: style.watermarkSize,
         angle: style.watermarkAngle,
-        // 水印文字取正文色而不是单开一个取色器：它在明暗两套主题里都读得出，
-        // 而一个写死的品牌色在暗色主题下会变成一块看不见的东西。标志自带颜色，不受这条影响。
-        color: computed.color || '#6b7280',
+        // 用户挑了色就用他的；没挑（空串）才跟随正文色。
+        // 默认必须是后者：「跟随主题」在明暗两套配色下各自成立，
+        // 而任何一个写死的色号只在其中一套里成立。标志自带颜色，不受这条影响。
+        color: style.watermarkColor || computed.color || '#6b7280',
         fontFamily,
         opacity: style.watermarkOpacity,
     });
@@ -201,4 +228,79 @@ function measureTextWidth(text: string, fontSize: number, fontFamily: string): n
     context.font = `${fontSize}px ${fontFamily}`;
 
     return context.measureText(text).width || text.length * fontSize * 0.9;
+}
+
+/**
+ * 页眉与页脚各自指向哪儿、那块可点区域在纸上的什么位置。
+ *
+ * 量的是**那一行里真正有墨的部分**（标志与文字的并集），不是整行的盒子：
+ * 一行 flex 是块级的，它的盒子横跨整张纸宽，把它整块变成链接，
+ * 用户点在标题右边八厘米的空白上也会跳转——那不是他以为自己点到的东西。
+ *
+ * 坐标走 offsetLeft/offsetTop 链而不是 getBoundingClientRect：后者会把祖先身上的
+ * transform 一并算进去，而预览正是靠 transform 缩放的。用布局值，量到的就永远是纸自己的坐标。
+ */
+export function linkRegions(article: HTMLElement, style: ExportStyle): LinkRegion[] {
+    const regions: LinkRegion[] = [];
+    const collect = (selector: string, raw: string): void => {
+        const url = exportLinkUrl(raw);
+
+        if (!url) return;
+
+        const line = article.querySelector<HTMLElement>(selector);
+        const box = line ? inkWithin(line, article) : null;
+
+        if (box) regions.push({ url, ...box });
+    };
+
+    collect('.ziminos-export-header', style.headerLink);
+    collect('.ziminos-export-footer', style.footerLink);
+
+    return regions;
+}
+
+/** 一行里全部子元素的并集，换算成相对 article 的坐标 */
+function inkWithin(line: HTMLElement, article: HTMLElement): Omit<LinkRegion, 'url'> | null {
+    const origin = offsetWithin(line, article);
+
+    if (!origin) return null;
+
+    const children = [...line.children].filter((child): child is HTMLElement => child instanceof HTMLElement);
+
+    if (!children.length) return null;
+
+    let left = Number.POSITIVE_INFINITY;
+    let top = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+
+    for (const child of children) {
+        left = Math.min(left, child.offsetLeft);
+        top = Math.min(top, child.offsetTop);
+        right = Math.max(right, child.offsetLeft + child.offsetWidth);
+        bottom = Math.max(bottom, child.offsetTop + child.offsetHeight);
+    }
+
+    if (!Number.isFinite(left) || right <= left || bottom <= top) return null;
+
+    return {
+        x: origin.x + left,
+        y: origin.y + top,
+        width: right - left,
+        height: bottom - top,
+    };
+}
+
+function offsetWithin(element: HTMLElement, ancestor: HTMLElement): { x: number; y: number } | null {
+    let x = 0;
+    let y = 0;
+    let node: HTMLElement | null = element;
+
+    while (node && node !== ancestor) {
+        x += node.offsetLeft;
+        y += node.offsetTop;
+        node = node.offsetParent instanceof HTMLElement ? node.offsetParent : null;
+    }
+
+    return node === ancestor ? { x, y } : null;
 }

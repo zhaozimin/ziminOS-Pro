@@ -83,11 +83,31 @@ export interface ExportStyle {
     readonly headerAlign: ExportAlign;
     /** 页眉与正文标题之间的留白 */
     readonly headerGap: number;
+    /**
+     * 页眉文字的颜色。**空串＝跟随正文色**，也就是升级之前唯一的行为。
+     *
+     * 留一个空态而不是给它一个具体的默认色，是因为这两件事不可互相表达：
+     * 「跟随主题」在明暗两套配色下各自成立，而任何一个写死的色号只在其中一套里成立。
+     * 用户挑了色就是他要压过主题，没挑就该跟着主题走——默认值必须是后者。
+     */
+    readonly headerColor: string;
+    /**
+     * 页眉整行指向的网址，空即没有链接。
+     *
+     * 它只在 PDF 里成立：PNG 是一张位图，「可点」这个概念在它那里不存在。
+     * 因此这不是一个「格式支持度不同」的可选增强，而是**必须在界面上说清**的一条事实——
+     * 用户在 PNG 下填了它却什么都没发生时，他会以为是链接写错了。
+     */
+    readonly headerLink: string;
     readonly footer: string;
     readonly footerAlign: ExportAlign;
     /** 页脚与正文末尾之间的留白 */
     readonly footerGap: number;
+    readonly footerColor: string;
+    readonly footerLink: string;
     readonly watermark: string;
+    /** 水印文字的颜色。空串＝跟随正文色。标志自带颜色，不受它影响 */
+    readonly watermarkColor: string;
     readonly watermarkMode: WatermarkMode;
     readonly watermarkAnchor: WatermarkAnchor;
     readonly watermarkSize: number;
@@ -109,6 +129,14 @@ export interface ExportStyle {
     readonly headerLogoSize: number;
     readonly footerLogoSize: number;
     readonly watermarkLogoSize: number;
+    /**
+     * 正文里的列表画不画缩进参考线。
+     *
+     * 它是全表唯一一个**默认为真**的新增项，与「新功能的默认值应当是不发生」那条看似冲突，
+     * 其实不冲突：那条护的是「我替用户做了个他没要过的决定」，
+     * 而这一条恰恰是用户点名要的观感。何况它就在预览里，第一眼就能看见、一下就能关掉。
+     */
+    readonly listGuides: boolean;
 }
 
 /**
@@ -131,12 +159,19 @@ export const DEFAULT_EXPORT_STYLE: ExportStyle = {
     watermarkGapY: 100,
     watermarkAngle: -28,
     watermarkOpacity: 14,
+    // 三处颜色默认空串＝跟随正文色，也就是升级之前唯一的行为
+    headerColor: '',
+    headerLink: '',
+    footerColor: '',
+    footerLink: '',
+    watermarkColor: '',
     logo: '',
     // 三个尺寸默认 0：老库升级之后，没选过标志的人导出的那张图与升级前逐像素相同。
     // 新功能的默认值应当是「不发生」，而不是「替他做了个决定」。
     headerLogoSize: 0,
     footerLogoSize: 0,
     watermarkLogoSize: 0,
+    listGuides: true,
 };
 
 // ============================================================
@@ -329,6 +364,14 @@ export function normalizeExportStyle(input: unknown): ExportStyle {
         watermarkGapY: numbers.watermarkGapY,
         watermarkAngle: numbers.watermarkAngle,
         watermarkOpacity: numbers.watermarkOpacity,
+        headerColor: color(stored.headerColor),
+        headerLink: text(stored.headerLink, DEFAULT_EXPORT_STYLE.headerLink),
+        footerColor: color(stored.footerColor),
+        footerLink: text(stored.footerLink, DEFAULT_EXPORT_STYLE.footerLink),
+        watermarkColor: color(stored.watermarkColor),
+        listGuides: typeof stored.listGuides === 'boolean'
+            ? stored.listGuides
+            : DEFAULT_EXPORT_STYLE.listGuides,
         logo: text(stored.logo, DEFAULT_EXPORT_STYLE.logo),
         headerLogoSize: numbers.headerLogoSize,
         footerLogoSize: numbers.footerLogoSize,
@@ -349,6 +392,19 @@ function clampSlider(value: unknown, spec: ExportSliderSpec, fallback: number): 
 
 function text(value: unknown, fallback: string): string {
     return typeof value === 'string' ? value : fallback;
+}
+
+/**
+ * 颜色只认十六进制色号，其余一律回落空串（＝跟随正文色）。
+ *
+ * 收得这么紧是因为这个值会被直接写进 SVG 的 fill 与元素的 style。
+ * 放任意字符串进来，一条 `red; content: url(...)` 就成了一次样式注入；
+ * 而验形失败时回落成「跟随主题」，用户看见的是颜色没变，不是一篇渲染坏掉的导出。
+ */
+function color(value: unknown): string {
+    return typeof value === 'string' && /^#[0-9a-f]{3,8}$/i.test(value.trim())
+        ? value.trim().toLowerCase()
+        : '';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

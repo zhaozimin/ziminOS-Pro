@@ -1430,7 +1430,46 @@ a[href^="ziminos-eagle://"] {
     }
 }
 
-/* ── 以下三条会被拍进 PNG / PDF，改它们等于改交付物 ── */
+/* PNG 下那条「链接点不了」的说明，得看起来像一句提醒而不是一句补充 */
+.ziminos-export-controls .ziminos-export-warn {
+    color: var(--text-warning, #b66a08);
+}
+
+/* ── 以下四条会被拍进 PNG / PDF，改它们等于改交付物 ── */
+
+/*
+ * 列表缩进参考线。
+ *
+ * 用绝对定位的伪元素而不是给 ul 加 border-left：加边框会把整列内容往右推，
+ * 于是「开了参考线」的那张图与编辑区里的行宽对不上——而对齐编辑区正是这一版的主线要求。
+ * 伪元素不占位，开关它不会动任何一个字的位置。
+ * 偏移收成一个变量，因为它唯一合理的取值取决于主题的 --list-indent，改这一处即可对齐。
+ */
+.ziminos-export-guides {
+    --ziminos-guide-offset: 0.9em;
+    /*
+     * 取「淡字灰」而不是「分隔线灰」：后者是给相邻两块内容之间用的，一根一像素的线
+     * 在导出的图被缩到手机屏幕上时会直接消失，而一条看不见的参考线不如没有。
+     * 淡字灰在明暗两套主题下都是「安静但确实在那儿」，正是参考线该有的分量。
+     */
+    --ziminos-guide-color: var(--text-faint);
+}
+
+.ziminos-export-guides .ziminos-export-markdown ul,
+.ziminos-export-guides .ziminos-export-markdown ol {
+    position: relative;
+}
+
+.ziminos-export-guides .ziminos-export-markdown ul::before,
+.ziminos-export-guides .ziminos-export-markdown ol::before {
+    content: "";
+    position: absolute;
+    top: 0.2em;
+    bottom: 0.3em;
+    left: calc(var(--ziminos-guide-offset) * -1);
+    border-left: 1px solid var(--ziminos-guide-color);
+}
+
 
 .ziminos-export-header,
 .ziminos-export-footer {

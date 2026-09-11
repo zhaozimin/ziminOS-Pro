@@ -25,6 +25,10 @@
     HTMLElement.prototype.createEl = function (tag, o) {
         return this.appendChild(apply(document.createElement(tag), o));
     };
+    HTMLElement.prototype.toggleClass = function (cls, on) {
+        this.classList.toggle(cls, !!on);
+        return this;
+    };
 
     function apply(el, o) {
         if (!o) return el;
@@ -56,6 +60,7 @@
         watermarkOpacity: 13,
         headerLogoSize: 26,
         watermarkLogoSize: 34,
+        headerLink: 'edu.zhaozimin.cn',
     });
 
     var PRESETS = {
@@ -126,7 +131,9 @@
 
         title.textContent = CONTEXT.title;
 
-        var body = content.createDiv({ cls: 'demo-body' });
+        // 正文容器必须与 paper.ts 用同一个类名：插件的参考线等样式是按它选中的，
+        // 演示页换个类名就会「这里好看、装上去不是那样」——而那正是这份演示页要杜绝的事。
+        var body = content.createDiv({ cls: 'ziminos-export-markdown demo-body' });
 
         body.innerHTML = [
             '<p>你问我：把答案整理好发给客户，对方转手就发给了别人，我还剩下什么。</p>',
@@ -134,7 +141,9 @@
             '<p>贴一层半透明的字上去，谁都会。难的是让它<strong>既裁不掉、又不挡字</strong>——这两件事互相拉扯，只有你亲眼看着调，才知道停在哪儿。所以这个功能的第一性不是"能加水印"，是"边看边调"。</p>',
             '<blockquote><p>左边那张纸，就是等会儿被拍下来的那一个元素。不是示意图。</p></blockquote>',
             '<p>平铺适合防转发：整篇铺满，截哪一段都带着你的名字。单个落款适合署名：安静地待在一角，像信纸下方那一行。两者不是浓淡之别，是两个目的。</p>',
-            '<ul><li>页眉页脚：对齐、与正文的距离、可以只放标志不写字</li><li>水印：排布、九宫格落点、字号、横纵间距、角度、不透明度</li><li>标志：选一张库内图片，三处各自决定放多大，0 就是不放</li></ul>',
+            '<ul><li>页眉页脚<ul><li>对齐与离正文多远</li><li>文字颜色，或跟随主题</li><li>可以只放标志不写字</li></ul></li>'
+             + '<li>水印<ul><li>排布：平铺 / 单个落款</li><li>九宫格落点、字号、横纵间距</li><li>角度与不透明度<ul><li>太淡等于没有</li><li>太浓等于毁了正文</li></ul></li></ul></li>'
+             + '<li>标志：一条路径，三处各自决定放多大，0 就是不放</li></ul>',
             '<pre><code>applyDecorations(article, style, context, logo)</code></pre>',
             '<p>整套风格会被记住。水印是你的品牌，而品牌的意思就是每次都一样。</p>',
         ].join('');
@@ -240,6 +249,49 @@
         });
     }
 
+    /**
+     * 一个颜色栏。空串＝跟随正文色，所以它比一个普通取色器多一个「退回去」的按钮——
+     * 取色器本身没有空态，少了那枚按钮，点过一次就再也回不到跟随主题。
+     */
+    function colorRow(key, name) {
+        var cell = row('ziminos-export-field', name, '');
+        var input = cell.control.createEl('input', { attr: { type: 'color' } });
+        var reset = cell.control.createEl('button', { attr: { type: 'button' } });
+
+        reset.textContent = '↺';
+        reset.className = 'clickable-icon';
+        reset.title = '跟随正文色';
+
+        input.addEventListener('input', function () {
+            var patch = {};
+
+            patch[key] = input.value;
+            update(patch);
+        });
+        reset.addEventListener('click', function () {
+            var patch = {};
+
+            patch[key] = '';
+            update(patch);
+        });
+        refreshers.push(function () {
+            input.value = style[key] || inheritedColor();
+            cell.desc.textContent = style[key]
+                ? '用这个色：' + style[key]
+                : '跟随正文色（明暗两套主题下都读得出）。';
+        });
+    }
+
+    function inheritedColor() {
+        var match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(article).color || '');
+
+        if (!match) return '#6b7280';
+
+        return '#' + [match[1], match[2], match[3]].map(function (part) {
+            return Number(part).toString(16).padStart(2, '0');
+        }).join('');
+    }
+
     /** 一段（页眉/页脚/水印）此刻有没有东西，与 modal.ts 的 stateOf 同一套判据 */
     function stateOf(textKey, logoSizeKey) {
         var hasText = String(style[textKey]).trim() !== '';
@@ -294,6 +346,17 @@
         refreshers.push(function () { select.value = style.format; });
     })();
 
+    // 正文
+    (function () {
+        heading('正文');
+
+        var cell = row('ziminos-export-field', '列表参考线', '给列表画上缩进参考线，一眼看得出哪几条是同一层。');
+        var box = cell.control.createEl('input', { attr: { type: 'checkbox' } });
+
+        box.addEventListener('change', function () { update({ listGuides: box.checked }); });
+        refreshers.push(function () { box.checked = !!style.listGuides; });
+    })();
+
     // 品牌标志
     (function () {
         heading('品牌标志');
@@ -339,6 +402,22 @@
         textbox(row('ziminos-export-field', '文字', where + '留空即不添加；可用 {title}、{date}、{time}。').control,
             section, '留空即不添加');
 
+        var linkKey = section === 'header' ? 'headerLink' : 'footerLink';
+        var colorKey = section === 'header' ? 'headerColor' : 'footerColor';
+        var linkCell = row('ziminos-export-field', '链接', '');
+
+        textbox(linkCell.control, linkKey, 'edu.example.com');
+        refreshers.push(function () {
+            var png = style.format === 'png';
+
+            linkCell.desc.textContent = png
+                ? 'PNG 是图片，点不了。要可点的链接，把格式换成 PDF。'
+                : '填一个网址，这一行在 PDF 里整段可点（不带 https:// 也认）。';
+            linkCell.desc.classList.toggle('ziminos-export-warn', png);
+        });
+
+        colorRow(colorKey, '文字颜色');
+
         var alignCell = row('ziminos-export-field', '位置', '');
 
         picker3(alignCell.control, ['left', 'center', 'right'], Z.EXPORT_ALIGN_LABELS,
@@ -360,6 +439,8 @@
         heading('水印');
         textbox(row('ziminos-export-field', '文字', '留空即不添加；可用 {title}、{date}、{time}。只放标志也成立。').control,
             'watermark', '留空即不添加');
+
+        colorRow('watermarkColor', '文字颜色');
 
         var modeCell = row('ziminos-export-field', '排布', '平铺裁不掉，适合防转发；单个安静，适合当落款。');
 
