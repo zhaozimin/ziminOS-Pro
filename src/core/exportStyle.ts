@@ -42,6 +42,21 @@ export type WatermarkAnchor =
  */
 export type PageSizeMode = 'auto' | 'fixed';
 
+/**
+ * 导出用哪一套明暗，与 Obsidian 此刻是什么主题**分开**。
+ *
+ * 「跟随」是升级前唯一的行为，也必须是默认——换了默认，所有人下一次导出的底色都变了。
+ * 但它不该是唯一选项：常年用暗色写作、却要交一张白底给客户，是很常见的一件事，
+ * 而为了导一张图去把整个 Obsidian 切成亮色再切回来，是让人替机器干活。
+ */
+export type ExportTheme = 'auto' | 'light' | 'dark';
+
+export const EXPORT_THEME_LABELS: Readonly<Record<ExportTheme, string>> = {
+    auto: '跟随',
+    light: '亮色',
+    dark: '暗色',
+};
+
 export const PAGE_SIZE_MODE_LABELS: Readonly<Record<PageSizeMode, string>> = {
     auto: '自适应',
     fixed: '自定',
@@ -106,6 +121,8 @@ export interface ExportStyle {
      */
     readonly pageHeightMode: PageSizeMode;
     readonly pageHeight: number;
+    /** 导出这张纸用哪一套明暗；auto＝跟随 Obsidian 当前主题 */
+    readonly theme: ExportTheme;
     readonly header: string;
     readonly headerAlign: ExportAlign;
     /** 页眉与正文标题之间的留白 */
@@ -177,6 +194,8 @@ export const DEFAULT_EXPORT_STYLE: ExportStyle = {
     pageWidth: 800,
     pageHeightMode: 'auto',
     pageHeight: 1_200,
+    // 跟随：升级之后不选任何东西的人，导出的底色与升级前一模一样
+    theme: 'auto',
     header: '',
     headerAlign: 'center',
     headerGap: 24,
@@ -415,6 +434,7 @@ export function normalizeExportStyle(input: unknown): ExportStyle {
             ? stored.pageHeightMode
             : DEFAULT_EXPORT_STYLE.pageHeightMode,
         pageHeight: numbers.pageHeight,
+        theme: isExportTheme(stored.theme) ? stored.theme : DEFAULT_EXPORT_STYLE.theme,
         header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
         headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
         headerGap: numbers.headerGap,
@@ -476,6 +496,10 @@ function color(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isExportTheme(value: unknown): value is ExportTheme {
+    return value === 'auto' || value === 'light' || value === 'dark';
 }
 
 function isPageSizeMode(value: unknown): value is PageSizeMode {

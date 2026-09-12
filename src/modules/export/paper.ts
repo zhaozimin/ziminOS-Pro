@@ -16,6 +16,7 @@
  */
 
 import { Component, MarkdownRenderer, MarkdownView, requestUrl, TFile } from 'obsidian';
+import type { ExportTheme } from '../../core/exportStyle';
 import type { ZiminosContext } from '../../core/types';
 
 /** 一张已经渲好、随时可以被装饰与截图的纸 */
@@ -30,6 +31,15 @@ export interface ExportPaper {
      * 纸宽虽然会改变版面，却与「解释一遍 Markdown」完全是两件事。
      */
     resize(width: number | null, minHeight: number | null): void;
+    /**
+     * 让这张纸用哪一套明暗，不动 Obsidian 自己的主题。
+     *
+     * 做法是往舞台上挂 `theme-light` / `theme-dark` 一个类——主题把配色变量定义在这两个
+     * **不带 body 限定**的类选择器下（Obsidian 自己如此，Minimal 全篇 347 处里只有 1 处带 body），
+     * 于是同一套变量在这棵子树里被重新算一遍，纸就换了底色，而屏幕上其余部分一动不动。
+     * 挂在舞台而不是纸上：被拍的是纸，它自身的计算样式里因此只剩解算好的颜色，不留下这层开关。
+     */
+    setTheme(theme: ExportTheme): void;
     /** 交给预览：把舞台挪进宿主并按 scale 缩放 */
     mount(host: HTMLElement, scale: number): void;
     /** 收回离屏。预览关掉、或准备截图之前调用——祖先带 transform 的元素不该被拍 */
@@ -139,6 +149,16 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
 
     return {
         article,
+        setTheme: (theme) => {
+            stage.removeClass('theme-light');
+            stage.removeClass('theme-dark');
+            stage.style.colorScheme = '';
+
+            if (theme === 'auto') return;
+
+            stage.addClass(theme === 'light' ? 'theme-light' : 'theme-dark');
+            stage.style.colorScheme = theme;
+        },
         resize: (width, minHeight) => {
             const paperWidth = width ?? metrics.width;
 

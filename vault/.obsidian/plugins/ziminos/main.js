@@ -22220,6 +22220,11 @@ var EAGLE_PORT_RANGE = {
 };
 
 // src/core/exportStyle.ts
+var EXPORT_THEME_LABELS = {
+  auto: "\u8DDF\u968F",
+  light: "\u4EAE\u8272",
+  dark: "\u6697\u8272"
+};
 var PAGE_SIZE_MODE_LABELS = {
   auto: "\u81EA\u9002\u5E94",
   fixed: "\u81EA\u5B9A"
@@ -22260,6 +22265,8 @@ var DEFAULT_EXPORT_STYLE = {
   pageWidth: 800,
   pageHeightMode: "auto",
   pageHeight: 1200,
+  // 跟随：升级之后不选任何东西的人，导出的底色与升级前一模一样
+  theme: "auto",
   header: "",
   headerAlign: "center",
   headerGap: 24,
@@ -22447,6 +22454,7 @@ function normalizeExportStyle(input) {
     pageWidth: numbers.pageWidth,
     pageHeightMode: isPageSizeMode(stored.pageHeightMode) ? stored.pageHeightMode : DEFAULT_EXPORT_STYLE.pageHeightMode,
     pageHeight: numbers.pageHeight,
+    theme: isExportTheme(stored.theme) ? stored.theme : DEFAULT_EXPORT_STYLE.theme,
     header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
     headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
     headerGap: numbers.headerGap,
@@ -22485,6 +22493,9 @@ function color(value) {
 }
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isExportTheme(value) {
+  return value === "auto" || value === "light" || value === "dark";
 }
 function isPageSizeMode(value) {
   return value === "auto" || value === "fixed";
@@ -40828,6 +40839,8 @@ function applyDecorations(article, style, context, logo) {
     text: resolveExportText(style.header.trim(), context),
     align: style.headerAlign,
     color: style.headerColor,
+    link: style.headerLink,
+    format: style.format,
     logo,
     logoSize: style.headerLogoSize
   });
@@ -40839,6 +40852,8 @@ function applyDecorations(article, style, context, logo) {
     text: resolveExportText(style.footer.trim(), context),
     align: style.footerAlign,
     color: style.footerColor,
+    link: style.footerLink,
+    format: style.format,
     logo,
     logoSize: style.footerLogoSize
   });
@@ -40847,7 +40862,9 @@ function applyDecorations(article, style, context, logo) {
 }
 function buildLine(host, cls, input) {
   const showLogo = Boolean(input.logo) && input.logoSize > 0;
-  if (!input.text && !showLogo) return null;
+  const url = exportLinkUrl(input.link);
+  const text5 = input.text || (url ? input.link.trim() : "");
+  if (!text5 && !showLogo) return null;
   const line = host.createDiv({ cls });
   Object.assign(line.style, {
     display: "flex",
@@ -40867,7 +40884,13 @@ function buildLine(host, cls, input) {
       flex: "0 0 auto"
     });
   }
-  if (input.text) line.createSpan({ text: input.text });
+  if (text5) {
+    const span = line.createSpan({ text: text5 });
+    if (url && input.format === "pdf") {
+      span.style.textDecoration = "underline";
+      span.style.textUnderlineOffset = "0.22em";
+    }
+  }
   return line;
 }
 function applyWatermark(article, style, context, logo) {
@@ -41236,6 +41259,7 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
    * Markdown 早已是 DOM，改宽度只是让浏览器重排一次。
    */
   redraw() {
+    this.paper.setTheme(this.value.theme);
     this.paper.resize(pageWidthOf(this.value), pageMinHeightOf(this.value));
     applyDecorations(this.paper.article, this.value, this.context, this.logo);
     this.fitPreview();
@@ -41274,6 +41298,14 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
       this.refreshers.push(() => dropdown.setValue(this.value.format));
     });
     this.buildPage(host);
+    const themeSetting = new import_obsidian30.Setting(host).setName("\u660E\u6697").setDesc("\u5BFC\u51FA\u8FD9\u5F20\u7EB8\u7528\u54EA\u4E00\u5957\u914D\u8272\uFF0C\u4E0E Obsidian \u6B64\u523B\u662F\u4EC0\u4E48\u4E3B\u9898\u5206\u5F00\u3002\u5E38\u5E74\u7528\u6697\u8272\u5199\u4F5C\u3001\u5374\u8981\u4EA4\u4E00\u5F20\u767D\u5E95\u7ED9\u5BA2\u6237\uFF0C\u662F\u5F88\u5E38\u89C1\u7684\u4E00\u4EF6\u4E8B\u3002").setClass("ziminos-export-field");
+    this.addPicker(
+      themeSetting,
+      ["auto", "light", "dark"],
+      EXPORT_THEME_LABELS,
+      () => this.value.theme,
+      (theme) => this.update({ theme })
+    );
     new import_obsidian30.Setting(host).setName("\u6B63\u6587").setHeading();
     new import_obsidian30.Setting(host).setName("\u5217\u8868\u53C2\u8003\u7EBF").setDesc("\u7ED9\u5217\u8868\u753B\u4E0A\u7F29\u8FDB\u53C2\u8003\u7EBF\uFF0C\u4E00\u773C\u770B\u5F97\u51FA\u54EA\u51E0\u6761\u662F\u540C\u4E00\u5C42\u3002").setClass("ziminos-export-field").addToggle((toggle) => {
       toggle.onChange((on) => this.update({ listGuides: on }));
@@ -41633,6 +41665,14 @@ async function renderPaper(ctx, file) {
   await waitForStableLayout(article);
   return {
     article,
+    setTheme: (theme) => {
+      stage.removeClass("theme-light");
+      stage.removeClass("theme-dark");
+      stage.style.colorScheme = "";
+      if (theme === "auto") return;
+      stage.addClass(theme === "light" ? "theme-light" : "theme-dark");
+      stage.style.colorScheme = theme;
+    },
     resize: (width, minHeight) => {
       const paperWidth = width != null ? width : metrics.width;
       article.style.width = `${paperWidth}px`;
@@ -41952,6 +41992,7 @@ async function rememberStyle(ctx, style) {
 }
 async function capture(ctx, file, paper, style, context, target, progress) {
   await progress.step("\u6392\u7248\u5B9A\u7A3F\u2026");
+  paper.setTheme(style.theme);
   paper.resize(pageWidthOf(style), pageMinHeightOf(style));
   applyDecorations(paper.article, style, context, await resolveLogo(ctx.app, style.logo));
   const { width, height } = paper.measure();

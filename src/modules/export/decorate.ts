@@ -77,6 +77,8 @@ export function applyDecorations(
         text: resolveExportText(style.header.trim(), context),
         align: style.headerAlign,
         color: style.headerColor,
+        link: style.headerLink,
+        format: style.format,
         logo,
         logoSize: style.headerLogoSize,
     });
@@ -90,6 +92,8 @@ export function applyDecorations(
         text: resolveExportText(style.footer.trim(), context),
         align: style.footerAlign,
         color: style.footerColor,
+        link: style.footerLink,
+        format: style.format,
         logo,
         logoSize: style.footerLogoSize,
     });
@@ -104,18 +108,29 @@ interface LineInput {
     readonly align: ExportStyle['headerAlign'];
     /** 空串＝跟随正文色，也就是不往元素上写任何颜色，让主题自己说了算 */
     readonly color: string;
+    /** 用户填的那条网址原文（未验形）。它同时参与「这一行有没有东西」的判断 */
+    readonly link: string;
+    readonly format: ExportStyle['format'];
     readonly logo: ResolvedLogo | null;
     readonly logoSize: number;
 }
 
 /**
- * 画一行页眉或页脚。文字与标志都没有就返回 null——**「关闭」的判据是这一行空无一物**，
- * 而不再是「文字为空」；只放一枚标志不写字，是落款最常见的样子。
+ * 画一行页眉或页脚。文字、标志与链接**三样都没有**才返回 null。
+ *
+ * 链接原本不参与这个判断，于是「只填链接、不填文字」得到的是：整行不存在、
+ * 没有可点区域、而且不报错——一个填了却什么都不发生的输入框，正是本模块一路在打的那类错。
+ * 现在文字为空时就用链接本身当文字：你想推广 `edu.example.com`，那就把它印出来，
+ * 这也是用户填下那串字时心里想的样子。
  */
 function buildLine(host: HTMLElement, cls: string, input: LineInput): HTMLElement | null {
     const showLogo = Boolean(input.logo) && input.logoSize > 0;
+    const url = exportLinkUrl(input.link);
+    // 印出来的是他填的原文而不是验形后的 href：他写 edu.example.com 就该看见 edu.example.com，
+    // 而不是被补成 https://edu.example.com/ 这种他没写过的样子。
+    const text = input.text || (url ? input.link.trim() : '');
 
-    if (!input.text && !showLogo) return null;
+    if (!text && !showLogo) return null;
 
     const line = host.createDiv({ cls });
 
@@ -142,7 +157,18 @@ function buildLine(host: HTMLElement, cls: string, input: LineInput): HTMLElemen
         });
     }
 
-    if (input.text) line.createSpan({ text: input.text });
+    if (text) {
+        const span = line.createSpan({ text });
+
+        // 下划线**只在 PDF 下画**：那条线的含义是「这里可以点」，
+        // 而在 PNG 里那句话是假的——一张位图上没有「点」这回事。
+        // 于是切换格式时下划线跟着出现或消失，用户一眼就知道这一版能不能点，
+        // 不必等导出完看提示。没有任何视觉提示的可点区域等于不存在：没人会去点它。
+        if (url && input.format === 'pdf') {
+            span.style.textDecoration = 'underline';
+            span.style.textUnderlineOffset = '0.22em';
+        }
+    }
 
     return line;
 }

@@ -530,6 +530,55 @@ test('参考线只画给嵌套列表：顶层没有父级，那条线什么都�
     assert.doesNotMatch(css, /\.ziminos-export-guides \.ziminos-export-markdown ul::before/);
 });
 
+test('只填链接不填文字也成立：链接自己就是那一行的内容', () => {
+    const decorate = code('src/modules/export/decorate.ts');
+
+    // 链接原本不参与「这一行有没有东西」的判断，于是「只填链接」得到的是
+    // 整行不存在、没有可点区域、而且不报错——一个填了却什么都不发生的输入框
+    assert.match(decorate, /const url = exportLinkUrl\(input\.link\)/);
+    assert.match(decorate, /const text = input\.text \|\| \(url \? input\.link\.trim\(\) : ''\)/);
+    assert.match(decorate, /if \(!text && !showLogo\) return null;/);
+
+    // 印出来的是他填的原文，不是验形后补过协议的 href
+    assert.doesNotMatch(decorate, /createSpan\(\{ text: url \}\)/);
+});
+
+test('下划线只在 PDF 下画：在 PNG 里「可以点」这句话是假的', () => {
+    const decorate = code('src/modules/export/decorate.ts');
+
+    assert.match(decorate, /if \(url && input\.format === 'pdf'\)/);
+    assert.match(decorate, /textDecoration = 'underline'/);
+
+    // 没有任何视觉提示的可点区域等于不存在——没人会去点它
+    assert.match(decorate, /textUnderlineOffset/);
+});
+
+test('导出明暗与 Obsidian 当前主题分开，默认仍是跟随', () => {
+    assert.equal(style.DEFAULT_EXPORT_STYLE.theme, 'auto');
+    assert.equal(style.normalizeExportStyle({ theme: 'light' }).theme, 'light');
+    assert.equal(style.normalizeExportStyle({ theme: 'dark' }).theme, 'dark');
+    // 坏值回落跟随：换了默认，所有人下一次导出的底色都变了
+    assert.equal(style.normalizeExportStyle({ theme: 'sepia' }).theme, 'auto');
+    assert.equal(style.normalizeExportStyle({}).theme, 'auto');
+
+    const paper = code('src/modules/export/paper.ts');
+
+    // 靠往舞台挂一个类让主题的变量在这棵子树里重算，屏幕上其余部分一动不动
+    assert.match(paper, /stage\.addClass\(theme === 'light' \? 'theme-light' : 'theme-dark'\)/);
+    assert.match(paper, /stage\.removeClass\('theme-light'\)/);
+    // 绝不去动 Obsidian 自己的主题：那会把整个界面闪一下
+    assert.doesNotMatch(paper, /document\.body\.(add|remove|toggle)Class/);
+
+    // 明暗必须排在装饰之前：装饰层要读正文色去定水印颜色
+    for (const file of ['src/modules/export/modal.ts', 'src/modules/export/exporter.ts']) {
+        const source = code(file);
+        const themed = source.indexOf('setTheme(');
+        const decorated = source.indexOf('applyDecorations(');
+
+        assert.ok(themed > 0 && decorated > themed, `${file}: setTheme 必须排在 applyDecorations 之前`);
+    }
+});
+
 test('演示页是生成物：改了插件却忘了重新生成，这里当场变红', async () => {
     const generated = await buildExportDemo();
     const committed = readFileSync(DEMO_PATH, 'utf8');

@@ -3,14 +3,14 @@
   真源在 docs/export-demo/ —— 外壳 shell.html、驱动 driver.js、与 src/ 的接缝 entry.ts。
   页内的导出样式逐字来自 vault/.obsidian/plugins/ziminos/styles.css，
   几何与装饰逻辑由 esbuild 从 src/ 直接打包，因此它与插件里跑的是同一份判断。
-  ziminOS v0.28.0
+  ziminOS v0.29.0
 -->
 <!doctype html>
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ziminOS 导出预览｜交互演示 v0.28.0</title>
+<title>ziminOS 导出预览｜交互演示 v0.29.0</title>
 <style>
 /* ── 外壳：近似 Obsidian app.css 与 Minimal 主题的那几条变量与控件样式 ── */
 :root[data-theme="light"] {
@@ -75,6 +75,19 @@ input[type=range] { accent-color:var(--interactive-accent); }
   border-color:var(--interactive-accent); }
 .clickable-icon { padding:4px 9px !important; background:none !important; border:0 !important;
   color:var(--text-muted) !important; }
+
+/*
+ * 对 Obsidian `.theme-light` / `.theme-dark` 的近似。
+ * 真环境里这两个类由主题定义（Obsidian 自己与 Minimal 都是不带 body 限定的类选择器），
+ * 插件只是往那张纸的舞台上挂其中一个，同一套变量就在那棵子树里重算一遍。
+ * 演示页没有主题，所以这里照抄外壳那两套值，好让「明暗」这个开关看得出效果。
+ */
+.theme-light{--text-normal:#2b3138;--text-muted:#6a7480;--text-faint:#9aa3ad;--text-accent:#6c5ce7;
+ --background-primary:#fff;--background-secondary:#f2f4f7;--background-modifier-border:#dcdfe5;
+ --interactive-accent:#6c5ce7;color-scheme:light;}
+.theme-dark{--text-normal:#dadde2;--text-muted:#8b939e;--text-faint:#6b737d;--text-accent:#a99bff;
+ --background-primary:#1e2126;--background-secondary:#181b1f;--background-modifier-border:#343941;
+ --interactive-accent:#7c6cf0;color-scheme:dark;}
 
 /* 进度弹窗的遮罩：Obsidian 自己那层的近似 */
 .demo-veil { position:fixed; inset:0; z-index:50; display:grid; place-items:center;
@@ -1714,7 +1727,7 @@ a[href^="ziminos-eagle://"] {
     <button type="button" data-demo="preset-brand">试一套：品牌落款</button>
     <button type="button" data-demo="preset-guard">试一套：防转发平铺</button>
     <button type="button" data-demo="reset">恢复默认</button>
-    <span class="hint">v0.28.0 · 单文件，可离线打开、可转发</span>
+    <span class="hint">v0.29.0 · 单文件，可离线打开、可转发</span>
   </div>
 </div>
 
@@ -1780,6 +1793,7 @@ var ZExport = (() => {
     EXPORT_ALIGN_LABELS: () => EXPORT_ALIGN_LABELS,
     EXPORT_FORMAT_LABELS: () => EXPORT_FORMAT_LABELS,
     EXPORT_SLIDERS: () => EXPORT_SLIDERS,
+    EXPORT_THEME_LABELS: () => EXPORT_THEME_LABELS,
     PAGE_SIZE_MODE_LABELS: () => PAGE_SIZE_MODE_LABELS,
     WATERMARK_ANCHOR_GRID: () => WATERMARK_ANCHOR_GRID,
     WATERMARK_ANCHOR_LABELS: () => WATERMARK_ANCHOR_LABELS,
@@ -1795,6 +1809,11 @@ var ZExport = (() => {
   });
 
   // src/core/exportStyle.ts
+  var EXPORT_THEME_LABELS = {
+    auto: "\u8DDF\u968F",
+    light: "\u4EAE\u8272",
+    dark: "\u6697\u8272"
+  };
   var PAGE_SIZE_MODE_LABELS = {
     auto: "\u81EA\u9002\u5E94",
     fixed: "\u81EA\u5B9A"
@@ -1835,6 +1854,8 @@ var ZExport = (() => {
     pageWidth: 800,
     pageHeightMode: "auto",
     pageHeight: 1200,
+    // 跟随：升级之后不选任何东西的人，导出的底色与升级前一模一样
+    theme: "auto",
     header: "",
     headerAlign: "center",
     headerGap: 24,
@@ -2022,6 +2043,7 @@ var ZExport = (() => {
       pageWidth: numbers.pageWidth,
       pageHeightMode: isPageSizeMode(stored.pageHeightMode) ? stored.pageHeightMode : DEFAULT_EXPORT_STYLE.pageHeightMode,
       pageHeight: numbers.pageHeight,
+      theme: isExportTheme(stored.theme) ? stored.theme : DEFAULT_EXPORT_STYLE.theme,
       header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
       headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
       headerGap: numbers.headerGap,
@@ -2060,6 +2082,9 @@ var ZExport = (() => {
   }
   function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isExportTheme(value) {
+    return value === "auto" || value === "light" || value === "dark";
   }
   function isPageSizeMode(value) {
     return value === "auto" || value === "fixed";
@@ -2156,6 +2181,18 @@ var ZExport = (() => {
     const y = vertical === "top" ? `${Math.max(0, gapY)}px` : vertical === "bottom" ? `calc(100% - ${Math.max(0, gapY)}px)` : "50%";
     return `${x} ${y}`;
   }
+  function exportLinkUrl(raw) {
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    const candidate = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+      return url.href;
+    } catch (e) {
+      return "";
+    }
+  }
   function pageWidthOf(style) {
     return style.pageWidthMode === "fixed" ? Math.max(1, Math.round(style.pageWidth)) : null;
   }
@@ -2183,6 +2220,8 @@ var ZExport = (() => {
       text: resolveExportText(style.header.trim(), context),
       align: style.headerAlign,
       color: style.headerColor,
+      link: style.headerLink,
+      format: style.format,
       logo,
       logoSize: style.headerLogoSize
     });
@@ -2194,6 +2233,8 @@ var ZExport = (() => {
       text: resolveExportText(style.footer.trim(), context),
       align: style.footerAlign,
       color: style.footerColor,
+      link: style.footerLink,
+      format: style.format,
       logo,
       logoSize: style.footerLogoSize
     });
@@ -2202,7 +2243,9 @@ var ZExport = (() => {
   }
   function buildLine(host, cls, input) {
     const showLogo = Boolean(input.logo) && input.logoSize > 0;
-    if (!input.text && !showLogo) return null;
+    const url = exportLinkUrl(input.link);
+    const text2 = input.text || (url ? input.link.trim() : "");
+    if (!text2 && !showLogo) return null;
     const line = host.createDiv({ cls });
     Object.assign(line.style, {
       display: "flex",
@@ -2222,7 +2265,13 @@ var ZExport = (() => {
         flex: "0 0 auto"
       });
     }
-    if (input.text) line.createSpan({ text: input.text });
+    if (text2) {
+      const span = line.createSpan({ text: text2 });
+      if (url && input.format === "pdf") {
+        span.style.textDecoration = "underline";
+        span.style.textUnderlineOffset = "0.22em";
+      }
+    }
     return line;
   }
   function applyWatermark(article, style, context, logo) {
@@ -2509,6 +2558,11 @@ var ZExport = (() => {
         var width = Z.pageWidthOf(style) || 760;
         var minHeight = Z.pageMinHeightOf(style) || 1;
 
+        // 明暗排在最前：装饰层要读正文色去定水印颜色，
+        // 反过来的话水印会用上一套主题的颜色画在这一套主题的纸上
+        stage.classList.remove('theme-light', 'theme-dark');
+        if (style.theme !== 'auto') stage.classList.add('theme-' + style.theme);
+
         article.style.width = width + 'px';
         if (column) column.style.width = width + 'px';
         article.style.minHeight = minHeight + 'px';
@@ -2739,6 +2793,16 @@ var ZExport = (() => {
                 entry.cell.item.classList.toggle('is-disabled', style[modeKey] !== 'fixed');
             });
         });
+    })();
+
+    // 明暗：导出用哪一套配色，与当前主题分开
+    (function () {
+        var cell = row('ziminos-export-field', '明暗',
+            '导出这张纸用哪一套配色，与 Obsidian 此刻是什么主题分开。常年用暗色写作、却要交一张白底给客户，是很常见的一件事。');
+
+        picker3(cell.control, ['auto', 'light', 'dark'], Z.EXPORT_THEME_LABELS,
+            function () { return style.theme; },
+            function (v) { update({ theme: v }); });
     })();
 
     // 正文

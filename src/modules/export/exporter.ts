@@ -136,8 +136,9 @@ async function capture(
 ): Promise<string> {
     await progress.step('排版定稿…');
 
-    // 与弹窗的 redraw 同样的三步，同样的先后：先定尺寸、再施装饰、最后量。
+    // 与弹窗的 redraw 同样的几步、同样的先后：明暗 → 尺寸 → 装饰 → 量。
     // 重放一次的代价是零（两者都幂等），而不重放的代价是拿到的与看见的不是同一张。
+    paper.setTheme(style.theme);
     paper.resize(pageWidthOf(style), pageMinHeightOf(style));
     // 标志在这里重解一次而不是信弹窗那一份：读盘是异步的，用户完全可能在它读完之前就点了导出。
     // resolveLogo 自带按路径与修改时间的缓存，重解一次通常连一次读盘都不会发生。

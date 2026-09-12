@@ -163,6 +163,11 @@
         var width = Z.pageWidthOf(style) || 760;
         var minHeight = Z.pageMinHeightOf(style) || 1;
 
+        // 明暗排在最前：装饰层要读正文色去定水印颜色，
+        // 反过来的话水印会用上一套主题的颜色画在这一套主题的纸上
+        stage.classList.remove('theme-light', 'theme-dark');
+        if (style.theme !== 'auto') stage.classList.add('theme-' + style.theme);
+
         article.style.width = width + 'px';
         if (column) column.style.width = width + 'px';
         article.style.minHeight = minHeight + 'px';
@@ -393,6 +398,16 @@
                 entry.cell.item.classList.toggle('is-disabled', style[modeKey] !== 'fixed');
             });
         });
+    })();
+
+    // 明暗：导出用哪一套配色，与当前主题分开
+    (function () {
+        var cell = row('ziminos-export-field', '明暗',
+            '导出这张纸用哪一套配色，与 Obsidian 此刻是什么主题分开。常年用暗色写作、却要交一张白底给客户，是很常见的一件事。');
+
+        picker3(cell.control, ['auto', 'light', 'dark'], Z.EXPORT_THEME_LABELS,
+            function () { return style.theme; },
+            function (v) { update({ theme: v }); });
     })();
 
     // 正文

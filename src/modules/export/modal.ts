@@ -21,6 +21,7 @@ import {
     EXPORT_ALIGN_LABELS,
     EXPORT_FORMAT_LABELS,
     EXPORT_SLIDERS,
+    EXPORT_THEME_LABELS,
     PAGE_SIZE_MODE_LABELS,
     WATERMARK_ANCHOR_GRID,
     WATERMARK_ANCHOR_LABELS,
@@ -31,6 +32,7 @@ import type {
     ExportFormat,
     ExportSliderSpec,
     ExportStyle,
+    ExportTheme,
     PageSizeMode,
     WatermarkAnchor,
     WatermarkMode,
@@ -186,6 +188,9 @@ export class ExportPreviewModal extends Modal {
      * Markdown 早已是 DOM，改宽度只是让浏览器重排一次。
      */
     private redraw(): void {
+        // 明暗排在最前：它改的是配色变量，而装饰层要读正文色去定水印的颜色。
+        // 反过来的话，水印会用上一套主题的颜色画在这一套主题的纸上。
+        this.paper.setTheme(this.value.theme);
         this.paper.resize(pageWidthOf(this.value), pageMinHeightOf(this.value));
         applyDecorations(this.paper.article, this.value, this.context, this.logo);
         this.fitPreview();
@@ -244,6 +249,19 @@ export class ExportPreviewModal extends Modal {
             });
 
         this.buildPage(host);
+
+        const themeSetting = new Setting(host)
+            .setName('明暗')
+            .setDesc('导出这张纸用哪一套配色，与 Obsidian 此刻是什么主题分开。常年用暗色写作、却要交一张白底给客户，是很常见的一件事。')
+            .setClass('ziminos-export-field');
+
+        this.addPicker(
+            themeSetting,
+            ['auto', 'light', 'dark'],
+            EXPORT_THEME_LABELS,
+            () => this.value.theme,
+            (theme: ExportTheme) => this.update({ theme }),
+        );
 
         new Setting(host).setName('正文').setHeading();
 

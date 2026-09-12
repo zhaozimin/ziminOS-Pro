@@ -79,6 +79,19 @@ input[type=range] { accent-color:var(--interactive-accent); }
 .clickable-icon { padding:4px 9px !important; background:none !important; border:0 !important;
   color:var(--text-muted) !important; }
 
+/*
+ * 对 Obsidian `.theme-light` / `.theme-dark` 的近似。
+ * 真环境里这两个类由主题定义（Obsidian 自己与 Minimal 都是不带 body 限定的类选择器），
+ * 插件只是往那张纸的舞台上挂其中一个，同一套变量就在那棵子树里重算一遍。
+ * 演示页没有主题，所以这里照抄外壳那两套值，好让「明暗」这个开关看得出效果。
+ */
+.theme-light{--text-normal:#2b3138;--text-muted:#6a7480;--text-faint:#9aa3ad;--text-accent:#6c5ce7;
+ --background-primary:#fff;--background-secondary:#f2f4f7;--background-modifier-border:#dcdfe5;
+ --interactive-accent:#6c5ce7;color-scheme:light;}
+.theme-dark{--text-normal:#dadde2;--text-muted:#8b939e;--text-faint:#6b737d;--text-accent:#a99bff;
+ --background-primary:#1e2126;--background-secondary:#181b1f;--background-modifier-border:#343941;
+ --interactive-accent:#7c6cf0;color-scheme:dark;}
+
 /* 进度弹窗的遮罩：Obsidian 自己那层的近似 */
 .demo-veil { position:fixed; inset:0; z-index:50; display:grid; place-items:center;
   background:var(--shell-veil); }
