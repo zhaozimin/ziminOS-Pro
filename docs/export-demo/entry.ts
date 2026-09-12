@@ -29,3 +29,4 @@ export {
     resolveExportText,
 } from '../../src/modules/export/layout';
 export { applyDecorations } from '../../src/modules/export/decorate';
+export { createProgressBody } from '../../src/modules/export/progressBody';

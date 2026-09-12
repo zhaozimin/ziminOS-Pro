@@ -479,9 +479,47 @@ test('先问去处再做图：保存框立刻弹出，选完路径弹窗才关',
     assert.match(modal, /if \(!await this\.confirm\(this\.value\)\) return;/);
     assert.match(exporter, /return picked\.target !== null;/);
 
-    // 真的要等的那一段得有个一直在的提示（0＝不自动消失）
-    assert.match(exporter, /new Notice\('正在生成，请稍候…', 0\)/);
-    assert.match(exporter, /progress\.hide\(\)/);
+    // 真的要等的那一段有一块进度条，而不是一条不会动的角落提示
+    assert.match(exporter, /openExportProgress\(ctx\.app/);
+    assert.match(exporter, /progress\.succeed\(/);
+    assert.match(exporter, /progress\.fail\(message\)/);
+});
+
+test('进度按阶段走并自报家门，PDF 比 PNG 多一步', () => {
+    const exporter = code('src/modules/export/exporter.ts');
+    const body = code('src/modules/export/progressBody.ts');
+
+    // 步数随格式变：PDF 多一步「装进单页 PDF」，而那一步是真的要花时间
+    assert.match(exporter, /style\.format === 'pdf' \? 4 : 3/);
+
+    // 每一步都带一句「此刻在干什么」——按字节的百分比装不出来（dom-to-image 不给回调），
+    // 所以标签才是消除「盲盒感」的那一半
+    for (const label of ['排版定稿…', '正在栅格化', '装进单页 PDF…', '写入文件…']) {
+        assert.ok(exporter.includes(label), `少了这一步的说明：${label}`);
+    }
+
+    // step 必须等界面真的画出来再放行：只等一帧的话，紧接着那段同步重活会把更新压住，
+    // 进度条从头到尾只画一次——那比没有进度条更糟
+    assert.match(body, /requestAnimationFrame\(\(\) => requestAnimationFrame\(/);
+
+    // 失败不自动关：那句话是用户唯一能拿去问「为什么」的东西
+    assert.match(body, /ziminos-export-progress-actions/);
+    assert.match(body, /'知道了'/);
+
+    // 纯 DOM 半边零 obsidian 依赖，演示页才拿得走同一份代码
+    assert.doesNotMatch(body, /from 'obsidian'/);
+});
+
+test('正文左右等宽：屏幕上留给滚动条的那点不对称，不该跟到纸上', () => {
+    const paper = code('src/modules/export/paper.ts');
+
+    // 真机量到左 88px、右 62px——照抄得越忠实，偏心越明显
+    assert.match(paper, /paddingX/);
+    assert.doesNotMatch(paper, /paddingLeft:|paddingRight:/);
+
+    // 取平均而不是取大的那个：正文栏宽度分毫不变，改的只是它摆在哪儿
+    assert.match(paper, /pixels\(computed\.paddingLeft\) \+ pixels\(computed\.paddingRight\)\) \/ 2/);
+    assert.match(paper, /\$\{metrics\.paddingY\}px \$\{metrics\.paddingX\}px/);
 });
 
 test('参考线只画给嵌套列表：顶层没有父级，那条线什么都不表示', () => {

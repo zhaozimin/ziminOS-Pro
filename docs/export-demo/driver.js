@@ -537,14 +537,7 @@
         cancel.addEventListener('click', function () {
             toast('取消了。真插件里这一步零写入：设置不动，磁盘上什么都不留。');
         });
-        confirm.addEventListener('click', function () {
-            var size = Z.pdfPageSize(article.scrollWidth, article.scrollHeight);
-
-            toast(style.format === 'png'
-                ? '真插件会把左边这张纸一次性拍成 PNG，弹出系统保存框，并记住这套风格。'
-                : '真插件会把同一张图装进一页 ' + Math.round(size.width) + '×' + Math.round(size.height) +
-                  ' pt 的 PDF，弹出系统保存框，并记住这套风格。');
-        });
+        confirm.addEventListener('click', function () { runProgress(); });
     })();
 
     document.querySelectorAll('[data-demo]').forEach(function (button) {
@@ -570,6 +563,53 @@
             }
         });
     });
+
+    /**
+     * 走一遍导出进度。
+     *
+     * 条与推进逻辑来自插件真源（createProgressBody），**每一步之间的等待是演示页伪造的**——
+     * 这里没有真的在栅格化。伪造的只有时长，长什么样、怎么走、说什么话都是真的。
+     * 真插件里点「导出」会先弹系统保存框，选完路径才轮到这一块。
+     */
+    function runProgress() {
+        var veil = document.getElementById('veil');
+        var host = document.getElementById('progress-host');
+        var title = document.getElementById('progress-title');
+        var pdf = style.format === 'pdf';
+        var size = Z.pdfPageSize(article.scrollWidth, article.scrollHeight);
+
+        host.textContent = '';
+        title.textContent = '正在导出';
+        veil.hidden = false;
+
+        var body = Z.createProgressBody(host, {
+            total: pdf ? 4 : 3,
+            onTitle: function (text) { title.textContent = text; },
+        });
+        var steps = ['排版定稿…',
+            '正在栅格化 ' + article.scrollWidth.toLocaleString('zh-CN') + ' × '
+                + article.scrollHeight.toLocaleString('zh-CN') + ' px…'];
+
+        if (pdf) steps.push('装进单页 PDF…');
+        steps.push('写入文件…');
+
+        var delays = pdf ? [260, 1400, 700, 320] : [260, 1600, 320];
+
+        (function next(i) {
+            if (i >= steps.length) {
+                body.succeed(pdf
+                    ? '已导出：一页 ' + Math.round(size.width) + '×' + Math.round(size.height) + ' pt 的 PDF'
+                    : '已导出：一整张 PNG 长图');
+                window.setTimeout(function () { veil.hidden = true; }, 1600);
+
+                return;
+            }
+
+            body.step(steps[i]).then(function () {
+                window.setTimeout(function () { next(i + 1); }, delays[i]);
+            });
+        })(0);
+    }
 
     var toastTimer = null;
 

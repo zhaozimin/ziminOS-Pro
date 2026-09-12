@@ -3,14 +3,14 @@
   真源在 docs/export-demo/ —— 外壳 shell.html、驱动 driver.js、与 src/ 的接缝 entry.ts。
   页内的导出样式逐字来自 vault/.obsidian/plugins/ziminos/styles.css，
   几何与装饰逻辑由 esbuild 从 src/ 直接打包，因此它与插件里跑的是同一份判断。
-  ziminOS v0.27.0
+  ziminOS v0.28.0
 -->
 <!doctype html>
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ziminOS 导出预览｜交互演示 v0.27.0</title>
+<title>ziminOS 导出预览｜交互演示 v0.28.0</title>
 <style>
 /* ── 外壳：近似 Obsidian app.css 与 Minimal 主题的那几条变量与控件样式 ── */
 :root[data-theme="light"] {
@@ -75,6 +75,11 @@ input[type=range] { accent-color:var(--interactive-accent); }
   border-color:var(--interactive-accent); }
 .clickable-icon { padding:4px 9px !important; background:none !important; border:0 !important;
   color:var(--text-muted) !important; }
+
+/* 进度弹窗的遮罩：Obsidian 自己那层的近似 */
+.demo-veil { position:fixed; inset:0; z-index:50; display:grid; place-items:center;
+  background:var(--shell-veil); }
+.demo-veil[hidden] { display:none; }
 
 /* 演示专属：右下角那句回执，替代 Obsidian 的 Notice */
 .toast { position:fixed; right:20px; bottom:20px; max-width:340px; padding:12px 15px;
@@ -1559,6 +1564,71 @@ a[href^="ziminos-eagle://"] {
     color: var(--text-warning, #b66a08);
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * 导出进度
+ *
+ * 它替换的是一条右上角的 Notice——用户的原话是「像盲盒一样」。
+ * 因此这一块的全部设计就一句：**把正在发生的事摆到屏幕正中，让人没法错过**。
+ * 进度按阶段走而不是按字节（dom-to-image 不给回调），所以标签比那根条更重要：
+ * 条说「还有多远」，标签说「此刻在干什么」，后者才是消除「盲盒感」的那一半。
+ * ══════════════════════════════════════════════════════════════ */
+
+.modal.ziminos-export-progress-modal {
+    width: min(440px, 90vw);
+}
+
+.ziminos-export-progress-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.ziminos-export-progress-label {
+    /* 路径可能很长且没有空格可断；不给它断行的余地，弹窗会被撑宽 */
+    overflow-wrap: anywhere;
+    color: var(--text-normal);
+}
+
+.ziminos-export-progress-count {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    /* 等宽数字：这两个数每一步都在变，不等宽会让整行左右抖 */
+    font-variant-numeric: tabular-nums;
+}
+
+.ziminos-export-progress-track {
+    overflow: hidden;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--background-modifier-border);
+}
+
+.ziminos-export-progress-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--interactive-accent);
+    /* 阶段之间是跳变的，给它一段过渡，条才像在「走」而不是在「闪」 */
+    transition: width .28s ease;
+}
+
+.ziminos-export-progress.is-done .ziminos-export-progress-fill {
+    background: var(--color-green, #16734a);
+}
+
+.ziminos-export-progress.is-failed .ziminos-export-progress-fill {
+    background: var(--color-red, #b13939);
+}
+
+.ziminos-export-progress-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
 /* ── 以下四条会被拍进 PNG / PDF，改它们等于改交付物 ── */
 
 /*
@@ -1644,7 +1714,7 @@ a[href^="ziminos-eagle://"] {
     <button type="button" data-demo="preset-brand">试一套：品牌落款</button>
     <button type="button" data-demo="preset-guard">试一套：防转发平铺</button>
     <button type="button" data-demo="reset">恢复默认</button>
-    <span class="hint">v0.27.0 · 单文件，可离线打开、可转发</span>
+    <span class="hint">v0.28.0 · 单文件，可离线打开、可转发</span>
   </div>
 </div>
 
@@ -1666,6 +1736,17 @@ a[href^="ziminos-eagle://"] {
         <div class="setting-item-control" id="actions"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<!--
+  导出进度。外壳（遮罩、弹窗框）是对 Obsidian 的近似，
+  框里那块条与它的推进逻辑来自插件真源的 createProgressBody——与装上去跑的是同一份代码。
+-->
+<div class="demo-veil" id="veil" hidden>
+  <div class="modal ziminos-export-progress-modal">
+    <div class="modal-title" id="progress-title">正在导出</div>
+    <div id="progress-host"></div>
   </div>
 </div>
 
@@ -1705,6 +1786,7 @@ var ZExport = (() => {
     WATERMARK_MODE_LABELS: () => WATERMARK_MODE_LABELS,
     applyDecorations: () => applyDecorations,
     captureScale: () => captureScale,
+    createProgressBody: () => createProgressBody,
     normalizeExportStyle: () => normalizeExportStyle,
     pageMinHeightOf: () => pageMinHeightOf,
     pageWidthOf: () => pageWidthOf,
@@ -2201,6 +2283,63 @@ var ZExport = (() => {
     if (!context) return text2.length * fontSize * 0.9;
     context.font = `${fontSize}px ${fontFamily}`;
     return context.measureText(text2).width || text2.length * fontSize * 0.9;
+  }
+
+  // src/modules/export/progressBody.ts
+  function createProgressBody(host, options) {
+    const total = Math.max(1, options.total);
+    const box = div(host, "ziminos-export-progress");
+    const head = div(box, "ziminos-export-progress-head");
+    const label = div(head, "ziminos-export-progress-label", "\u51C6\u5907\u4E2D\u2026");
+    const count = div(head, "ziminos-export-progress-count", `0 / ${total}`);
+    const fill = div(div(box, "ziminos-export-progress-track"), "ziminos-export-progress-fill");
+    let done = 0;
+    let settled = false;
+    fill.style.width = "0%";
+    return {
+      step: async (text2) => {
+        if (settled) return;
+        done = Math.min(total, done + 1);
+        label.textContent = text2;
+        count.textContent = `${done} / ${total}`;
+        fill.style.width = `${Math.round(done / total * 100)}%`;
+        await paint();
+      },
+      succeed: (message) => {
+        if (settled) return;
+        settled = true;
+        options.onTitle("\u5BFC\u51FA\u6210\u529F");
+        label.textContent = message;
+        count.textContent = `${total} / ${total}`;
+        fill.style.width = "100%";
+        box.classList.add("is-done");
+      },
+      fail: (message, onDismiss) => {
+        if (settled) return;
+        settled = true;
+        options.onTitle("\u5BFC\u51FA\u5931\u8D25");
+        label.textContent = message;
+        box.classList.add("is-failed");
+        const actions = div(host, "ziminos-export-progress-actions");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "\u77E5\u9053\u4E86";
+        button.addEventListener("click", onDismiss);
+        actions.appendChild(button);
+      }
+    };
+  }
+  function div(host, cls, text2) {
+    const element = document.createElement("div");
+    element.className = cls;
+    if (text2 !== void 0) element.textContent = text2;
+    host.appendChild(element);
+    return element;
+  }
+  function paint() {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
   }
   return __toCommonJS(entry_exports);
 })();
@@ -2744,14 +2883,7 @@ var ZExport = (() => {
         cancel.addEventListener('click', function () {
             toast('取消了。真插件里这一步零写入：设置不动，磁盘上什么都不留。');
         });
-        confirm.addEventListener('click', function () {
-            var size = Z.pdfPageSize(article.scrollWidth, article.scrollHeight);
-
-            toast(style.format === 'png'
-                ? '真插件会把左边这张纸一次性拍成 PNG，弹出系统保存框，并记住这套风格。'
-                : '真插件会把同一张图装进一页 ' + Math.round(size.width) + '×' + Math.round(size.height) +
-                  ' pt 的 PDF，弹出系统保存框，并记住这套风格。');
-        });
+        confirm.addEventListener('click', function () { runProgress(); });
     })();
 
     document.querySelectorAll('[data-demo]').forEach(function (button) {
@@ -2777,6 +2909,53 @@ var ZExport = (() => {
             }
         });
     });
+
+    /**
+     * 走一遍导出进度。
+     *
+     * 条与推进逻辑来自插件真源（createProgressBody），**每一步之间的等待是演示页伪造的**——
+     * 这里没有真的在栅格化。伪造的只有时长，长什么样、怎么走、说什么话都是真的。
+     * 真插件里点「导出」会先弹系统保存框，选完路径才轮到这一块。
+     */
+    function runProgress() {
+        var veil = document.getElementById('veil');
+        var host = document.getElementById('progress-host');
+        var title = document.getElementById('progress-title');
+        var pdf = style.format === 'pdf';
+        var size = Z.pdfPageSize(article.scrollWidth, article.scrollHeight);
+
+        host.textContent = '';
+        title.textContent = '正在导出';
+        veil.hidden = false;
+
+        var body = Z.createProgressBody(host, {
+            total: pdf ? 4 : 3,
+            onTitle: function (text) { title.textContent = text; },
+        });
+        var steps = ['排版定稿…',
+            '正在栅格化 ' + article.scrollWidth.toLocaleString('zh-CN') + ' × '
+                + article.scrollHeight.toLocaleString('zh-CN') + ' px…'];
+
+        if (pdf) steps.push('装进单页 PDF…');
+        steps.push('写入文件…');
+
+        var delays = pdf ? [260, 1400, 700, 320] : [260, 1600, 320];
+
+        (function next(i) {
+            if (i >= steps.length) {
+                body.succeed(pdf
+                    ? '已导出：一页 ' + Math.round(size.width) + '×' + Math.round(size.height) + ' pt 的 PDF'
+                    : '已导出：一整张 PNG 长图');
+                window.setTimeout(function () { veil.hidden = true; }, 1600);
+
+                return;
+            }
+
+            body.step(steps[i]).then(function () {
+                window.setTimeout(function () { next(i + 1); }, delays[i]);
+            });
+        })(0);
+    }
 
     var toastTimer = null;
 

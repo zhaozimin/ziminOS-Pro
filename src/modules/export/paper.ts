@@ -3,7 +3,9 @@
  *          依赖 core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 ExportPaper 契约与 renderPaper——把一篇笔记渲成一张可以被截图的纸
  * [POS]: 导出模块的内容层，只回答「这篇笔记铺开来是什么样、有多大」，不认识页眉页脚水印。
- *        它的版面口径全部**量自用户此刻那个编辑区**（宽度、左右留白、字号、行高），一个数都不是这里定的——
+ *        它的版面口径全部**量自用户此刻那个编辑区**（宽度、留白、字号、行高），一个数都不是这里定的——
+ *        唯一一处刻意不照抄的是左右不对称：那份不对称是屏幕上留给滚动条的，纸上没有滚动条，
+ *        照抄过来只会让正文明显偏左，所以取平均把它摆正（列宽不变）。
  *        发明尺寸就是在替用户排版，而那件事他已经在 Obsidian 的设置里回答过一次了。
  *        它与 decorate.ts 分家是整个预览功能的根：内容渲染昂贵且只该发生一次
  *        （解析 Markdown、内联远端图、等字体与版面稳定），装饰廉价却要在每一次拖动滑块时重来。
@@ -48,8 +50,15 @@ export interface ExportPaper {
 interface PaperMetrics {
     /** 纸面宽（含左右内边距），取自那个 sizer 的 border-box */
     readonly width: number;
-    readonly paddingLeft: number;
-    readonly paddingRight: number;
+    /**
+     * 左右**共用**的一个水平留白，不是两个。
+     *
+     * 编辑区那一栏的左右内边距本来就不对称——右边多出来的那一截是留给滚动条的。
+     * 屏幕上看不出来（滚动条正占着那儿），纸上没有滚动条，它就变成了肉眼可见的偏心：
+     * 真机导出量到左 88px、右 62px，差 26px。照抄得越忠实，错得越明显。
+     * 取两者的平均：正文栏宽度分毫不差（792−88−62 ＝ 792−75−75），只是把它摆正了。
+     */
+    readonly paddingX: number;
     readonly paddingY: number;
     /** 空串＝不覆盖，让主题自己说了算 */
     readonly fontSize: string;
@@ -79,8 +88,7 @@ const MIN_PAGE_MARGIN = 48;
 /** 只有在连编辑区都探不到时才用的兜底：它是「没有事实可依」时的最后一手，不是默认版面 */
 const FALLBACK_METRICS: PaperMetrics = {
     width: 760,
-    paddingLeft: 56,
-    paddingRight: 56,
+    paddingX: 56,
     paddingY: 48,
     fontSize: '',
     fontFamily: '',
@@ -223,17 +231,20 @@ function measureSource(ctx: ZiminosContext, file: TFile): PaperMetrics {
 
     if (!Number.isFinite(width) || width < 1) return FALLBACK_METRICS;
 
-    const paddingLeft = Math.max(MIN_PAGE_MARGIN, pixels(computed.paddingLeft));
-    const paddingRight = Math.max(MIN_PAGE_MARGIN, pixels(computed.paddingRight));
+    // 平均而不是取大的那个：取大的会把正文栏收窄，而这一栏有多宽是用户在
+    // 「可读行宽」里已经回答过的事；居中要改的只是它摆在哪儿，不是它有多宽。
+    const paddingX = Math.max(
+        MIN_PAGE_MARGIN,
+        Math.round((pixels(computed.paddingLeft) + pixels(computed.paddingRight)) / 2),
+    );
     const paddingTop = pixels(computed.paddingTop);
 
     return {
         width,
-        paddingLeft,
-        paddingRight,
+        paddingX,
         // 上下留白取真实值；真实值是 0 时跟左右一样宽——
         // 那不是发明，是「这一栏的留白就这么宽」在另一个方向上的同一句话。
-        paddingY: Math.max(MIN_PAGE_MARGIN, paddingTop > 0 ? paddingTop : Math.max(paddingLeft, paddingRight)),
+        paddingY: Math.max(MIN_PAGE_MARGIN, paddingTop > 0 ? paddingTop : paddingX),
         fontSize: computed.fontSize,
         fontFamily: computed.fontFamily,
         lineHeight: computed.lineHeight,
@@ -270,7 +281,7 @@ function styleArticle(article: HTMLElement, content: HTMLElement, metrics: Paper
         width: `${metrics.width}px`,
         maxWidth: 'none',
         minHeight: '1px',
-        padding: `${metrics.paddingY}px ${metrics.paddingRight}px ${metrics.paddingY}px ${metrics.paddingLeft}px`,
+        padding: `${metrics.paddingY}px ${metrics.paddingX}px`,
     });
 }
 

@@ -25,6 +25,8 @@ import type { ExportTemplateContext } from './layout';
 import { resolveLogo } from './logo';
 import { ExportPreviewModal } from './modal';
 import { renderPaper } from './paper';
+import { openExportProgress } from './progress';
+import type { ExportProgress } from './progress';
 import type { ExportPaper } from './paper';
 
 interface SaveDialogResult {
@@ -65,6 +67,7 @@ async function exportCurrentNote(ctx: ZiminosContext): Promise<void> {
     }
 
     let paper: ExportPaper | null = null;
+    let progress: ExportProgress | null = null;
 
     try {
         new Notice('正在生成预览…');
@@ -93,20 +96,19 @@ async function exportCurrentNote(ctx: ZiminosContext): Promise<void> {
 
         await rememberStyle(ctx, style);
 
-        // 0 表示不自动消失：这一段是真的要等，得有个东西一直在那儿说「还在做」。
-        const progress = new Notice('正在生成，请稍候…', 0);
+        // 一条不会动的提示，用户的原话是「像盲盒一样」。进度条按阶段推进并自报家门，
+        // 步数取决于格式——PDF 比 PNG 多一步「装进单页 PDF」，而那一步是真的要花时间。
+        progress = openExportProgress(ctx.app, style.format === 'pdf' ? 4 : 3);
 
-        try {
-            const saved = await capture(ctx, file, paper, style, context, target);
+        const saved = await capture(ctx, file, paper, style, context, target, progress);
 
-            new Notice(`已导出：${saved}`);
-        } finally {
-            progress.hide();
-        }
+        progress.succeed(`已导出：${saved}`);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
-        new Notice(`导出失败：${message}`);
+        // 进度条开着就把话说在那儿（它不自动关，用户读完再点掉）；还没开就退回 Notice
+        if (progress) progress.fail(message);
+        else new Notice(`导出失败：${message}`);
     } finally {
         paper?.release();
     }
@@ -130,7 +132,10 @@ async function capture(
     style: ExportStyle,
     context: ExportTemplateContext,
     target: ExportTarget,
+    progress: ExportProgress,
 ): Promise<string> {
+    await progress.step('排版定稿…');
+
     // 与弹窗的 redraw 同样的三步，同样的先后：先定尺寸、再施装饰、最后量。
     // 重放一次的代价是零（两者都幂等），而不重放的代价是拿到的与看见的不是同一张。
     paper.resize(pageWidthOf(style), pageMinHeightOf(style));
@@ -139,6 +144,9 @@ async function capture(
     applyDecorations(paper.article, style, context, await resolveLogo(ctx.app, style.logo));
 
     const { width, height } = paper.measure();
+
+    await progress.step(`正在栅格化 ${width.toLocaleString('zh-CN')} × ${height.toLocaleString('zh-CN')} px…`);
+
     const blob = await domToImage.toBlob(paper.article, {
         width,
         height,
@@ -149,9 +157,17 @@ async function capture(
     if (!blob) throw new Error('浏览器没有生成图片数据');
 
     const links = linkRegions(paper.article, style);
-    const bytes = style.format === 'png'
-        ? new Uint8Array(await blob.arrayBuffer())
-        : await pdfBytes(blob, width, height, links);
+    let bytes: Uint8Array;
+
+    if (style.format === 'png') {
+        bytes = new Uint8Array(await blob.arrayBuffer());
+    } else {
+        await progress.step('装进单页 PDF…');
+        bytes = await pdfBytes(blob, width, height, links);
+    }
+
+    await progress.step('写入文件…');
+
     const saved = await writeTarget(ctx, target, bytes);
 
     // PNG 就是一堆像素，「可点」这个概念在它那里不存在。用户填了链接却什么都没发生时，

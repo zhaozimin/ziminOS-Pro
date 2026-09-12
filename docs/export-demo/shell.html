@@ -79,6 +79,11 @@ input[type=range] { accent-color:var(--interactive-accent); }
 .clickable-icon { padding:4px 9px !important; background:none !important; border:0 !important;
   color:var(--text-muted) !important; }
 
+/* 进度弹窗的遮罩：Obsidian 自己那层的近似 */
+.demo-veil { position:fixed; inset:0; z-index:50; display:grid; place-items:center;
+  background:var(--shell-veil); }
+.demo-veil[hidden] { display:none; }
+
 /* 演示专属：右下角那句回执，替代 Obsidian 的 Notice */
 .toast { position:fixed; right:20px; bottom:20px; max-width:340px; padding:12px 15px;
   border-radius:var(--radius-m); background:var(--background-primary-alt); color:var(--text-normal);
@@ -138,6 +143,17 @@ input[type=range] { accent-color:var(--interactive-accent); }
         <div class="setting-item-control" id="actions"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<!--
+  导出进度。外壳（遮罩、弹窗框）是对 Obsidian 的近似，
+  框里那块条与它的推进逻辑来自插件真源的 createProgressBody——与装上去跑的是同一份代码。
+-->
+<div class="demo-veil" id="veil" hidden>
+  <div class="modal ziminos-export-progress-modal">
+    <div class="modal-title" id="progress-title">正在导出</div>
+    <div id="progress-host"></div>
   </div>
 </div>
 

@@ -1457,6 +1457,71 @@ a[href^="ziminos-eagle://"] {
     color: var(--text-warning, #b66a08);
 }
 
+/* ══════════════════════════════════════════════════════════════
+ * 导出进度
+ *
+ * 它替换的是一条右上角的 Notice——用户的原话是「像盲盒一样」。
+ * 因此这一块的全部设计就一句：**把正在发生的事摆到屏幕正中，让人没法错过**。
+ * 进度按阶段走而不是按字节（dom-to-image 不给回调），所以标签比那根条更重要：
+ * 条说「还有多远」，标签说「此刻在干什么」，后者才是消除「盲盒感」的那一半。
+ * ══════════════════════════════════════════════════════════════ */
+
+.modal.ziminos-export-progress-modal {
+    width: min(440px, 90vw);
+}
+
+.ziminos-export-progress-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.ziminos-export-progress-label {
+    /* 路径可能很长且没有空格可断；不给它断行的余地，弹窗会被撑宽 */
+    overflow-wrap: anywhere;
+    color: var(--text-normal);
+}
+
+.ziminos-export-progress-count {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    /* 等宽数字：这两个数每一步都在变，不等宽会让整行左右抖 */
+    font-variant-numeric: tabular-nums;
+}
+
+.ziminos-export-progress-track {
+    overflow: hidden;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--background-modifier-border);
+}
+
+.ziminos-export-progress-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--interactive-accent);
+    /* 阶段之间是跳变的，给它一段过渡，条才像在「走」而不是在「闪」 */
+    transition: width .28s ease;
+}
+
+.ziminos-export-progress.is-done .ziminos-export-progress-fill {
+    background: var(--color-green, #16734a);
+}
+
+.ziminos-export-progress.is-failed .ziminos-export-progress-fill {
+    background: var(--color-red, #b13939);
+}
+
+.ziminos-export-progress-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
 /* ── 以下四条会被拍进 PNG / PDF，改它们等于改交付物 ── */
 
 /*
