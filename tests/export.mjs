@@ -18,21 +18,25 @@ import { build } from 'esbuild';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * 演示页的源只住在第二版仓库：`publish-v1.sh` 同步 tests/ 却把 docs/ 留下，
- * 因为那份交互演示是第二版的东西。
+ * 这是不是第二版仓库。
  *
- * 所以这里**不能**在顶层 import 它——一条静态 import 指向不存在的文件，
- * 整个测试文件连加载都加载不起来，三十多条与演示页毫无关系的断言一起陪葬，
- * 而第一版仓库的回归就此全红。这正是下面那条「演示页的接缝」断言在讲的坑，
- * 只不过它当初只想到了 tsconfig，没想到自己所在的这个文件也踩着同一条。
+ * 判别式与 regression.mjs 用的是同一条，理由也是同一条：**问的是仓库身份，不是某个文件在不在**。
+ * 后者会在被问的那个文件改名时静默跳过，把一条本该变红的测试变成一条永远绿的测试。
  *
- * 判据：**第二版专属的东西，第一版拿到的那份文件里只能以「可缺席」的形式出现。**
+ * 演示页与 `publish-v1.sh` 都只住在第二版：`publish-v1.sh` 同步 `tests/` 却把 `docs/` 与它自己留下。
+ * 于是这个文件里凡是要读那两样东西的断言，都得先过这道闸——
+ * 而且 import 更要紧：**一条顶层静态 import 指向不存在的文件，整个测试文件连加载都加载不起来**，
+ * 三十多条与演示页毫无关系的断言一起陪葬，连 skip 的机会都没有，第一版仓库的回归就此全红。
+ * 这正是下面那条「演示页的接缝」断言在讲的坑，只不过它当初只想到了 tsconfig，
+ * 没想到自己所在的这个文件也踩着同一条。
+ *
+ * 判据：**第二版专属的东西，在会被同步的文件里只能以「可缺席」的形式出现**——
+ * 闸按仓库身份判一次，模块按需 `import()`。按需那一步不吞错：演示页真被改名时它照样炸。
  */
-const DEMO_ENTRY = path.join(ROOT, 'docs/export-demo/build.mjs');
-const HAS_DEMO = existsSync(DEMO_ENTRY);
+const IS_PRO_REPO = existsSync(path.join(ROOT, 'skill-pro/SKILL.md'));
 
 function loadDemo() {
-    return import(`file://${DEMO_ENTRY}`);
+    return import(`file://${path.join(ROOT, 'docs/export-demo/build.mjs')}`);
 }
 
 async function loadModule(relative) {
@@ -674,7 +678,7 @@ test('导出明暗与 Obsidian 当前主题分开，默认仍是跟随', () => {
     }
 });
 
-test('演示页是生成物：改了插件却忘了重新生成，这里当场变红', { skip: !HAS_DEMO }, async () => {
+test('演示页是生成物：改了插件却忘了重新生成，这里当场变红', { skip: !IS_PRO_REPO }, async () => {
     const { buildExportDemo, DEMO_PATH } = await loadDemo();
     const generated = await buildExportDemo();
     const committed = readFileSync(DEMO_PATH, 'utf8');
@@ -686,7 +690,7 @@ test('演示页是生成物：改了插件却忘了重新生成，这里当场�
     );
 });
 
-test('演示页嵌的是插件真源，而不是一份照着抄的仿真', { skip: !HAS_DEMO }, async () => {
+test('演示页嵌的是插件真源，而不是一份照着抄的仿真', { skip: !IS_PRO_REPO }, async () => {
     const { DEMO_PATH } = await loadDemo();
     const demo = readFileSync(DEMO_PATH, 'utf8');
     const css = source('vault/.obsidian/plugins/ziminos/styles.css');
@@ -712,7 +716,7 @@ test('演示页嵌的是插件真源，而不是一份照着抄的仿真', { ski
     assert.doesNotMatch(demo, /MarkdownRenderer/);
 });
 
-test('演示页的接缝进了类型检查，但缺了它的第一版仓库同样要编得过', () => {
+test('演示页的接缝进了类型检查，但缺了它的第一版仓库同样要编得过', { skip: !IS_PRO_REPO }, () => {
     const tsconfig = JSON.parse(source('tsconfig.json'));
     const publish = source('publish-v1.sh');
 
@@ -722,17 +726,6 @@ test('演示页的接缝进了类型检查，但缺了它的第一版仓库同�
     assert.ok(/^\s*tsconfig\.json\s*$/m.test(publish), 'publish-v1.sh 不再同步 tsconfig，这条断言该改了');
     assert.ok(/^\s*docs\s*$/m.test(publish), 'docs 不再是第二版专属，这条断言该改了');
 
-    // 同一条坑还有第二种形状，而且更狠：tests/ 是**同步**过去的，
-    // 于是这里面任何一条指向 docs/ 的静态 import，在第一版仓库都是「文件加载不起来」，
-    // 整份断言连一条都跑不到。v0.30.0 就这么把发布通道堵死了，直到有人真去跑它才发现。
-    // 第二版专属的东西，只能以「可缺席」的形式出现在会被同步的文件里。
-    for (const file of ['tests/export.mjs', 'tests/regression.mjs']) {
-        assert.doesNotMatch(
-            code(file),
-            /^import .* from '\.\.\/docs\//m,
-            `${file} 顶层静态 import 了 docs/，而第一版仓库没有那个目录——改成按需 import`,
-        );
-    }
 
     assert.ok(tsconfig.include.includes('docs/export-demo/entry.ts'));
     // src 那条必须留着：include 里的路径不匹配只是被忽略，但**全部都不匹配**时
@@ -741,6 +734,24 @@ test('演示页的接缝进了类型检查，但缺了它的第一版仓库同�
         tsconfig.include.includes('src/**/*.ts'),
         'include 里必须留着 src 那条，否则缺了 docs/ 的第一版仓库会报「找不到输入」',
     );
+});
+
+/**
+ * 这一条**两个仓库都要跑**，因此刻意不挂那道闸。
+ *
+ * 它查的不是第二版的交付物，而是**会被同步过去的那两个文件自己**：tests/ 是同步范围内的，
+ * 于是这里面任何一条指向 docs/ 的顶层静态 import，在第一版仓库都是「文件加载不起来」——
+ * 整份断言连一条都跑不到，连 skip 都来不及。v0.30.0 就这么把发布通道堵死了整整两个版本，
+ * 一声不响，直到有人真去跑它。
+ */
+test('会被同步的测试文件不许顶层 import 第二版专属的东西', () => {
+    for (const file of ['tests/export.mjs', 'tests/regression.mjs']) {
+        assert.doesNotMatch(
+            code(file),
+            /^import .* from '\.\.\/docs\//m,
+            `${file} 顶层静态 import 了 docs/，而第一版仓库没有那个目录——改成按需 import`,
+        );
+    }
 });
 
 test('纸张一个开关管两边；高度只是下限，绝不裁内容', () => {
@@ -816,7 +827,7 @@ test('控件列分家且不 import obsidian，于是演示页能原样搬走它'
 
     // 演示页用的就是这一列，不再自己画一份。
     // 第一版仓库没有 docs/，那边这一句跳过——它验的是演示页，而演示页不属于那个版次
-    if (HAS_DEMO) assert.match(code('docs/export-demo/driver.js'), /Z\.buildExportPanel\(/);
+    if (IS_PRO_REPO) assert.match(code('docs/export-demo/driver.js'), /Z\.buildExportPanel\(/);
 
     // 两边都在 800 行以内——那条线是重构的触发点，不是上限
     assert.ok(panel.split('\n').length < 800);
