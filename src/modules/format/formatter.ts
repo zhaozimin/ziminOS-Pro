@@ -213,8 +213,11 @@ export function registerFormatter(ctx: ZiminosContext): void {
                  *
                  * 中文输入法在合成期间被外部改写会吞字，而两秒的停顿在斟酌一句话时太常见；
                  * 就算不吞字，整篇重写也会让光标从他正打字的位置上移开。
-                 * 「停手两秒」这个信号对 updated 那种只改一个 YAML 字段的动作足够，
-                 * 对整篇重排则远远不够——所以这一篇要等他真的走开。
+                 *
+                 * 这条纪律曾被当成本模块独有的，理由是「整篇重写才这么危险」。v0.33.0 由真机改正：
+                 * updatedMaintainer 只改一个 YAML 字段，症状一模一样——代价与写多少字节无关，
+                 * 只与「写盘的那一刻编辑器手里有没有未保存的改动」有关。于是它也搬来了同一套
+                 * dirtyWhileOpen + 走开再补，两个常驻监听现在守的是同一条边界。
                  */
                 if (file.path === openPath) {
                     dirtyWhileOpen.add(file.path);

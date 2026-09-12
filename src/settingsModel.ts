@@ -239,7 +239,10 @@ export const TEXTS = {
     autoCardName: '新建笔记自动登记为卡片',
     autoCardDesc: '在项目或领域目录里新建空笔记时，自动补齐标准字段，并链回它所属的 MOC。关掉后可用命令「初始化当前卡片」手动登记。',
     autoUpdatedName: '自动维护 updated 时间',
-    autoUpdatedDesc: '改完带 YAML 的笔记、停手两秒后，自动记下这次修改时间。没有 YAML 的笔记一个字都不动。',
+    autoUpdatedDesc:
+        '改完带 YAML 的笔记，自动记下这次修改时间。'
+        + '你正开着的那一篇要等你切走才记——在你眼皮底下写盘会被 Obsidian 当成外部修改，'
+        + '合并之后整篇重新灌回编辑器，视口就跳走了。没有 YAML 的笔记一个字都不动。',
 
     booksHeading: '读书笔记',
     booksIntro:
