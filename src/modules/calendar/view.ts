@@ -2,13 +2,14 @@
  * [INPUT]: 依赖 obsidian 的 ItemView/WorkspaceLeaf/App 公开视图 API；依赖 core/commands 的日历命令与图标，
  *          core/constants 的 PeriodKey；依赖 ./model 的月历计算与 ./holidays 的最后可用数据服务
  * [OUTPUT]: 对外提供 registerCalendar（注册常驻日历视图、Dust 式年/季/月独立导航、
- *           「今」全局回归当日月视图、打开命令与默认右侧栏入口）及 CalendarPeriodOpener 注入契约
+ *           「今」全局回归当日月视图、打开命令与默认右侧栏入口）及 CalendarPeriodOpener /
+ *           CalendarNoteProbe 两个注入契约
  * [POS]: calendar 模块的唯一呈现层。头部只管“看哪个时间”，标题与网格只发出“写这个周期”意图；
  *        真正的模板、目录与写盘仍由 main 注入的 opener 统一实现，不分叉第二套周期笔记系统
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { ItemView } from 'obsidian';
+import { ItemView, TFile } from 'obsidian';
 import type { App, WorkspaceLeaf } from 'obsidian';
 import { OPEN_CALENDAR_COMMAND } from '../../core/commands';
 import type { PeriodKey } from '../../core/constants';
@@ -23,15 +24,28 @@ export const CALENDAR_VIEW_TYPE = 'ziminos-calendar';
 /** calendar 不认识 review；main 用 review.openPeriodNote 填这个洞 */
 export type CalendarPeriodOpener = (period: PeriodKey, anchorDay: string) => Promise<void>;
 
+/**
+ * 这一天（或这一周）的复盘写没写过。
+ *
+ * 它与 opener 是同一条路数的第二个洞：目录规则、文件名格式、设置里那个根目录，
+ * 全归 review 管；日历只想知道「这一格要不要涂绿」，不该为此学会一套路径规则——
+ * 学了就会有第二处对「日记住哪儿」的理解，而两处迟早不一致。
+ */
+export type CalendarNoteProbe = (period: PeriodKey, anchorDay: string) => boolean;
+
 type CalendarMode = 'month' | 'year';
 
 /** 注册视图、命令，并在布局就绪后把日历安静放进右侧栏 */
-export function registerCalendar(ctx: ZiminosContext, openPeriod: CalendarPeriodOpener): void {
+export function registerCalendar(
+    ctx: ZiminosContext,
+    openPeriod: CalendarPeriodOpener,
+    hasNote: CalendarNoteProbe,
+): void {
     const holidays = new HolidayService(ctx);
 
     ctx.plugin.registerView(
         CALENDAR_VIEW_TYPE,
-        (leaf) => new ZiminosCalendarView(leaf, holidays, openPeriod),
+        (leaf) => new ZiminosCalendarView(leaf, holidays, openPeriod, hasNote),
     );
 
     ctx.commands.register(OPEN_CALENDAR_COMMAND, () => {
@@ -59,15 +73,20 @@ class ZiminosCalendarView extends ItemView {
     private year: number;
     private month: number;
     private unsubscribe: (() => void) | null = null;
+    private readonly hasNote: CalendarNoteProbe;
+    /** 笔记增删改名后重画的防抖句柄；无定时器、无轮询，只在真有事发生时排一次 */
+    private repaint: number | null = null;
 
     constructor(
         leaf: WorkspaceLeaf,
         holidays: HolidayService,
         openPeriod: CalendarPeriodOpener,
+        hasNote: CalendarNoteProbe,
     ) {
         super(leaf);
         this.holidays = holidays;
         this.openPeriod = openPeriod;
+        this.hasNote = hasNote;
 
         const today = new Date();
 
@@ -91,6 +110,21 @@ class ZiminosCalendarView extends ItemView {
     async onOpen(): Promise<void> {
         this.contentEl.addClass('ziminos-calendar');
         this.unsubscribe = this.holidays.subscribe(() => this.renderCalendar());
+
+        // 「这一天写过没有」是磁盘上的事实，它会在日历之外被改变——
+        // 命令建的、右键新建的、手动删掉的。因此听 vault 的三个事件重画一次，
+        // 防抖 80ms（与文件夹计数同一个数），无定时器无轮询。
+        // 只认 Markdown：附件与文件夹的增删与这件事无关。
+        // 三个事件各注册一次而不是用一个循环：vault.on 的重载按事件名给出不同的回调签名，
+        // rename 多带一个旧路径，合成一个联合类型就谁的签名都对不上。
+        const onChange = (file: unknown): void => {
+            if (file instanceof TFile && file.extension === 'md') this.scheduleRepaint();
+        };
+
+        this.registerEvent(this.app.vault.on('create', onChange));
+        this.registerEvent(this.app.vault.on('delete', onChange));
+        this.registerEvent(this.app.vault.on('rename', onChange));
+
         this.renderCalendar();
         void this.holidays.refreshCalendarYear(this.year);
     }
@@ -98,7 +132,31 @@ class ZiminosCalendarView extends ItemView {
     async onClose(): Promise<void> {
         this.unsubscribe?.();
         this.unsubscribe = null;
+
+        if (this.repaint !== null) window.clearTimeout(this.repaint);
+        this.repaint = null;
         this.contentEl.empty();
+    }
+
+    /**
+     * 点一格＝写这一段复盘。写完立刻重画：那一格该当场变绿。
+     *
+     * 不靠上面那三个 vault 事件兜住这条路，是因为它们只在**新建**时触发；
+     * 点一格更常见的结果是「那篇已经在了，只是打开它」——那时没有任何事件，
+     * 而用户仍然期待看见自己刚点过的那一格是绿的（它本来就该是）。
+     */
+    private async open(period: PeriodKey, anchorDay: string): Promise<void> {
+        await this.openPeriod(period, anchorDay);
+        this.renderCalendar();
+    }
+
+    private scheduleRepaint(): void {
+        if (this.repaint !== null) window.clearTimeout(this.repaint);
+
+        this.repaint = window.setTimeout(() => {
+            this.repaint = null;
+            this.renderCalendar();
+        }, 80);
     }
 
     private renderCalendar(): void {
@@ -250,10 +308,11 @@ class ZiminosCalendarView extends ItemView {
                 String(week.weekNumber),
                 `创建或打开 ${week.weekYear} 年第 ${week.weekNumber} 周复盘`,
                 'ziminos-calendar-week',
-                () => void this.openPeriod('weekly', week.anchor),
+                () => void this.open('weekly', week.anchor),
             );
 
             weekButton.setAttribute('aria-label', `${week.weekYear} 年第 ${week.weekNumber} 周`);
+            weekButton.toggleClass('has-note', this.hasNote('weekly', week.anchor));
 
             for (const day of week.days) this.renderDay(grid, day);
         }
@@ -266,11 +325,14 @@ class ZiminosCalendarView extends ItemView {
             '',
             this.dayTitle(day, holiday?.name ?? '', holiday?.isOffDay ?? null),
             'ziminos-calendar-day',
-            () => void this.openPeriod('daily', day.date),
+            () => void this.open('daily', day.date),
         );
 
         button.toggleClass('is-other-month', !day.inMonth);
         button.toggleClass('is-today', day.isToday);
+        // 「今天」与「写过了」是两个互不排斥的事实，所以是两个类而不是三选一的状态：
+        // 今天也可能已经写完，而那恰恰是最该一眼看见的一格。
+        button.toggleClass('has-note', this.hasNote('daily', day.date));
         button.toggleClass('is-weekend', day.weekday >= 6 && !holiday);
         button.toggleClass('is-rest-day', holiday?.isOffDay === true);
         button.toggleClass('is-work-day', holiday?.isOffDay === false);

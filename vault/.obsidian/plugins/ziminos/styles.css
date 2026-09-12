@@ -241,13 +241,51 @@
     opacity: 0.24;
 }
 
+/*
+ * 「写过了」与「今天」是两个互不排斥的事实，因此走两条视觉通道而不是三选一：
+ *
+ *   写过了 —— 内容的事实，一层淡绿底 + 绿色日期。它答的是「这一格已经有东西了」。
+ *   今  天 —— 此刻的事实，最重的一档：实心红块。它答的是「你在这儿」。
+ *
+ * 今天也可能已经写完，而那恰恰是最该一眼看见的一格。所以红块之上再补一枚绿点，
+ * 两句话同时说得出口。若做成三选一（今天 > 写过 > 普通），那一格就只剩一半信息。
+ */
+.ziminos-calendar-day.has-note,
+.ziminos-calendar-week.has-note {
+    color: var(--color-green, #16734a);
+    background: color-mix(in srgb, var(--color-green, #16734a) 14%, transparent);
+    font-weight: 600;
+}
+
+.ziminos-calendar-day.has-note:hover,
+.ziminos-calendar-week.has-note:hover {
+    background: color-mix(in srgb, var(--color-green, #16734a) 22%, transparent);
+}
+
+/* 排在 has-note 之后：同特异性下后来者胜，今天因此永远压过「写过了」那层底 */
 .ziminos-calendar-day.is-today {
-    background: var(--interactive-accent);
-    color: var(--text-on-accent);
+    position: relative;
+    background: var(--color-red, #b13939);
+    color: #fff;
+    font-weight: 700;
 }
 
 .ziminos-calendar-day.is-today:hover {
-    background: var(--interactive-accent-hover);
+    background: color-mix(in srgb, var(--color-red, #b13939) 85%, #000);
+}
+
+/* 今天又写过：红块保住「今天」，右上角那一点保住「写过了」 */
+.ziminos-calendar-day.is-today.has-note::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-green, #16734a);
+    /* 红底上的绿点对比不够，描一圈白边把它从底色里摘出来 */
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
 }
 
 .ziminos-calendar-day.is-special-day:not(.is-today) .ziminos-calendar-lunar {
@@ -303,7 +341,13 @@
 }
 
 .ziminos-calendar-day.is-today .ziminos-calendar-lunar {
-    color: var(--text-on-accent);
+    color: #fff;
+    opacity: 0.82;
+}
+
+/* 写过的那一格里，农历那行不跟着变绿——两行都绿会让日期数字失去重点 */
+.ziminos-calendar-day.has-note:not(.is-today) .ziminos-calendar-lunar {
+    color: var(--text-muted);
 }
 
 .ziminos-calendar-year-grid {
@@ -1232,8 +1276,8 @@ a[href^="ziminos-eagle://"] {
  * 导出预览 · 弹窗
  *
  * 这一段服务两类东西，值得先分清，否则改错了没人当场发现：
- * 前半段（modal / layout / viewport / picker …）只活在弹窗里，用户看完就关；
- * 后半段（header / footer / image-fallback）会被 dom-to-image 连同计算样式一起
+ * 前半段（modal / layout / viewport / 控件列）只活在弹窗里，用户看完就关；
+ * 后半段（header / footer / 参考线 / image-fallback）会被 dom-to-image 连同计算样式一起
  * **拍进最终的 PNG 与 PDF**——改它等于改交付物本身。
  * 因此后半段只用相对单位与语义变量：纸的宽度由笔记决定，写死 px 会让宽窄两篇长得不一样。
  * ============================================================ */
@@ -1289,78 +1333,296 @@ a[href^="ziminos-eagle://"] {
     box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
 }
 
+/* ── 控件列 ──────────────────────────────────────────────
+ *
+ * 它要在三百二十像素里装下三十个字段，靠的是两件事，不是把控件做小：
+ * 其一，**说明不常驻**——每行一句灰字才是吃掉高度的大头，它们搬进了名字的 title；
+ * 其二，**关着的段落不画**——三段装饰各有一个开关，关掉时下面那一堆根本不存在。
+ * 默认（三段全关、纸张自适应）约 265px，三段全开约 820px；改版之前是固定 2,400px。
+ * ────────────────────────────────────────────────────── */
+
 .ziminos-export-controls {
-    flex: 0 0 320px;
+    flex: 0 0 300px;
     min-width: 0;
     overflow-y: auto;
     padding-right: 6px;
-}
-
-.ziminos-export-controls .setting-item {
-    border-top: none;
-    padding: 10px 0;
+    /* 名字列定宽，所有控件因此左端对齐；改这一个数就整列一起动 */
+    --ziminos-label: 68px;
 }
 
 /*
- * 上面那条把每一行的分隔线都去掉了——三百二十像素一列，十几道横线只会把它切成碎片。
- * 于是「页眉 / 页脚 / 水印」三道小标题重新拿回那根线：分隔留给分段，不留给每一行。
+ * 这一条必须排在 .ziminos-export-row 之前：`display:flex` 是类选择器，
+ * 会压过 [hidden] 那条来自浏览器默认样式表的 display:none。少了它，
+ * 「预设」在 PNG 下、九宫格在平铺下都照样显示——而那正是这一版要靠隐藏省下来的地方。
  */
-.ziminos-export-controls .setting-item.setting-item-heading {
-    border-top: 1px solid var(--background-modifier-border);
-    margin-top: 8px;
-    padding-top: 18px;
+.ziminos-export-row[hidden] {
+    display: none;
 }
 
-/*
- * 三百二十像素一列，Obsidian 默认的「名字在左、控件在右」会把滑块挤成一小段。
- * 所以带 field 标记的行改成上下两层：说明在上，控件占满整行。
- */
-.ziminos-export-controls .setting-item.ziminos-export-field {
-    display: block;
+.ziminos-export-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 30px;
+    padding: 3px 0;
 }
 
-.ziminos-export-controls .ziminos-export-field .setting-item-info {
-    margin-right: 0;
+.ziminos-export-label {
+    flex: 0 0 var(--ziminos-label);
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.3;
+    /* 名字不换行：一换行，那一整列的对齐就没了。所以滑块表里的名字必须短 */
+    white-space: nowrap;
+    cursor: help;
 }
 
-.ziminos-export-controls .ziminos-export-field .setting-item-control {
-    justify-content: flex-start;
-    width: 100%;
-    margin-top: 6px;
-}
-
-.ziminos-export-controls .ziminos-export-field input[type="text"],
-.ziminos-export-controls .ziminos-export-field select,
-.ziminos-export-controls .ziminos-export-field input[type="range"] {
-    width: 100%;
-}
-
-/*
- * 标志那一行的说明位里显示的是库内路径，可能很长且没有空格可断。
- * 不给它断行的余地，它会把整列撑宽、把预览挤扁——而那条路径本来只是个回执。
- */
-.ziminos-export-controls .ziminos-export-logo .setting-item-description {
-    overflow-wrap: anywhere;
-}
-
-.ziminos-export-controls .ziminos-export-logo .setting-item-control {
+.ziminos-export-ctl {
+    display: flex;
+    align-items: center;
     gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* 段头：名字 + 颜色 + 开关，三样在同一条水平线上 */
+.ziminos-export-head .ziminos-export-label {
+    color: var(--text-normal);
+    font-size: var(--font-ui-small);
+    font-weight: 600;
+}
+
+.ziminos-export-head .ziminos-export-ctl {
+    justify-content: flex-end;
+}
+
+.ziminos-export-rule {
+    height: 1px;
+    margin: 10px 0;
+    background: var(--background-modifier-border);
+}
+
+/* 关掉的段落不是变灰，是整段消失——留着一堆点了没用的控件，比没有更占地方 */
+.ziminos-export-body[hidden] {
+    display: none;
+}
+
+/* PNG 下「链接点不了」那一行：它得看起来像一句提醒，而不是一句补充 */
+.ziminos-export-row.ziminos-export-warn .ziminos-export-label {
+    color: var(--text-warning, #b66a08);
+}
+
+/* 九宫格占三行；整行的垂直居中会让左边那个名字飘到第二行去，对齐到首行才读得顺 */
+.ziminos-export-anchor {
+    align-items: flex-start;
+}
+
+.ziminos-export-anchor .ziminos-export-label {
+    padding-top: 5px;
+}
+
+/* ── 二选一滑块：左滑一个意思，右滑另一个意思 ── */
+
+.ziminos-export-duo {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    padding: 2px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 999px;
+    background: var(--background-modifier-form-field);
+    cursor: pointer;
+    user-select: none;
 }
 
 /*
- * 读数是可以直接改的数字框，不是一块只读标签——拖得到的值受 step 限制，
- * 而「就要这个数」是真实诉求（纸宽要的是 800，不是「800 附近」）。
- * 它长得尽量不像输入框：没有边框、贴着标题、跟着强调色，
- * 因为它首先是那根滑块此刻的读数，其次才是一个可以改的地方。
+ * 滑块本身用 <i> 而不是 <span>：下面那两条 :first/:last-of-type 选的是标签，
+ * 它若也是 span 就会被选中，于是选中那一侧的字变成同色不可读——第一版就是这么错的。
  */
+.ziminos-export-duo-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    bottom: 2px;
+    width: calc(50% - 2px);
+    border-radius: 999px;
+    background: var(--interactive-accent);
+    transition: transform 0.18s ease;
+}
+
+.ziminos-export-duo[data-at="1"] .ziminos-export-duo-thumb {
+    transform: translateX(100%);
+}
+
+.ziminos-export-duo-lab {
+    position: relative;
+    z-index: 1;
+    padding: 4px 0;
+    text-align: center;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    transition: color 0.18s ease;
+}
+
+.ziminos-export-duo[data-at="0"] .ziminos-export-duo-lab:first-of-type,
+.ziminos-export-duo[data-at="1"] .ziminos-export-duo-lab:last-of-type {
+    color: var(--text-on-accent);
+    font-weight: 600;
+}
+
+/* ── 开关：只回答开还是关 ── */
+
+.ziminos-export-toggle {
+    position: relative;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 19px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: var(--background-modifier-border);
+    box-shadow: none;
+    cursor: pointer;
+    transition: background 0.18s ease;
+}
+
+.ziminos-export-toggle::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    transition: transform 0.18s ease;
+}
+
+.ziminos-export-toggle[aria-checked="true"] {
+    background: var(--interactive-accent);
+}
+
+.ziminos-export-toggle[aria-checked="true"]::after {
+    transform: translateX(15px);
+}
+
+/* ── 颜色：一小块色 + 一枚退回去 ── */
+
+.ziminos-export-swatch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 19px;
+    height: 19px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.ziminos-export-swatch input {
+    position: absolute;
+    inset: -4px;
+    width: 200%;
+    height: 200%;
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+}
+
+/* 空串＝跟随正文色。它没有色号可显示，所以画一个 A 说明「这一格现在不是一个颜色」 */
+.ziminos-export-swatch.is-auto::after {
+    content: "A";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-faint);
+    background: var(--background-modifier-form-field);
+}
+
+.ziminos-export-reset {
+    flex: 0 0 auto;
+    width: 19px;
+    height: 19px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--text-faint);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ziminos-export-reset:hover {
+    color: var(--text-normal);
+}
+
+/* ── 分段选择：位置这种事用位置来问 ── */
+
+.ziminos-export-seg {
+    display: flex;
+    gap: 3px;
+    width: 100%;
+}
+
+.ziminos-export-seg button {
+    flex: 1 1 0;
+    padding: 4px 0;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    background: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.ziminos-export-seg button:hover {
+    color: var(--text-normal);
+}
+
+.ziminos-export-seg button.is-on {
+    color: var(--text-on-accent);
+    background: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+}
+
+.ziminos-export-seg.ziminos-export-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    width: 132px;
+}
+
+.ziminos-export-seg.ziminos-export-grid button {
+    padding: 3px 0;
+    font-size: 11px;
+}
+
+/* ── 滑块：条占满余量，数字贴右端且可以直接改 ── */
+
+.ziminos-export-slider {
+    flex: 1 1 auto;
+    min-width: 0;
+    accent-color: var(--interactive-accent);
+}
+
 .ziminos-export-value {
-    width: 5.5em;
-    margin-left: 8px;
-    padding: 0 2px;
+    /* 要装得下四位数（纸高上限 4000）与负号（角度 -90）；窄一位就会把 1200 显示成 120 */
+    flex: 0 0 52px;
+    width: 52px;
+    padding: 1px 2px;
     font: inherit;
-    font-weight: normal;
-    color: var(--text-accent);
+    font-size: var(--font-ui-smaller);
     font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--text-accent);
     background: transparent;
     border: 1px solid transparent;
     border-radius: var(--radius-s);
@@ -1376,57 +1638,66 @@ a[href^="ziminos-eagle://"] {
     outline: none;
 }
 
-/* 位置这件事用位置来问：一排互斥按钮，而不是一个把空间压成一列文字的下拉框 */
-.ziminos-export-picker {
+.ziminos-export-controls input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 3px 7px;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-normal);
+    background: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+}
+
+/* ── 标志：缩略图 + 一枚按钮 + 文件名 + 清除，一行放得下 ── */
+
+.ziminos-export-logo {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 6px;
     width: 100%;
 }
 
-.ziminos-export-picker button {
-    flex: 1 1 0;
-    padding: 5px 0;
+.ziminos-export-logo-thumb {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 22px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    background: var(--background-modifier-form-field) center / contain no-repeat;
+}
+
+.ziminos-export-mini {
+    flex: 0 0 auto;
+    padding: 3px 8px;
     font-size: var(--font-ui-smaller);
-    color: var(--text-muted);
-    background: var(--background-modifier-form-field);
+    color: var(--text-normal);
+    background: var(--interactive-normal);
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
     box-shadow: none;
     cursor: pointer;
+    white-space: nowrap;
 }
 
-.ziminos-export-picker button:hover {
-    color: var(--text-normal);
+.ziminos-export-logo-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--text-faint);
+    /* 库内路径可能很长且没有空格可断；不给它省略，整列会被撑宽 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.ziminos-export-picker button.is-active {
-    color: var(--text-on-accent);
-    background: var(--interactive-accent);
-    border-color: var(--interactive-accent);
-}
-
-.ziminos-export-picker.ziminos-export-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    max-width: 216px;
-}
-
-/*
- * 那九个格子与那几根滑块是我们自己建的 DOM，Setting.setDisabled 够不着它们。
- * 不补这一条，文字留空时控件看着还能点——点了却什么都不发生，比变灰难懂得多。
- */
-.ziminos-export-controls .setting-item.is-disabled {
-    opacity: 0.45;
-    pointer-events: none;
-}
-
-/* 平铺的水印没有「位置」，那一行整行收起而不是变灰：
-   一个永远无效的控件留在那儿，用户会以为是它坏了 */
-.ziminos-export-controls .setting-item.ziminos-export-hidden {
-    display: none;
-}
+/* ── 底部 ── */
 
 .ziminos-export-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
     border-top: 1px solid var(--background-modifier-border);
     padding-top: 14px;
     margin-top: 4px;
@@ -1446,15 +1717,6 @@ a[href^="ziminos-eagle://"] {
         flex: 1 1 auto;
         max-height: 42vh;
     }
-
-    .ziminos-export-picker.ziminos-export-grid {
-        max-width: none;
-    }
-}
-
-/* PNG 下那条「链接点不了」的说明，得看起来像一句提醒而不是一句补充 */
-.ziminos-export-controls .ziminos-export-warn {
-    color: var(--text-warning, #b66a08);
 }
 
 /* ══════════════════════════════════════════════════════════════

@@ -275,12 +275,12 @@ export function exportLinkUrl(raw: string): string {
  * 否则预览里看见的宽度与拍下来的宽度会差一点，而那一点没有任何东西会提示。
  */
 export function pageWidthOf(style: ExportStyle): number | null {
-    return style.pageWidthMode === 'fixed' ? Math.max(1, Math.round(style.pageWidth)) : null;
+    return style.pageMode === 'fixed' ? Math.max(1, Math.round(style.pageWidth)) : null;
 }
 
 /** 纸至少该有多高——null 表示「别管，跟内容」。内容更高时照样往下长 */
 export function pageMinHeightOf(style: ExportStyle): number | null {
-    return style.pageHeightMode === 'fixed' ? Math.max(1, Math.round(style.pageHeight)) : null;
+    return style.pageMode === 'fixed' ? Math.max(1, Math.round(style.pageHeight)) : null;
 }
 
 function escapeXml(text: string): string {

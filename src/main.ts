@@ -38,7 +38,8 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { Plugin } from 'obsidian';
+import { Plugin, TFile } from 'obsidian';
+import { titleOfDay } from './core/time';
 import { registerViewCodeBlock } from './core/codeblock';
 import { CommandRegistry, INIT_VAULT_COMMAND } from './core/commands';
 import { readEdition } from './core/edition';
@@ -89,6 +90,7 @@ import { registerTransitionCommands } from './modules/projects/transitions';
 import { registerUpdatedMaintainer } from './modules/projects/updatedMaintainer';
 import {
     openPeriodNote,
+    periodFolderOf,
     registerPeriodAutoInit,
     registerPeriodicCommands,
 } from './modules/review/periodic';
@@ -193,11 +195,26 @@ export default class ZiminosPlugin extends Plugin {
 
         // 日历只表达“用户点了哪个时间坐标”，五级笔记的目录、模板与幂等创建仍归复盘模块。
         // 这里把两者接上；点日记后再走同一条缺主题检查，日历入口与命令入口行为不分叉。
-        registerCalendar(ctx, async (periodKey, day) => {
-            const file = await openPeriodNote(ctx, PERIODS[periodKey], { day });
+        registerCalendar(
+            ctx,
+            async (periodKey, day) => {
+                const file = await openPeriodNote(ctx, PERIODS[periodKey], { day });
 
-            if (file && periodKey === 'daily') await promptThemeIfMissing(ctx, file);
-        });
+                if (file && periodKey === 'daily') await promptThemeIfMissing(ctx, file);
+            },
+            // 日历只想知道「这一格要不要涂绿」。目录规则、文件名格式与那个可改的根目录
+            // 全归 review，路径在这里拼一次即可——让日历自己学会一套，
+            // 就会有第二处对「日记住哪儿」的理解，而两处迟早不一致。
+            (periodKey, day) => {
+                const period = PERIODS[periodKey];
+                const title = titleOfDay(day, period);
+
+                if (!title) return false;
+
+                return ctx.app.vault
+                    .getAbstractFileByPath(`${periodFolderOf(ctx, period)}/${title}.md`) instanceof TFile;
+            },
+        );
 
         // 打开命令只管「打开」，主题模块只管「有没有主题」；
         // 这里把两者接上，于是首次打开会问，已有主题再打开就安静

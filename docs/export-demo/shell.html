@@ -57,16 +57,12 @@ code { padding:.12em .36em; border-radius:4px; background:var(--background-secon
   box-shadow:0 22px 70px rgba(0,0,0,.34); margin:0 auto; }
 .modal-title { margin-bottom:14px; font-size:18px; font-weight:600; }
 
-/* Obsidian 的 Setting 原语：名字 + 说明在左，控件在右 */
-.setting-item { display:flex; align-items:center; justify-content:space-between; gap:12px;
-  padding:.75em 0; border-top:1px solid var(--background-modifier-border); }
-.setting-item-info { margin-right:20px; }
-.setting-item-description { padding-top:2px; color:var(--text-muted); font-size:var(--font-ui-smaller);
-  line-height:1.5; }
-.setting-item-control { display:flex; align-items:center; justify-content:flex-end; flex:1 1 auto; gap:8px; }
-.setting-item-heading { padding-top:16px; }
-.setting-item-heading .setting-item-name { font-weight:700; font-size:13px; letter-spacing:.04em;
-  color:var(--text-muted); }
+/* 弹窗底部那三个按钮；控件列自己带样式，来自插件的 styles.css */
+.ziminos-export-actions button { font:inherit; padding:6px 14px; border-radius:var(--radius-s);
+  cursor:pointer; border:1px solid var(--background-modifier-border);
+  background:var(--interactive-normal); color:var(--text-normal); }
+.ziminos-export-actions button.mod-cta { background:var(--interactive-accent);
+  color:var(--text-on-accent); border-color:var(--interactive-accent); }
 input[type=text], select { padding:5px 8px; border:1px solid var(--background-modifier-border);
   border-radius:var(--radius-s); background:var(--background-modifier-form-field);
   color:var(--text-normal); font:inherit; }
@@ -128,7 +124,7 @@ input[type=range] { accent-color:var(--interactive-accent); }
 <div class="brief">
   <h1>导出预览长什么样</h1>
   <p>这是 ziminOS <code>导出当前笔记</code> 弹出来的那个窗口。左边是等比缩小的整张成品，右边是控件——<strong>拖一格就变一格</strong>。左边那张纸不是示意图，它就是等会儿被拍成 PNG / PDF 的那一个元素。</p>
-  <p>本页里的水印几何、页眉页脚排布与装饰逻辑，用的是插件源码里同一份 <code>applyDecorations</code>，由构建脚本从 <code>src/</code> 直接打包进来；外壳（遮罩、控件外观）是对 Obsidian 的近似。真插件里"选择图片"打开的是笔记库里的图片清单，本页换成了你本机的文件选择框，方便你直接拿自己的 logo 试。</p>
+  <p>右边那一列控件<strong>就是插件里的那一列</strong>——连同水印几何、装饰逻辑与进度条，都由构建脚本从 <code>src/</code> 直接打包进来，只有最外层那圈遮罩是对 Obsidian 的近似。真插件里「选图」开的是系统文件框（桌面）或笔记库图片清单（手机），本页换成你本机的文件选择框，方便直接拿自己的 logo 试。</p>
   <div class="bar">
     <button type="button" data-demo="theme">切换明暗</button>
     <button type="button" data-demo="preset-brand">试一套：品牌落款</button>
@@ -151,10 +147,7 @@ input[type=range] { accent-color:var(--interactive-accent); }
         </div>
         <div class="ziminos-export-controls" id="controls"></div>
       </div>
-      <div class="setting-item ziminos-export-actions">
-        <div class="setting-item-info"></div>
-        <div class="setting-item-control" id="actions"></div>
-      </div>
+      <div class="ziminos-export-actions" id="actions"></div>
     </div>
   </div>
 </div>

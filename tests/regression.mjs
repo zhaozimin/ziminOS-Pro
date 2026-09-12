@@ -994,3 +994,51 @@ if (existsSync(proContractPath)) {
         assert.equal(parseManifestLine('- [ ] 一条没有 UID 的手写备注'), null);
     });
 }
+
+test('日历把「今天」与「写过了」画成两个事实，而不是三选一', () => {
+    const view = readFileSync(path.join(ROOT, 'src/modules/calendar/view.ts'), 'utf8');
+    const main = readFileSync(path.join(ROOT, 'src/main.ts'), 'utf8');
+    const css = readFileSync(path.join(ROOT, 'vault/.obsidian/plugins/ziminos/styles.css'), 'utf8');
+
+    // 日历不认识 review：它只想知道「这一格要不要涂绿」，
+    // 目录规则与文件名格式归 review，由 main 填洞——与 opener 同一条路数
+    assert.match(view, /export type CalendarNoteProbe/);
+    assert.doesNotMatch(view, /periodFolderOf|titleOfDay/);
+    assert.match(main, /periodFolderOf\(ctx, period\)/);
+
+    // 日格与周格都要涂：他要的是「日记或者周记」
+    assert.match(view, /button\.toggleClass\('has-note', this\.hasNote\('daily', day\.date\)\)/);
+    assert.match(view, /weekButton\.toggleClass\('has-note', this\.hasNote\('weekly', week\.anchor\)\)/);
+
+    // 两个类而不是一个三态：今天也可能已经写完，那恰恰是最该一眼看见的一格
+    assert.match(css, /\.ziminos-calendar-day\.has-note/);
+    assert.match(css, /\.ziminos-calendar-day\.is-today \{[^}]*--color-red/);
+    assert.match(css, /\.ziminos-calendar-day\.is-today\.has-note::after/);
+
+    // is-today 必须排在 has-note 之后：同特异性下后来者胜
+    assert.ok(
+        css.indexOf('.ziminos-calendar-day.has-note') < css.indexOf('.ziminos-calendar-day.is-today {'),
+        'is-today 要排在 has-note 之后，否则今天会被写过那层底压住',
+    );
+});
+
+test('日历只在真有事发生时重画：无定时器、无轮询', () => {
+    const view = readFileSync(path.join(ROOT, 'src/modules/calendar/view.ts'), 'utf8');
+
+    // 三个 vault 事件各注册一次——它们的回调签名不同，合成一个联合类型谁都对不上
+    for (const name of ['create', 'delete', 'rename']) {
+        assert.ok(view.includes(`this.app.vault.on('${name}', onChange)`), `少了 ${name} 的监听`);
+    }
+
+    // 只认 Markdown：附件与文件夹的增删与「这天写没写复盘」无关
+    assert.match(view, /file instanceof TFile && file\.extension === 'md'/);
+
+    // 点一格之后也要重画：更常见的结果是「那篇已经在了，只是打开它」，
+    // 那时没有任何 vault 事件，而用户仍然期待看见自己刚点过的那一格是绿的
+    assert.match(view, /await this\.openPeriod\(period, anchorDay\);\s*\n\s*this\.renderCalendar\(\);/);
+
+    // 防抖而不是定时器
+    assert.match(view, /scheduleRepaint/);
+    assert.doesNotMatch(view, /setInterval/);
+});
+

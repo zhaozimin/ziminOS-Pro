@@ -69,11 +69,13 @@ export function applyDecorations(
 
     article.querySelectorAll(DECORATION_SELECTOR).forEach((node) => node.remove());
 
-    // 参考线不是装饰节点而是正文的一种呈现，所以它只翻一个类、不参与上面那次清场；
-    // 翻类本身幂等，与本函数的承诺一致。
-    article.toggleClass('ziminos-export-guides', style.listGuides);
+    // 参考线恒开，不再是一个开关：v0.30.0 由用户明令去掉那个按钮——
+    // 它是默认就该有的观感，而不是一个需要人来决定的问题。
+    // 它只翻一个类、不参与上面那次清场；翻类本身幂等，与本函数的承诺一致。
+    article.addClass('ziminos-export-guides');
 
     const header = buildLine(content, 'ziminos-export-header', {
+        enabled: style.headerEnabled,
         text: resolveExportText(style.header.trim(), context),
         align: style.headerAlign,
         color: style.headerColor,
@@ -89,6 +91,7 @@ export function applyDecorations(
     }
 
     const footer = buildLine(content, 'ziminos-export-footer', {
+        enabled: style.footerEnabled,
         text: resolveExportText(style.footer.trim(), context),
         align: style.footerAlign,
         color: style.footerColor,
@@ -104,6 +107,11 @@ export function applyDecorations(
 }
 
 interface LineInput {
+    /**
+     * 这一段开不开。它排在文字、标志、链接之前——**关着就是关着**，
+     * 哪怕那行字还写在设置里。开关让用户临时不要页眉时不必先把自己写好的字删掉。
+     */
+    readonly enabled: boolean;
     readonly text: string;
     readonly align: ExportStyle['headerAlign'];
     /** 空串＝跟随正文色，也就是不往元素上写任何颜色，让主题自己说了算 */
@@ -130,7 +138,7 @@ function buildLine(host: HTMLElement, cls: string, input: LineInput): HTMLElemen
     // 而不是被补成 https://edu.example.com/ 这种他没写过的样子。
     const text = input.text || (url ? input.link.trim() : '');
 
-    if (!text && !showLogo) return null;
+    if (!input.enabled || (!text && !showLogo)) return null;
 
     const line = host.createDiv({ cls });
 
@@ -182,7 +190,7 @@ function applyWatermark(
     const text = resolveExportText(style.watermark.trim(), context);
     const showLogo = Boolean(logo) && style.watermarkLogoSize > 0;
 
-    if (!text && !showLogo) return;
+    if (!style.watermarkEnabled || (!text && !showLogo)) return;
 
     const computed = getComputedStyle(article);
     const fontFamily = computed.fontFamily || 'sans-serif';
@@ -268,6 +276,8 @@ function measureTextWidth(text: string, fontSize: number, fontFamily: string): n
  */
 export function linkRegions(article: HTMLElement, style: ExportStyle): LinkRegion[] {
     const regions: LinkRegion[] = [];
+    // 关着的那一段不会有元素，因此这里不必再判一次开关——
+    // querySelector 找不到就自然没有可点区域，两处判断只留一处。
     const collect = (selector: string, raw: string): void => {
         const url = exportLinkUrl(raw);
 

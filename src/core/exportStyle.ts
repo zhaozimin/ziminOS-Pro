@@ -2,7 +2,8 @@
  * [INPUT]: 不依赖任何模块——它只回答「一套导出风格长什么样、哪些取值算数」
  * [OUTPUT]: 对外提供 ExportFormat/ExportAlign/WatermarkMode/WatermarkAnchor 四个枚举与它们的中文标签，
  *           ExportStyle 契约（含品牌标志路径与三处各自的尺寸）、DEFAULT_EXPORT_STYLE 默认值、
- *           滑块规格表 EXPORT_SLIDERS、九宫格排布 WATERMARK_ANCHOR_GRID，以及读取侧兜底 normalizeExportStyle
+ *           滑块规格表 EXPORT_SLIDERS、九宫格排布 WATERMARK_ANCHOR_GRID、纸张预设 PAPER_PRESET_SIZES，
+ *           以及读取侧兜底 normalizeExportStyle（含三个开关「键不存在时从内容推导」的升级语义）
  * [POS]: core 的导出口径层，与 markdownStyle/device 同列：模块自己的设置形状必须住在 core，
  *        否则 normalizeSettings 就得反向 import 一个功能模块，依赖图从树变成网。
  *        本文件最要紧的设计是 EXPORT_SLIDERS——它同时是界面的滑块范围与持久化的验形区间，
@@ -62,6 +63,27 @@ export const PAGE_SIZE_MODE_LABELS: Readonly<Record<PageSizeMode, string>> = {
     fixed: '自定',
 };
 
+/**
+ * 纸张预设。只在 PDF 下有意义——A4/A3 是印刷开本，图片没有「开本」这回事。
+ *
+ * 它不是第四种尺寸模式，只是两个数字的快捷填法：选中即把宽高填成对应像素，
+ * 此后照样可以接着拖。因此 free 不是「关掉预设」，是「这两个数字是我自己定的」。
+ */
+export type PaperPreset = 'free' | 'a4' | 'a3';
+
+export const PAPER_PRESET_LABELS: Readonly<Record<PaperPreset, string>> = {
+    free: '自由',
+    a4: 'A4',
+    a3: 'A3',
+};
+
+/** 按 96dpi 换算：A4 210×297mm、A3 297×420mm。不写 mm 是因为这张纸最终是像素 */
+export const PAPER_PRESET_SIZES: Readonly<Record<PaperPreset, { width: number; height: number } | null>> = {
+    free: null,
+    a4: { width: 794, height: 1_123 },
+    a3: { width: 1_123, height: 1_587 },
+};
+
 export const EXPORT_FORMAT_LABELS: Readonly<Record<ExportFormat, string>> = {
     png: 'PNG 长图',
     pdf: 'PDF 单页',
@@ -109,18 +131,26 @@ export const WATERMARK_ANCHOR_LABELS: Readonly<Record<WatermarkAnchor, string>> 
  */
 export interface ExportStyle {
     readonly format: ExportFormat;
-    /** auto＝纸宽跟随编辑区正文栏；fixed＝钉死成 pageWidth */
-    readonly pageWidthMode: PageSizeMode;
+    /**
+     * 纸张尺寸怎么定：auto＝宽跟编辑区正文栏、高跟内容；fixed＝两边都按下面那两个数。
+     *
+     * v0.27.0 时这是**两个**开关，判据是「宽和高是两个独立的问题」。合成一个是用户的判决，
+     * 而它站得住的理由很具体：高度本来就是**下限**，拖到最小 200 就等于没约束，
+     * 于是「只想钉宽度」在一个开关下照样做得到。少一个开关换来的是少一行控件——
+     * 在三百二十像素那一列里，每一行都得挣出它占的地方。
+     */
+    readonly pageMode: PageSizeMode;
     readonly pageWidth: number;
     /**
-     * auto＝纸高跟随内容；fixed＝**至少** pageHeight 那么高。
+     * **至少**这么高，不是「就是」这么高。
      *
-     * 只能是「至少」而不是「就是」：内容比它高时若按定高裁掉，用户会拿到一张少了半篇的图，
-     * 而且没有任何提示。这个模块从第一版起守着同一条——宁可一张完整、稍不好看的图，
+     * 内容比它高时若按定高裁掉，用户会拿到一张少了半篇的图，而且没有任何提示。
+     * 这个模块从第一版起守着同一条——宁可一张完整、稍不好看的图，
      * 也不在不告诉他的情况下截掉后半篇。
      */
-    readonly pageHeightMode: PageSizeMode;
     readonly pageHeight: number;
+    /** 纸张预设，只在 PDF 下露面。选中即把上面那两个数填成对应像素 */
+    readonly paperPreset: PaperPreset;
     /** 导出这张纸用哪一套明暗；auto＝跟随 Obsidian 当前主题 */
     readonly theme: ExportTheme;
     readonly header: string;
@@ -152,6 +182,19 @@ export interface ExportStyle {
     readonly watermark: string;
     /** 水印文字的颜色。空串＝跟随正文色。标志自带颜色，不受它影响 */
     readonly watermarkColor: string;
+    /**
+     * 这一段开不开。三个开关是 v0.30.0 新增的，它们把「关闭」从一个**推断**变成一个**声明**。
+     *
+     * 此前「关掉页眉」的唯一办法是把文字和标志尺寸都清空——于是想临时不要页眉的人，
+     * 得先把自己写好的那行字删掉。开关让他保住那行字。
+     * 它同时是面板能压缩到六行的根据：关着的段落，下面那一堆控件根本不画。
+     *
+     * 升级时它们在 data.json 里并不存在，默认**不能**取 false（所有人的页眉页脚水印会一夜消失），
+     * 也不能取 true（空内容的段落会平白展开）。正确的默认是从内容推导：有东西就是开着。
+     */
+    readonly headerEnabled: boolean;
+    readonly footerEnabled: boolean;
+    readonly watermarkEnabled: boolean;
     readonly watermarkMode: WatermarkMode;
     readonly watermarkAnchor: WatermarkAnchor;
     readonly watermarkSize: number;
@@ -173,14 +216,6 @@ export interface ExportStyle {
     readonly headerLogoSize: number;
     readonly footerLogoSize: number;
     readonly watermarkLogoSize: number;
-    /**
-     * 正文里的列表画不画缩进参考线。
-     *
-     * 它是全表唯一一个**默认为真**的新增项，与「新功能的默认值应当是不发生」那条看似冲突，
-     * 其实不冲突：那条护的是「我替用户做了个他没要过的决定」，
-     * 而这一条恰恰是用户点名要的观感。何况它就在预览里，第一眼就能看见、一下就能关掉。
-     */
-    readonly listGuides: boolean;
 }
 
 /**
@@ -189,11 +224,11 @@ export interface ExportStyle {
  */
 export const DEFAULT_EXPORT_STYLE: ExportStyle = {
     format: 'png',
-    // 两边都默认跟着走：升级之后不选任何东西的人，导出的那张图与升级前逐像素相同
-    pageWidthMode: 'auto',
+    // 默认跟着走：升级之后不选任何东西的人，导出的那张图与升级前逐像素相同
+    pageMode: 'auto',
     pageWidth: 800,
-    pageHeightMode: 'auto',
     pageHeight: 1_200,
+    paperPreset: 'free',
     // 跟随：升级之后不选任何东西的人，导出的底色与升级前一模一样
     theme: 'auto',
     header: '',
@@ -216,13 +251,17 @@ export const DEFAULT_EXPORT_STYLE: ExportStyle = {
     footerColor: '',
     footerLink: '',
     watermarkColor: '',
+    // 三个开关的默认值只在「全新的库」这一种情况下用得上；
+    // 老库升级走的是 normalizeExportStyle 里那条「有东西就是开着」的推导
+    headerEnabled: false,
+    footerEnabled: false,
+    watermarkEnabled: false,
     logo: '',
     // 三个尺寸默认 0：老库升级之后，没选过标志的人导出的那张图与升级前逐像素相同。
     // 新功能的默认值应当是「不发生」，而不是「替他做了个决定」。
     headerLogoSize: 0,
     footerLogoSize: 0,
     watermarkLogoSize: 0,
-    listGuides: true,
 };
 
 // ============================================================
@@ -241,7 +280,9 @@ export interface ExportSliderSpec {
     readonly key: ExportSliderKey;
     /** 归哪一段：决定它出现在面板的哪一组下面 */
     readonly section: 'page' | 'header' | 'footer' | 'watermark';
+    /** 面板上那一列名字。**必须短**——它占的是一条 68px 的定宽列，长了就得换行，一换行整列就不齐了 */
     readonly name: string;
+    /** 完整说明。它不常驻在屏幕上，只在鼠标停到名字上时才出现——那一行灰字才是吃掉面板高度的大头 */
     readonly desc: string;
     readonly min: number;
     readonly max: number;
@@ -265,7 +306,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'pageWidth',
         section: 'page',
-        name: '纸宽',
+        name: '宽',
         desc: '整张纸多宽（含左右页边）。正文栏＝纸宽减去两侧页边。',
         min: 320,
         max: 2_400,
@@ -276,7 +317,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'pageHeight',
         section: 'page',
-        name: '纸高（最少）',
+        name: '高',
         desc: '内容不足时补到这么高；内容更高时照样往下长，绝不裁掉。',
         min: 200,
         max: 4_000,
@@ -287,7 +328,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'headerLogoSize',
         section: 'header',
-        name: '标志大小',
+        name: '标志',
         desc: '页眉里那枚标志多高。0 就是页眉不放标志。',
         min: 0,
         max: 160,
@@ -298,7 +339,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'headerGap',
         section: 'header',
-        name: '与正文的距离',
+        name: '间距',
         desc: '页眉离标题多远。0 就是紧贴着标题。',
         min: 0,
         max: 120,
@@ -309,7 +350,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'footerLogoSize',
         section: 'footer',
-        name: '标志大小',
+        name: '标志',
         desc: '页脚里那枚标志多高。0 就是页脚不放标志。',
         min: 0,
         max: 160,
@@ -320,7 +361,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'footerGap',
         section: 'footer',
-        name: '与正文的距离',
+        name: '间距',
         desc: '页脚离最后一行多远。',
         min: 0,
         max: 120,
@@ -331,7 +372,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'watermarkLogoSize',
         section: 'watermark',
-        name: '标志大小',
+        name: '标志',
         desc: '水印里那枚标志多高。0 就是水印只有文字。',
         min: 0,
         max: 320,
@@ -353,7 +394,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'watermarkGapX',
         section: 'watermark',
-        name: '横向间距',
+        name: '横向',
         desc: '平铺时是左右两个水印之间的距离；单个时是离左右纸边的距离。',
         min: 0,
         max: 480,
@@ -364,7 +405,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'watermarkGapY',
         section: 'watermark',
-        name: '纵向间距',
+        name: '纵向',
         desc: '平铺时是上下两个水印之间的距离；单个时是离上下纸边的距离。',
         min: 0,
         max: 480,
@@ -375,7 +416,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'watermarkAngle',
         section: 'watermark',
-        name: '倾斜角度',
+        name: '角度',
         desc: '负数往左倒，正数往右倒，0 是水平。标志与文字一起转。',
         min: -90,
         max: 90,
@@ -386,7 +427,7 @@ export const EXPORT_SLIDERS: readonly ExportSliderSpec[] = [
     {
         key: 'watermarkOpacity',
         section: 'watermark',
-        name: '不透明度',
+        name: '透明',
         desc: '越低越像纸纹，越高越难被裁掉——但也越挡字。标志与文字同一个数。',
         min: 1,
         max: 100,
@@ -426,14 +467,12 @@ export function normalizeExportStyle(input: unknown): ExportStyle {
 
     return {
         format: isFormat(stored.format) ? stored.format : DEFAULT_EXPORT_STYLE.format,
-        pageWidthMode: isPageSizeMode(stored.pageWidthMode)
-            ? stored.pageWidthMode
-            : DEFAULT_EXPORT_STYLE.pageWidthMode,
+        pageMode: isPageSizeMode(stored.pageMode) ? stored.pageMode : DEFAULT_EXPORT_STYLE.pageMode,
         pageWidth: numbers.pageWidth,
-        pageHeightMode: isPageSizeMode(stored.pageHeightMode)
-            ? stored.pageHeightMode
-            : DEFAULT_EXPORT_STYLE.pageHeightMode,
         pageHeight: numbers.pageHeight,
+        paperPreset: isPaperPreset(stored.paperPreset)
+            ? stored.paperPreset
+            : DEFAULT_EXPORT_STYLE.paperPreset,
         theme: isExportTheme(stored.theme) ? stored.theme : DEFAULT_EXPORT_STYLE.theme,
         header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
         headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
@@ -456,9 +495,9 @@ export function normalizeExportStyle(input: unknown): ExportStyle {
         footerColor: color(stored.footerColor),
         footerLink: text(stored.footerLink, DEFAULT_EXPORT_STYLE.footerLink),
         watermarkColor: color(stored.watermarkColor),
-        listGuides: typeof stored.listGuides === 'boolean'
-            ? stored.listGuides
-            : DEFAULT_EXPORT_STYLE.listGuides,
+        headerEnabled: enabled(stored.headerEnabled, stored.header, stored.headerLogoSize),
+        footerEnabled: enabled(stored.footerEnabled, stored.footer, stored.footerLogoSize),
+        watermarkEnabled: enabled(stored.watermarkEnabled, stored.watermark, stored.watermarkLogoSize),
         logo: text(stored.logo, DEFAULT_EXPORT_STYLE.logo),
         headerLogoSize: numbers.headerLogoSize,
         footerLogoSize: numbers.footerLogoSize,
@@ -500,6 +539,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isExportTheme(value: unknown): value is ExportTheme {
     return value === 'auto' || value === 'light' || value === 'dark';
+}
+
+/**
+ * 这一段开着还是关着。
+ *
+ * 键**不存在**时不能取 false，那会让所有升级上来的用户的页眉页脚水印一夜消失；
+ * 也不能取 true，那会让空内容的段落平白展开。唯一对的默认是从内容推导：
+ * 那行字或那枚标志还在，说明它本来就在显示——升级前后所见相同，正是这条要保的东西。
+ */
+function enabled(flag: unknown, text: unknown, logoSize: unknown): boolean {
+    if (typeof flag === 'boolean') return flag;
+
+    const hasText = typeof text === 'string' && text.trim() !== '';
+    const hasLogo = typeof logoSize === 'number' && logoSize > 0;
+
+    return hasText || hasLogo;
+}
+
+function isPaperPreset(value: unknown): value is PaperPreset {
+    return value === 'free' || value === 'a4' || value === 'a3';
 }
 
 function isPageSizeMode(value: unknown): value is PageSizeMode {

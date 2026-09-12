@@ -400,13 +400,12 @@ test('颜色只认十六进制色号，其余一律回落「跟随正文色」',
     assert.equal(style.DEFAULT_EXPORT_STYLE.headerColor, '');
 });
 
-test('列表参考线默认开，但它是用户点名要的观感，不是插件替他做的决定', () => {
-    assert.equal(style.DEFAULT_EXPORT_STYLE.listGuides, true);
-    assert.equal(style.normalizeExportStyle({ listGuides: false }).listGuides, false);
-    // 升级前写下的设置里没有这个键，读回来取默认
-    assert.equal(style.normalizeExportStyle({ format: 'png' }).listGuides, true);
-    // 不是布尔就不是回答
-    assert.equal(style.normalizeExportStyle({ listGuides: 'yes' }).listGuides, true);
+test('参考线恒开：它是默认就该有的观感，不是一个需要人来决定的问题', () => {
+    // v0.30.0 由用户明令去掉那个开关，字段也一并退场——
+    // 留一个永远为真的字段，只会让人以为它还能关
+    assert.equal('listGuides' in style.DEFAULT_EXPORT_STYLE, false);
+    assert.equal('listGuides' in style.normalizeExportStyle({ listGuides: false }), false);
+    assert.match(code('src/modules/export/decorate.ts'), /article\.addClass\('ziminos-export-guides'\)/);
 });
 
 test('纸的宽度、留白与字号量自编辑区，不再有任何一个凭空定的数', () => {
@@ -537,7 +536,8 @@ test('只填链接不填文字也成立：链接自己就是那一行的内容',
     // 整行不存在、没有可点区域、而且不报错——一个填了却什么都不发生的输入框
     assert.match(decorate, /const url = exportLinkUrl\(input\.link\)/);
     assert.match(decorate, /const text = input\.text \|\| \(url \? input\.link\.trim\(\) : ''\)/);
-    assert.match(decorate, /if \(!text && !showLogo\) return null;/);
+    // 开关排在最前：关着就是关着，哪怕那行字还写在设置里
+    assert.match(decorate, /if \(!input\.enabled \|\| \(!text && !showLogo\)\) return null;/);
 
     // 印出来的是他填的原文，不是验形后补过协议的 href
     assert.doesNotMatch(decorate, /createSpan\(\{ text: url \}\)/);
@@ -598,16 +598,17 @@ test('演示页嵌的是插件真源，而不是一份照着抄的仿真', () =>
     // 导出样式逐字嵌入：挑三条只可能来自插件 styles.css 的规则
     for (const rule of [
         '.ziminos-export-viewport {',
-        '.ziminos-export-picker.ziminos-export-grid {',
-        '.ziminos-export-controls .setting-item.ziminos-export-hidden {',
+        '.ziminos-export-seg.ziminos-export-grid {',
+        '.ziminos-export-duo-thumb {',
     ]) {
         assert.ok(css.includes(rule), `styles.css 里没有 ${rule}，这条断言该改了`);
         assert.ok(demo.includes(rule), `演示页没有逐字嵌入 ${rule}`);
     }
 
-    // 几何与装饰来自 esbuild 打包，而不是演示页自己又写了一遍
+    // 几何、装饰与**控件列**都来自 esbuild 打包，而不是演示页自己又写了一遍
     assert.match(demo, /watermarkMark/);
     assert.match(demo, /applyDecorations/);
+    assert.match(demo, /buildExportPanel/);
     assert.ok(demo.includes(`v${version}`), '演示页的版本号与 package.json 对不上');
 
     // 演示页永远不该自己解释 Markdown 或读盘：它只有一张写死的样张
@@ -633,38 +634,85 @@ test('演示页的接缝进了类型检查，但缺了它的第一版仓库同�
     );
 });
 
-test('纸张两边各有各的开关，默认都跟着走；高度只是下限，绝不裁内容', () => {
-    assert.equal(style.DEFAULT_EXPORT_STYLE.pageWidthMode, 'auto');
-    assert.equal(style.DEFAULT_EXPORT_STYLE.pageHeightMode, 'auto');
+test('纸张一个开关管两边；高度只是下限，绝不裁内容', () => {
+    assert.equal(style.DEFAULT_EXPORT_STYLE.pageMode, 'auto');
+    // v0.27.0 那两个开关合成了一个：高度本来就是下限，拖到最小就等于没约束，
+    // 于是「只想钉宽度」在一个开关下照样做得到，而面板少了一行
+    assert.equal('pageWidthMode' in style.DEFAULT_EXPORT_STYLE, false);
+    assert.equal('pageHeightMode' in style.DEFAULT_EXPORT_STYLE, false);
 
-    // 自适应时给纸的是 null＝「别管」，而不是某个具体的数
     assert.equal(layout.pageWidthOf(style.DEFAULT_EXPORT_STYLE), null);
     assert.equal(layout.pageMinHeightOf(style.DEFAULT_EXPORT_STYLE), null);
 
-    const fixed = style.normalizeExportStyle({
-        pageWidthMode: 'fixed', pageWidth: 800,
-        pageHeightMode: 'fixed', pageHeight: 1_600,
-    });
+    const fixed = style.normalizeExportStyle({ pageMode: 'fixed', pageWidth: 800, pageHeight: 1_600 });
 
     assert.equal(layout.pageWidthOf(fixed), 800);
     assert.equal(layout.pageMinHeightOf(fixed), 1_600);
 
-    // 宽与高是两个独立的问题：只钉宽度、高度仍随内容长，是最常见的那一种
-    const halfFixed = style.normalizeExportStyle({ pageWidthMode: 'fixed', pageWidth: 800 });
-
-    assert.equal(layout.pageWidthOf(halfFixed), 800);
-    assert.equal(layout.pageMinHeightOf(halfFixed), null);
-
-    // 坏模式回落自适应；越界数值夹回区间（滑块表就是验形区间）
-    assert.equal(style.normalizeExportStyle({ pageWidthMode: 'A4' }).pageWidthMode, 'auto');
+    assert.equal(style.normalizeExportStyle({ pageMode: 'A4' }).pageMode, 'auto');
     assert.equal(style.normalizeExportStyle({ pageWidth: 99_999 }).pageWidth, 2_400);
     assert.equal(style.normalizeExportStyle({ pageHeight: 1 }).pageHeight, 200);
+
+    // 纸张预设只是两个数字的快捷填法，不是第四种尺寸模式
+    assert.equal(style.PAPER_PRESET_SIZES.free, null);
+    assert.deepEqual(style.PAPER_PRESET_SIZES.a4, { width: 794, height: 1_123 });
+    assert.deepEqual(style.PAPER_PRESET_SIZES.a3, { width: 1_123, height: 1_587 });
+    assert.equal(style.normalizeExportStyle({ paperPreset: 'B5' }).paperPreset, 'free');
 
     // 最小高度落在纸上、由 CSS 的 min-height 承担，因此内容更高时只会往下长，不会被裁
     const paper = code('src/modules/export/paper.ts');
 
     assert.match(paper, /article\.style\.minHeight/);
     assert.doesNotMatch(paper, /style\.height = /);
+});
+
+test('三个开关把「关闭」从推断变成声明，升级时从内容推导', () => {
+    // 全新的库：三段都关着，面板只剩六行
+    assert.equal(style.DEFAULT_EXPORT_STYLE.headerEnabled, false);
+    assert.equal(style.DEFAULT_EXPORT_STYLE.footerEnabled, false);
+    assert.equal(style.DEFAULT_EXPORT_STYLE.watermarkEnabled, false);
+
+    // 老库的 data.json 里没有这三个键。取 false 会让所有人的页眉页脚水印一夜消失，
+    // 取 true 会让空内容的段落平白展开——唯一对的默认是「有东西就是开着」
+    const upgraded = style.normalizeExportStyle({
+        header: '赵子民 · {date}',
+        watermarkLogoSize: 40,
+    });
+
+    assert.equal(upgraded.headerEnabled, true, '有文字就该是开着的');
+    assert.equal(upgraded.footerEnabled, false, '什么都没有就该是关着的');
+    assert.equal(upgraded.watermarkEnabled, true, '只有标志也算开着');
+
+    // 明写过的就照他写的来，不再推导
+    assert.equal(style.normalizeExportStyle({ header: '有字', headerEnabled: false }).headerEnabled, false);
+    assert.equal(style.normalizeExportStyle({ header: '', headerEnabled: true }).headerEnabled, true);
+
+    // 关着的那一段在纸上一个字都不留
+    const decorate = code('src/modules/export/decorate.ts');
+
+    assert.match(decorate, /if \(!style\.watermarkEnabled \|\| \(!text && !showLogo\)\) return;/);
+});
+
+test('控件列分家且不 import obsidian，于是演示页能原样搬走它', () => {
+    const panel = code('src/modules/export/panel.ts');
+    const modal = code('src/modules/export/modal.ts');
+
+    // 分家的判据与 settings/settingsPanels 同源：变更理由不同
+    assert.match(modal, /buildExportPanel\(/);
+    assert.doesNotMatch(modal, /EXPORT_SLIDERS/);
+
+    // 不 import obsidian 才搬得走；它只用 HTMLElement 上那几个便捷方法
+    assert.doesNotMatch(panel, /from 'obsidian'/);
+    assert.match(panel, /EXPORT_SLIDERS/);
+
+    // 演示页用的就是这一列，不再自己画一份
+    const driver = code('docs/export-demo/driver.js');
+
+    assert.match(driver, /Z\.buildExportPanel\(/);
+
+    // 两边都在 800 行以内——那条线是重构的触发点，不是上限
+    assert.ok(panel.split('\n').length < 800);
+    assert.ok(modal.split('\n').length < 800);
 });
 
 test('改纸宽只让浏览器重排，不重新解释一遍 Markdown', () => {

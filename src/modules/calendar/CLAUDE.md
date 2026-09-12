@@ -12,10 +12,10 @@ holidayTypes.ts: 远端响应、内置快照、磁盘缓存与界面共用的数
 holidaySnapshot.ts: 已人工核过的 2026 国务院放假安排离线底座，编译进 main.js；它只保首次联网前与断网时仍能显示正确的“休/班”，不承担更新。
 model.ts: 零 Obsidian 依赖的日期与农历计算层。生成以周一开头的 ISO 月历行，并用 lunar-typescript 计算农历、传统节日和节气；短标签同时返回分类，供视图突出节日/节气而不反向解析中文文案。
 holidays.ts: 唯一联网与落缓存出口。经 Obsidian 公开 requestUrl 依次读取 holiday-cn 的 jsDelivr/Fastly/Raw 镜像，严格校验后写入插件目录的 holiday-cache.json；网络与缓存损坏均静默退回最后正确数据。
-view.ts: Obsidian ItemView 呈现与点击编排。插件启用即注册并默认放进右侧栏，不提供功能开关；年/季/月三组箭头各自修改同一显示坐标，“今”无论从何处出发都回归月视图的当天，“月/年”才是常规视图切换；五级时间点击经 CalendarPeriodOpener 交回 main 装配。
+view.ts: Obsidian ItemView 呈现与点击编排。v0.30.0 起每一格还回答两个**互不排斥**的事实：这一天（或这一周）的复盘写过了涂绿、今天涂红，两者兼有时红块之上补一枚绿点——今天也可能已经写完，做成三选一就只剩一半信息。写没写过由 main 注入的 CalendarNoteProbe 回答，与 opener 同一条路数：日历不学目录规则，否则全库会有第二处对「日记住哪儿」的理解。重画两条路缺一不可——点一格之后立刻重画（那篇常常已经在了，只是被打开，此时没有任何 vault 事件），以及听 create/delete/rename 防抖 80ms。插件启用即注册并默认放进右侧栏，不提供功能开关；年/季/月三组箭头各自修改同一显示坐标，“今”无论从何处出发都回归月视图的当天，“月/年”才是常规视图切换；五级时间点击经 CalendarPeriodOpener 交回 main 装配。
 
 ## 模块契约
 
-对外只暴露 registerCalendar 与 CalendarPeriodOpener。calendar 不 import review；main 用 review.openPeriodNote 填洞，日记点击后仍沿用 theme.promptThemeIfMissing 的同一条规则。删掉本模块只损失日历视图、打开命令与 holiday-cache.json，既有五级复盘命令与笔记一字不动。
+对外只暴露 registerCalendar 与 CalendarPeriodOpener / CalendarNoteProbe 两个注入契约。calendar 不 import review；main 用 review.openPeriodNote 填洞，日记点击后仍沿用 theme.promptThemeIfMissing 的同一条规则。删掉本模块只损失日历视图、打开命令与 holiday-cache.json，既有五级复盘命令与笔记一字不动。
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

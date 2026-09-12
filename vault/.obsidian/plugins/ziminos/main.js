@@ -4899,11 +4899,11 @@ var require_html2canvas = __commonJS({
         });
         var offset = 0;
         var prev = {};
-        var supports = textList.every(function(text5, i5) {
+        var supports = textList.every(function(text6, i5) {
           range.setStart(node2, offset);
-          range.setEnd(node2, offset + text5.length);
+          range.setEnd(node2, offset + text6.length);
           var rect = range.getBoundingClientRect();
-          offset += text5.length;
+          offset += text6.length;
           var boundAhead = rect.x > prev.x || rect.y > prev.y;
           prev = rect;
           if (i5 === 0) {
@@ -5042,8 +5042,8 @@ var require_html2canvas = __commonJS({
       var TextBounds = (
         /** @class */
         /* @__PURE__ */ (function() {
-          function TextBounds2(text5, bounds) {
-            this.text = text5;
+          function TextBounds2(text6, bounds) {
+            this.text = text6;
             this.bounds = bounds;
           }
           return TextBounds2;
@@ -5053,29 +5053,29 @@ var require_html2canvas = __commonJS({
         var textList = breakText(value, styles);
         var textBounds = [];
         var offset = 0;
-        textList.forEach(function(text5) {
-          if (styles.textDecorationLine.length || text5.trim().length > 0) {
+        textList.forEach(function(text6) {
+          if (styles.textDecorationLine.length || text6.trim().length > 0) {
             if (FEATURES.SUPPORT_RANGE_BOUNDS) {
-              var clientRects = createRange(node2, offset, text5.length).getClientRects();
+              var clientRects = createRange(node2, offset, text6.length).getClientRects();
               if (clientRects.length > 1) {
-                var subSegments = segmentGraphemes(text5);
+                var subSegments = segmentGraphemes(text6);
                 var subOffset_1 = 0;
                 subSegments.forEach(function(subSegment) {
                   textBounds.push(new TextBounds(subSegment, Bounds.fromDOMRectList(context, createRange(node2, subOffset_1 + offset, subSegment.length).getClientRects())));
                   subOffset_1 += subSegment.length;
                 });
               } else {
-                textBounds.push(new TextBounds(text5, Bounds.fromDOMRectList(context, clientRects)));
+                textBounds.push(new TextBounds(text6, Bounds.fromDOMRectList(context, clientRects)));
               }
             } else {
-              var replacementNode = node2.splitText(text5.length);
-              textBounds.push(new TextBounds(text5, getWrapperBounds(context, node2)));
+              var replacementNode = node2.splitText(text6.length);
+              textBounds.push(new TextBounds(text6, getWrapperBounds(context, node2)));
               node2 = replacementNode;
             }
           } else if (!FEATURES.SUPPORT_RANGE_BOUNDS) {
-            node2 = node2.splitText(text5.length);
+            node2 = node2.splitText(text6.length);
           }
-          offset += text5.length;
+          offset += text6.length;
         });
         return textBounds;
       };
@@ -5173,16 +5173,16 @@ var require_html2canvas = __commonJS({
           return TextContainer2;
         })()
       );
-      var transform = function(text5, transform2) {
+      var transform = function(text6, transform2) {
         switch (transform2) {
           case 1:
-            return text5.toLowerCase();
+            return text6.toLowerCase();
           case 3:
-            return text5.replace(CAPITALIZE, capitalize);
+            return text6.replace(CAPITALIZE, capitalize);
           case 2:
-            return text5.toUpperCase();
+            return text6.toUpperCase();
           default:
-            return text5;
+            return text6;
         }
       };
       var CAPITALIZE = /(^|\s|:|-|\(|\))([a-z])/g;
@@ -6106,9 +6106,9 @@ var require_html2canvas = __commonJS({
             try {
               var sheet = node2.sheet;
               if (sheet && sheet.cssRules) {
-                var css = [].slice.call(sheet.cssRules, 0).reduce(function(css2, rule) {
-                  if (rule && typeof rule.cssText === "string") {
-                    return css2 + rule.cssText;
+                var css = [].slice.call(sheet.cssRules, 0).reduce(function(css2, rule2) {
+                  if (rule2 && typeof rule2.cssText === "string") {
+                    return css2 + rule2.cssText;
                   }
                   return css2;
                 }, "");
@@ -6294,10 +6294,10 @@ var require_html2canvas = __commonJS({
                     var counterStates = _this.counters.getCounterValues(counter.value);
                     var counterType_1 = counterStyle && isIdentToken(counterStyle) ? listStyleType.parse(_this.context, counterStyle.value) : 3;
                     var separator = delim && delim.type === 0 ? delim.value : "";
-                    var text5 = counterStates.map(function(value2) {
+                    var text6 = counterStates.map(function(value2) {
                       return createCounterText(value2, counterType_1, false);
                     }).join(separator);
-                    anonymousReplacedElement.appendChild(document2.createTextNode(text5));
+                    anonymousReplacedElement.appendChild(document2.createTextNode(text6));
                   }
                 } else ;
               } else if (token.type === 20) {
@@ -7458,16 +7458,16 @@ var require_html2canvas = __commonJS({
               });
             });
           };
-          CanvasRenderer2.prototype.renderTextWithLetterSpacing = function(text5, letterSpacing2, baseline) {
+          CanvasRenderer2.prototype.renderTextWithLetterSpacing = function(text6, letterSpacing2, baseline) {
             var _this = this;
             if (letterSpacing2 === 0) {
-              this.ctx.fillText(text5.text, text5.bounds.left, text5.bounds.top + baseline);
+              this.ctx.fillText(text6.text, text6.bounds.left, text6.bounds.top + baseline);
             } else {
-              var letters = segmentGraphemes(text5.text);
+              var letters = segmentGraphemes(text6.text);
               letters.reduce(function(left, letter) {
-                _this.ctx.fillText(letter, left, text5.bounds.top + baseline);
+                _this.ctx.fillText(letter, left, text6.bounds.top + baseline);
                 return left + _this.ctx.measureText(letter).width;
-              }, text5.bounds.left);
+              }, text6.bounds.left);
             }
           };
           CanvasRenderer2.prototype.createFontStyle = function(styles) {
@@ -7482,7 +7482,7 @@ var require_html2canvas = __commonJS({
               fontSize2
             ];
           };
-          CanvasRenderer2.prototype.renderTextNode = function(text5, styles) {
+          CanvasRenderer2.prototype.renderTextNode = function(text6, styles) {
             return __awaiter(this, void 0, void 0, function() {
               var _a2, font, fontFamily2, fontSize2, _b2, baseline, middle, paintOrder2;
               var _this = this;
@@ -7494,20 +7494,20 @@ var require_html2canvas = __commonJS({
                 this.ctx.textBaseline = "alphabetic";
                 _b2 = this.fontMetrics.getMetrics(fontFamily2, fontSize2), baseline = _b2.baseline, middle = _b2.middle;
                 paintOrder2 = styles.paintOrder;
-                text5.textBounds.forEach(function(text6) {
+                text6.textBounds.forEach(function(text7) {
                   paintOrder2.forEach(function(paintOrderLayer) {
                     switch (paintOrderLayer) {
                       case 0:
                         _this.ctx.fillStyle = asString(styles.color);
-                        _this.renderTextWithLetterSpacing(text6, styles.letterSpacing, baseline);
+                        _this.renderTextWithLetterSpacing(text7, styles.letterSpacing, baseline);
                         var textShadows = styles.textShadow;
-                        if (textShadows.length && text6.text.trim().length) {
+                        if (textShadows.length && text7.text.trim().length) {
                           textShadows.slice(0).reverse().forEach(function(textShadow2) {
                             _this.ctx.shadowColor = asString(textShadow2.color);
                             _this.ctx.shadowOffsetX = textShadow2.offsetX.number * _this.options.scale;
                             _this.ctx.shadowOffsetY = textShadow2.offsetY.number * _this.options.scale;
                             _this.ctx.shadowBlur = textShadow2.blur.number;
-                            _this.renderTextWithLetterSpacing(text6, styles.letterSpacing, baseline);
+                            _this.renderTextWithLetterSpacing(text7, styles.letterSpacing, baseline);
                           });
                           _this.ctx.shadowColor = "";
                           _this.ctx.shadowOffsetX = 0;
@@ -7519,24 +7519,24 @@ var require_html2canvas = __commonJS({
                           styles.textDecorationLine.forEach(function(textDecorationLine2) {
                             switch (textDecorationLine2) {
                               case 1:
-                                _this.ctx.fillRect(text6.bounds.left, Math.round(text6.bounds.top + baseline), text6.bounds.width, 1);
+                                _this.ctx.fillRect(text7.bounds.left, Math.round(text7.bounds.top + baseline), text7.bounds.width, 1);
                                 break;
                               case 2:
-                                _this.ctx.fillRect(text6.bounds.left, Math.round(text6.bounds.top), text6.bounds.width, 1);
+                                _this.ctx.fillRect(text7.bounds.left, Math.round(text7.bounds.top), text7.bounds.width, 1);
                                 break;
                               case 3:
-                                _this.ctx.fillRect(text6.bounds.left, Math.ceil(text6.bounds.top + middle), text6.bounds.width, 1);
+                                _this.ctx.fillRect(text7.bounds.left, Math.ceil(text7.bounds.top + middle), text7.bounds.width, 1);
                                 break;
                             }
                           });
                         }
                         break;
                       case 1:
-                        if (styles.webkitTextStrokeWidth && text6.text.trim().length) {
+                        if (styles.webkitTextStrokeWidth && text7.text.trim().length) {
                           _this.ctx.strokeStyle = asString(styles.webkitTextStrokeColor);
                           _this.ctx.lineWidth = styles.webkitTextStrokeWidth;
                           _this.ctx.lineJoin = !!window.chrome ? "miter" : "round";
-                          _this.ctx.strokeText(text6.text, text6.bounds.left, text6.bounds.top + baseline);
+                          _this.ctx.strokeText(text7.text, text7.bounds.left, text7.bounds.top + baseline);
                         }
                         _this.ctx.strokeStyle = "";
                         _this.ctx.lineWidth = 0;
@@ -8398,9 +8398,9 @@ var require_html2canvas = __commonJS({
         /** @class */
         (function() {
           function Logger2(_a2) {
-            var id = _a2.id, enabled = _a2.enabled;
+            var id = _a2.id, enabled2 = _a2.enabled;
             this.id = id;
-            this.enabled = enabled;
+            this.enabled = enabled2;
             this.start = Date.now();
           }
           Logger2.prototype.debug = function() {
@@ -11928,7 +11928,7 @@ var require_microtask = __commonJS({
     var Promise2 = globalThis2.Promise;
     var microtask = safeGetBuiltIn("queueMicrotask");
     var notify;
-    var toggle;
+    var toggle2;
     var node2;
     var promise;
     var then;
@@ -11946,11 +11946,11 @@ var require_microtask = __commonJS({
         if (parent) parent.enter();
       };
       if (!IS_IOS && !IS_NODE && !IS_WEBOS_WEBKIT && MutationObserver2 && document2) {
-        toggle = true;
+        toggle2 = true;
         node2 = document2.createTextNode("");
         new MutationObserver2(flush).observe(node2, { characterData: true });
         notify = function() {
-          node2.data = toggle = !toggle;
+          node2.data = toggle2 = !toggle2;
         };
       } else if (!IS_IOS_PEBBLE && Promise2 && Promise2.resolve) {
         promise = Promise2.resolve(void 0);
@@ -18090,13 +18090,13 @@ var init_index_es = __esm({
         var fontSize = this.getFontSize();
         return new BoundingBox(this.x, this.y - fontSize, this.x + this.measureText(ctx), this.y);
       }
-      getGlyph(font, text5, i4) {
-        var char = text5[i4];
+      getGlyph(font, text6, i4) {
+        var char = text6[i4];
         var glyph = null;
         if (font.isArabic) {
-          var len = text5.length;
-          var prevChar = text5[i4 - 1];
-          var nextChar = text5[i4 + 1];
+          var len = text6.length;
+          var prevChar = text6[i4 - 1];
+          var nextChar = text6[i4 + 1];
           var arabicForm = "isolated";
           if ((i4 === 0 || prevChar === " ") && i4 < len - 1 && nextChar !== " ") {
             arabicForm = "terminal";
@@ -18127,18 +18127,18 @@ var init_index_es = __esm({
         var childNodes = Array.from(textNode.parentNode.childNodes);
         var index2 = childNodes.indexOf(textNode);
         var lastIndex = childNodes.length - 1;
-        var text5 = compressSpaces(
+        var text6 = compressSpaces(
           // textNode.value
           // || textNode.text
           textNode.textContent || ""
         );
         if (index2 === 0) {
-          text5 = trimLeft(text5);
+          text6 = trimLeft(text6);
         }
         if (index2 === lastIndex) {
-          text5 = trimRight(text5);
+          text6 = trimRight(text6);
         }
-        return text5;
+        return text6;
       }
       renderChildren(ctx) {
         if (this.type !== "text") {
@@ -18172,11 +18172,11 @@ var init_index_es = __esm({
           var fontSize = parent.getStyle("font-size").getNumber(ctxFont.fontSize);
           var fontStyle = parent.getStyle("font-style").getString(ctxFont.fontStyle);
           var scale = fontSize / unitsPerEm;
-          var text5 = customFont.isRTL ? renderText.split("").reverse().join("") : renderText;
+          var text6 = customFont.isRTL ? renderText.split("").reverse().join("") : renderText;
           var dx = toNumbers(parent.getAttribute("dx").getString());
-          var len = text5.length;
+          var len = text6.length;
           for (var i4 = 0; i4 < len; i4++) {
-            var glyph = this.getGlyph(customFont, text5, i4);
+            var glyph = this.getGlyph(customFont, text6, i4);
             ctx.translate(this.x, this.y);
             ctx.scale(scale, -scale);
             var lw = ctx.lineWidth;
@@ -18357,12 +18357,12 @@ var init_index_es = __esm({
         var customFont = parent.getStyle("font-family").getDefinition();
         if (customFont) {
           var fontSize = this.getFontSize();
-          var text5 = customFont.isRTL ? targetText.split("").reverse().join("") : targetText;
+          var text6 = customFont.isRTL ? targetText.split("").reverse().join("") : targetText;
           var dx = toNumbers(parent.getAttribute("dx").getString());
-          var len = text5.length;
+          var len = text6.length;
           var _measure = 0;
           for (var i4 = 0; i4 < len; i4++) {
-            var glyph = this.getGlyph(customFont, text5, i4);
+            var glyph = this.getGlyph(customFont, text6, i4);
             _measure += (glyph.horizAdvX || customFont.horizAdvX) * fontSize / customFont.fontFace.unitsPerEm;
             if (typeof dx[i4] !== "undefined" && !isNaN(dx[i4])) {
               _measure += dx[i4];
@@ -19442,11 +19442,11 @@ var init_index_es = __esm({
           rotation
         };
       }
-      measureText(ctx, text5) {
+      measureText(ctx, text6) {
         var {
           measuresCache
         } = this;
-        var targetText = text5 || this.getText();
+        var targetText = text6 || this.getText();
         if (measuresCache.has(targetText)) {
           return measuresCache.get(targetText);
         }
@@ -20722,8 +20722,8 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian59 = require("obsidian");
 
-// src/core/codeblock.ts
-var import_obsidian3 = require("obsidian");
+// src/core/time.ts
+var import_obsidian = require("obsidian");
 
 // src/core/constants.ts
 var FOLDERS = {
@@ -21016,12 +21016,109 @@ var ETERNAL_INDEX_FILE = `${ETERNAL_FOLDERS.wiki}/\u7D22\u5F15.md`;
 var ETERNAL_LOG_FILE = `${ETERNAL_FOLDERS.system}/\u8D26\u672C.md`;
 var ETERNAL_LOG_INGEST_MARKS = ["\u6D88\u5316", "ingest"];
 
+// src/core/time.ts
+var momentFactory = import_obsidian.moment;
+function normalizeDateTimeFormat(value) {
+  const candidate = typeof value === "string" ? value.trim() : "";
+  return candidate || DEFAULT_DATETIME_FORMAT;
+}
+function nowStamp(format) {
+  return momentFactory().format(normalizeDateTimeFormat(format));
+}
+function nowStampAndUid(format) {
+  const now = momentFactory();
+  return {
+    stamp: now.format(normalizeDateTimeFormat(format)),
+    uid: Number(now.format(UID_FORMAT))
+  };
+}
+function nowLocalDateTimeParts(format) {
+  const now = momentFactory();
+  return {
+    date: now.format(DAY_FORMAT),
+    time: now.format("HH:mm"),
+    datetime: now.format(normalizeDateTimeFormat(format))
+  };
+}
+function today() {
+  return momentFactory().format(DAY_FORMAT);
+}
+function dayText(value) {
+  var _a2;
+  if (value === null || value === void 0) return null;
+  if (value instanceof Date) {
+    const time = value.getTime();
+    const parsed = momentFactory(time);
+    return Number.isNaN(time) || !parsed.isValid() ? null : parsed.format(DAY_FORMAT);
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    const parsed = momentFactory(value);
+    return parsed.isValid() ? parsed.format(DAY_FORMAT) : null;
+  }
+  const text6 = String(value).trim();
+  const day = (_a2 = /^\d{4}-\d{2}-\d{2}/.exec(text6)) == null ? void 0 : _a2[0];
+  if (!day) return null;
+  return momentFactory(day, DAY_FORMAT, true).isValid() ? day : null;
+}
+function dayOfMillis(millis) {
+  return momentFactory(millis).format(DAY_FORMAT);
+}
+function dayOfTitle(title) {
+  return momentFactory(title, DAY_FORMAT, true).isValid() ? title : null;
+}
+function shiftDay(day, amount, unit) {
+  const parsed = momentFactory(day, DAY_FORMAT, true);
+  if (!parsed.isValid()) return day;
+  return parsed.add(amount, unit).format(DAY_FORMAT);
+}
+function daysBetween(from, to) {
+  if (!from || !to) return null;
+  const start = momentFactory(from, DAY_FORMAT, true);
+  const end = momentFactory(to, DAY_FORMAT, true);
+  if (!start.isValid() || !end.isValid()) return null;
+  return Math.round(end.diff(start, "days"));
+}
+function currentPeriodTitle(period) {
+  return momentFactory().format(period.titleFormat);
+}
+function periodOfTitle(title) {
+  for (const period of Object.values(PERIODS)) {
+    if (periodStartOf(period, title) !== null) return period;
+  }
+  return null;
+}
+function periodStartOf(period, title) {
+  const parsed = momentFactory(title, period.titleFormat, true);
+  if (!parsed.isValid()) return null;
+  return parsed.startOf(period.startOfUnit).format(DAY_FORMAT);
+}
+function periodNeighbours(period, title, parentPeriod) {
+  const parsed = momentFactory(title, period.titleFormat, true);
+  if (!parsed.isValid()) return null;
+  const prev = parsed.clone().subtract(1, period.stepUnit).format(period.titleFormat);
+  const next = parsed.clone().add(1, period.stepUnit).format(period.titleFormat);
+  if (!parentPeriod) return { prev, next, parent: null };
+  const anchor = parsed.clone().startOf(period.startOfUnit);
+  const parent = (period.key === "weekly" ? anchor.add(3, "days") : anchor).format(
+    parentPeriod.titleFormat
+  );
+  return { prev, next, parent };
+}
+function titleOfDay(day, period) {
+  const parsed = momentFactory(day, DAY_FORMAT, true);
+  return parsed.isValid() ? parsed.format(period.titleFormat) : null;
+}
+
+// src/core/codeblock.ts
+var import_obsidian4 = require("obsidian");
+
 // src/core/table.ts
 function noteLink(file, display) {
   return { path: file.path, display: display != null ? display : file.basename };
 }
-function richText(text5, fromPath) {
-  return { text: text5, from: fromPath };
+function richText(text6, fromPath) {
+  return { text: text6, from: fromPath };
 }
 function isObjectCell(cell) {
   return typeof cell === "object" && cell !== null && !(cell instanceof HTMLElement);
@@ -21041,9 +21138,9 @@ function renderTable(app, el, sourcePath, headers, rows, grow) {
     });
   });
   const body = table.createEl("tbody");
-  for (const row of rows) {
+  for (const row2 of rows) {
     const tr = body.createEl("tr");
-    row.forEach((cell, index2) => {
+    row2.forEach((cell, index2) => {
       renderCell(app, tr.createEl("td", { cls: classOf(index2) }), sourcePath, cell);
     });
   }
@@ -21080,20 +21177,20 @@ function renderNoteLink(app, parent, sourcePath, link) {
   });
 }
 var WIKILINK = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\\?\|([^\]]*))?\]\]/g;
-function renderTextWithLinks(app, parent, text5, fromPath) {
+function renderTextWithLinks(app, parent, text6, fromPath) {
   var _a2;
   WIKILINK.lastIndex = 0;
   let cursor = 0;
-  let match = WIKILINK.exec(text5);
+  let match = WIKILINK.exec(text6);
   while (match) {
-    if (match.index > cursor) parent.appendText(text5.slice(cursor, match.index));
+    if (match.index > cursor) parent.appendText(text6.slice(cursor, match.index));
     const target = match[1].trim();
     const display = ((_a2 = match[2]) != null ? _a2 : "").trim() || target;
     renderNoteLink(app, parent, fromPath, { path: target, display });
     cursor = match.index + match[0].length;
-    match = WIKILINK.exec(text5);
+    match = WIKILINK.exec(text6);
   }
-  if (cursor < text5.length) parent.appendText(text5.slice(cursor));
+  if (cursor < text6.length) parent.appendText(text6.slice(cursor));
 }
 function renderTaskList(app, el, sourcePath, tasks, onToggle) {
   const ordered = [...tasks].sort((left, right) => right.day.localeCompare(left.day));
@@ -21124,37 +21221,37 @@ function renderEmpty(el, message2) {
 function renderNote(el, message2) {
   renderRichText(el.createEl("p", { cls: "ziminos-note" }), message2);
 }
-function renderHeading(el, level, text5) {
-  el.createEl(level === 3 ? "h3" : "h4", { cls: "ziminos-heading", text: text5 });
+function renderHeading(el, level, text6) {
+  el.createEl(level === 3 ? "h3" : "h4", { cls: "ziminos-heading", text: text6 });
 }
-function renderSummary(el, text5) {
-  renderRichText(el.createEl("p", { cls: "ziminos-summary" }), text5);
+function renderSummary(el, text6) {
+  renderRichText(el.createEl("p", { cls: "ziminos-summary" }), text6);
 }
 var RICH_MARKUP = /`([^`]+)`|\*\*([^*]+)\*\*/g;
-function renderRichText(parent, text5) {
+function renderRichText(parent, text6) {
   RICH_MARKUP.lastIndex = 0;
   let cursor = 0;
-  let match = RICH_MARKUP.exec(text5);
+  let match = RICH_MARKUP.exec(text6);
   while (match) {
-    if (match.index > cursor) parent.appendText(text5.slice(cursor, match.index));
+    if (match.index > cursor) parent.appendText(text6.slice(cursor, match.index));
     if (match[1] !== void 0) parent.createEl("code", { text: match[1] });
     else parent.createEl("strong", { text: match[2] });
     cursor = match.index + match[0].length;
-    match = RICH_MARKUP.exec(text5);
+    match = RICH_MARKUP.exec(text6);
   }
-  if (cursor < text5.length) parent.appendText(text5.slice(cursor));
+  if (cursor < text6.length) parent.appendText(text6.slice(cursor));
 }
 
 // src/core/vaultIndex.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/core/folders.ts
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 function isSystemPath(path) {
   return path === FOLDERS.system || path.startsWith(`${FOLDERS.system}/`);
 }
 async function ensureFolderPath(app, folderPath) {
-  const normalizedFolderPath = (0, import_obsidian.normalizePath)(folderPath);
+  const normalizedFolderPath = (0, import_obsidian2.normalizePath)(folderPath);
   const pathParts = normalizedFolderPath.split("/").filter(Boolean);
   let currentPath = "";
   for (const pathPart of pathParts) {
@@ -21164,7 +21261,7 @@ async function ensureFolderPath(app, folderPath) {
       await app.vault.createFolder(currentPath);
       continue;
     }
-    if (!(existingEntry instanceof import_obsidian.TFolder)) {
+    if (!(existingEntry instanceof import_obsidian2.TFolder)) {
       throw new Error(`\u65E0\u6CD5\u521B\u5EFA\u6587\u4EF6\u5939\uFF0C\u56E0\u4E3A\u540C\u4E00\u8DEF\u5F84\u4E0B\u5DF2\u7ECF\u5B58\u5728\u6587\u4EF6\uFF1A${currentPath}`);
     }
   }
@@ -21172,7 +21269,7 @@ async function ensureFolderPath(app, folderPath) {
 function normalizeFolderPath(value, fallback) {
   const candidate = typeof value === "string" ? value.trim() : "";
   const path = (candidate || fallback).replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-  return (0, import_obsidian.normalizePath)(path);
+  return (0, import_obsidian2.normalizePath)(path);
 }
 function isInFolder(path, folder) {
   const base = folder.replace(/\/+$/, "");
@@ -21263,7 +21360,7 @@ var VaultIndex = class {
       for (const sourcePath of Object.keys(resolved)) {
         if (isSystemPath(sourcePath)) continue;
         const source = this.app.vault.getAbstractFileByPath(sourcePath);
-        if (!(source instanceof import_obsidian2.TFile)) continue;
+        if (!(source instanceof import_obsidian3.TFile)) continue;
         for (const targetPath of Object.keys(resolved[sourcePath])) {
           const bucket = map.get(targetPath);
           if (bucket) bucket.push(source);
@@ -21325,26 +21422,26 @@ function parseListLines(content, items) {
   for (const item of items) {
     const raw = content.slice(item.position.start.offset, item.position.end.offset);
     const marker = LIST_MARKER.exec(raw);
-    const text5 = raw.slice((_a2 = marker == null ? void 0 : marker[0].length) != null ? _a2 : 0).replace(/\s*\n\s*/g, " ").trim();
+    const text6 = raw.slice((_a2 = marker == null ? void 0 : marker[0].length) != null ? _a2 : 0).replace(/\s*\n\s*/g, " ").trim();
     const box = typeof item.task === "string" ? item.task : marker == null ? void 0 : marker[1];
     parsed.push({
-      text: text5,
+      text: text6,
       isTask: typeof box === "string",
       checked: typeof box === "string" && box.trim().toLowerCase() === "x",
-      links: extractLinks(text5),
+      links: extractLinks(text6),
       line: item.position.start.line
     });
   }
   return parsed;
 }
-function extractLinks(text5) {
+function extractLinks(text6) {
   const links = [];
   WIKILINK2.lastIndex = 0;
-  let match = WIKILINK2.exec(text5);
+  let match = WIKILINK2.exec(text6);
   while (match) {
     const linktext = match[1].split("|")[0].replace(/\\$/, "").trim();
     if (linktext) links.push(linktext);
-    match = WIKILINK2.exec(text5);
+    match = WIKILINK2.exec(text6);
   }
   return links;
 }
@@ -21353,8 +21450,8 @@ function toStringList(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item != null ? item : "").trim()).filter((item) => item.length > 0);
   }
-  const text5 = String(value).trim();
-  return text5 ? [text5] : [];
+  const text6 = String(value).trim();
+  return text6 ? [text6] : [];
 }
 function toText(value) {
   if (value === null || value === void 0) return "";
@@ -21362,8 +21459,8 @@ function toText(value) {
 }
 function toBoolean(value) {
   if (typeof value === "boolean") return value;
-  const text5 = toText(value).toLowerCase();
-  return text5 === "true" || text5 === "yes" || text5 === "\u662F";
+  const text6 = toText(value).toLowerCase();
+  return text6 === "true" || text6 === "yes" || text6 === "\u662F";
 }
 
 // src/core/codeblock.ts
@@ -21394,7 +21491,7 @@ var ViewHost = class {
     return {
       el,
       sourcePath,
-      host: found instanceof import_obsidian3.TFile ? found : null,
+      host: found instanceof import_obsidian4.TFile ? found : null,
       params,
       index: this.index,
       ctx: this.ctx
@@ -21425,7 +21522,7 @@ var ViewHost = class {
     this.blocks.clear();
   }
 };
-var ViewBlock = class extends import_obsidian3.MarkdownRenderChild {
+var ViewBlock = class extends import_obsidian4.MarkdownRenderChild {
   constructor(el, host, request, sourcePath) {
     super(el);
     /** 每次重画递增；异步返回时只有最新一代有权提交 DOM */
@@ -22040,7 +22137,7 @@ var FORMAT_RULES = [
     desc: "\u6587\u4EF6\u7ED3\u5C3E\u6070\u597D\u4E00\u4E2A\u6362\u884C\u7B26\uFF0C\u4E0D\u591A\u4E0D\u5C11\u3002\u5B83\u4E0D\u5F71\u54CD\u9605\u8BFB\uFF0C\u4F46\u80FD\u8BA9\u6BCF\u6B21 Git \u5DEE\u5F02\u53EA\u663E\u793A\u4F60\u771F\u6B63\u6539\u8FC7\u7684\u90A3\u51E0\u884C\u3002"
   }
 ];
-var DEFAULT_FORMAT_RULES = FORMAT_RULES.map((rule) => rule.key);
+var DEFAULT_FORMAT_RULES = FORMAT_RULES.map((rule2) => rule2.key);
 function normalizeFormatRules(value) {
   if (!Array.isArray(value)) return DEFAULT_FORMAT_RULES;
   return value.filter((item) => typeof item === "string");
@@ -22078,8 +22175,8 @@ function addCjkSpaces(line) {
   }
   return join(result, spacePlainText(line.slice(cursor)));
 }
-function spacePlainText(text5) {
-  return text5.replace(CJK_THEN_LATIN, "$1 $2").replace(LATIN_THEN_CJK, "$1 $2");
+function spacePlainText(text6) {
+  return text6.replace(CJK_THEN_LATIN, "$1 $2").replace(LATIN_THEN_CJK, "$1 $2");
 }
 var IS_CJK = new RegExp(`[${CJK}]`);
 var IS_ASCII_GRAPH = /[!-~]/;
@@ -22144,8 +22241,8 @@ var ISOLATING_RULE = {
   table: "table-blank",
   code: "code-blank"
 };
-function formatMarkdown(content, enabled) {
-  const on = new Set(enabled);
+function formatMarkdown(content, enabled2) {
+  const on = new Set(enabled2);
   if (on.size === 0) return content;
   const lineEnding = lineEndingOf(content);
   const normalized = content.replace(/\r\n|\r/g, "\n");
@@ -22178,7 +22275,7 @@ function formatMarkdown(content, enabled) {
 function needsBlankBetween(before, after, on) {
   if (before === after && after !== "heading") return false;
   const rules = [ISOLATING_RULE[before], ISOLATING_RULE[after]];
-  return rules.some((rule) => rule !== void 0 && on.has(rule));
+  return rules.some((rule2) => rule2 !== void 0 && on.has(rule2));
 }
 function splitFrontmatter(content) {
   if (content.indexOf("---\n") !== 0) return { frontmatter: "", body: content };
@@ -22193,16 +22290,16 @@ function splitFrontmatter(content) {
   return { frontmatter: "", body: content };
 }
 function assemble(frontmatter, body, on) {
-  let text5 = body;
+  let text6 = body;
   if (frontmatter) {
-    text5 = on.has("yaml-blank") ? `${frontmatter}
+    text6 = on.has("yaml-blank") ? `${frontmatter}
 
-${text5.replace(/^\n+/, "")}` : `${frontmatter}
-${text5}`;
+${text6.replace(/^\n+/, "")}` : `${frontmatter}
+${text6}`;
   }
-  if (on.has("final-newline")) text5 = `${text5.replace(/\s*$/, "")}
+  if (on.has("final-newline")) text6 = `${text6.replace(/\s*$/, "")}
 `;
-  return text5;
+  return text6;
 }
 
 // src/core/device.ts
@@ -22228,6 +22325,16 @@ var EXPORT_THEME_LABELS = {
 var PAGE_SIZE_MODE_LABELS = {
   auto: "\u81EA\u9002\u5E94",
   fixed: "\u81EA\u5B9A"
+};
+var PAPER_PRESET_LABELS = {
+  free: "\u81EA\u7531",
+  a4: "A4",
+  a3: "A3"
+};
+var PAPER_PRESET_SIZES = {
+  free: null,
+  a4: { width: 794, height: 1123 },
+  a3: { width: 1123, height: 1587 }
 };
 var EXPORT_FORMAT_LABELS = {
   png: "PNG \u957F\u56FE",
@@ -22260,11 +22367,11 @@ var WATERMARK_ANCHOR_LABELS = {
 };
 var DEFAULT_EXPORT_STYLE = {
   format: "png",
-  // 两边都默认跟着走：升级之后不选任何东西的人，导出的那张图与升级前逐像素相同
-  pageWidthMode: "auto",
+  // 默认跟着走：升级之后不选任何东西的人，导出的那张图与升级前逐像素相同
+  pageMode: "auto",
   pageWidth: 800,
-  pageHeightMode: "auto",
   pageHeight: 1200,
+  paperPreset: "free",
   // 跟随：升级之后不选任何东西的人，导出的底色与升级前一模一样
   theme: "auto",
   header: "",
@@ -22287,19 +22394,23 @@ var DEFAULT_EXPORT_STYLE = {
   footerColor: "",
   footerLink: "",
   watermarkColor: "",
+  // 三个开关的默认值只在「全新的库」这一种情况下用得上；
+  // 老库升级走的是 normalizeExportStyle 里那条「有东西就是开着」的推导
+  headerEnabled: false,
+  footerEnabled: false,
+  watermarkEnabled: false,
   logo: "",
   // 三个尺寸默认 0：老库升级之后，没选过标志的人导出的那张图与升级前逐像素相同。
   // 新功能的默认值应当是「不发生」，而不是「替他做了个决定」。
   headerLogoSize: 0,
   footerLogoSize: 0,
-  watermarkLogoSize: 0,
-  listGuides: true
+  watermarkLogoSize: 0
 };
 var EXPORT_SLIDERS = [
   {
     key: "pageWidth",
     section: "page",
-    name: "\u7EB8\u5BBD",
+    name: "\u5BBD",
     desc: "\u6574\u5F20\u7EB8\u591A\u5BBD\uFF08\u542B\u5DE6\u53F3\u9875\u8FB9\uFF09\u3002\u6B63\u6587\u680F\uFF1D\u7EB8\u5BBD\u51CF\u53BB\u4E24\u4FA7\u9875\u8FB9\u3002",
     min: 320,
     max: 2400,
@@ -22310,7 +22421,7 @@ var EXPORT_SLIDERS = [
   {
     key: "pageHeight",
     section: "page",
-    name: "\u7EB8\u9AD8\uFF08\u6700\u5C11\uFF09",
+    name: "\u9AD8",
     desc: "\u5185\u5BB9\u4E0D\u8DB3\u65F6\u8865\u5230\u8FD9\u4E48\u9AD8\uFF1B\u5185\u5BB9\u66F4\u9AD8\u65F6\u7167\u6837\u5F80\u4E0B\u957F\uFF0C\u7EDD\u4E0D\u88C1\u6389\u3002",
     min: 200,
     max: 4e3,
@@ -22321,7 +22432,7 @@ var EXPORT_SLIDERS = [
   {
     key: "headerLogoSize",
     section: "header",
-    name: "\u6807\u5FD7\u5927\u5C0F",
+    name: "\u6807\u5FD7",
     desc: "\u9875\u7709\u91CC\u90A3\u679A\u6807\u5FD7\u591A\u9AD8\u30020 \u5C31\u662F\u9875\u7709\u4E0D\u653E\u6807\u5FD7\u3002",
     min: 0,
     max: 160,
@@ -22332,7 +22443,7 @@ var EXPORT_SLIDERS = [
   {
     key: "headerGap",
     section: "header",
-    name: "\u4E0E\u6B63\u6587\u7684\u8DDD\u79BB",
+    name: "\u95F4\u8DDD",
     desc: "\u9875\u7709\u79BB\u6807\u9898\u591A\u8FDC\u30020 \u5C31\u662F\u7D27\u8D34\u7740\u6807\u9898\u3002",
     min: 0,
     max: 120,
@@ -22343,7 +22454,7 @@ var EXPORT_SLIDERS = [
   {
     key: "footerLogoSize",
     section: "footer",
-    name: "\u6807\u5FD7\u5927\u5C0F",
+    name: "\u6807\u5FD7",
     desc: "\u9875\u811A\u91CC\u90A3\u679A\u6807\u5FD7\u591A\u9AD8\u30020 \u5C31\u662F\u9875\u811A\u4E0D\u653E\u6807\u5FD7\u3002",
     min: 0,
     max: 160,
@@ -22354,7 +22465,7 @@ var EXPORT_SLIDERS = [
   {
     key: "footerGap",
     section: "footer",
-    name: "\u4E0E\u6B63\u6587\u7684\u8DDD\u79BB",
+    name: "\u95F4\u8DDD",
     desc: "\u9875\u811A\u79BB\u6700\u540E\u4E00\u884C\u591A\u8FDC\u3002",
     min: 0,
     max: 120,
@@ -22365,7 +22476,7 @@ var EXPORT_SLIDERS = [
   {
     key: "watermarkLogoSize",
     section: "watermark",
-    name: "\u6807\u5FD7\u5927\u5C0F",
+    name: "\u6807\u5FD7",
     desc: "\u6C34\u5370\u91CC\u90A3\u679A\u6807\u5FD7\u591A\u9AD8\u30020 \u5C31\u662F\u6C34\u5370\u53EA\u6709\u6587\u5B57\u3002",
     min: 0,
     max: 320,
@@ -22387,7 +22498,7 @@ var EXPORT_SLIDERS = [
   {
     key: "watermarkGapX",
     section: "watermark",
-    name: "\u6A2A\u5411\u95F4\u8DDD",
+    name: "\u6A2A\u5411",
     desc: "\u5E73\u94FA\u65F6\u662F\u5DE6\u53F3\u4E24\u4E2A\u6C34\u5370\u4E4B\u95F4\u7684\u8DDD\u79BB\uFF1B\u5355\u4E2A\u65F6\u662F\u79BB\u5DE6\u53F3\u7EB8\u8FB9\u7684\u8DDD\u79BB\u3002",
     min: 0,
     max: 480,
@@ -22398,7 +22509,7 @@ var EXPORT_SLIDERS = [
   {
     key: "watermarkGapY",
     section: "watermark",
-    name: "\u7EB5\u5411\u95F4\u8DDD",
+    name: "\u7EB5\u5411",
     desc: "\u5E73\u94FA\u65F6\u662F\u4E0A\u4E0B\u4E24\u4E2A\u6C34\u5370\u4E4B\u95F4\u7684\u8DDD\u79BB\uFF1B\u5355\u4E2A\u65F6\u662F\u79BB\u4E0A\u4E0B\u7EB8\u8FB9\u7684\u8DDD\u79BB\u3002",
     min: 0,
     max: 480,
@@ -22409,7 +22520,7 @@ var EXPORT_SLIDERS = [
   {
     key: "watermarkAngle",
     section: "watermark",
-    name: "\u503E\u659C\u89D2\u5EA6",
+    name: "\u89D2\u5EA6",
     desc: "\u8D1F\u6570\u5F80\u5DE6\u5012\uFF0C\u6B63\u6570\u5F80\u53F3\u5012\uFF0C0 \u662F\u6C34\u5E73\u3002\u6807\u5FD7\u4E0E\u6587\u5B57\u4E00\u8D77\u8F6C\u3002",
     min: -90,
     max: 90,
@@ -22420,7 +22531,7 @@ var EXPORT_SLIDERS = [
   {
     key: "watermarkOpacity",
     section: "watermark",
-    name: "\u4E0D\u900F\u660E\u5EA6",
+    name: "\u900F\u660E",
     desc: "\u8D8A\u4F4E\u8D8A\u50CF\u7EB8\u7EB9\uFF0C\u8D8A\u9AD8\u8D8A\u96BE\u88AB\u88C1\u6389\u2014\u2014\u4F46\u4E5F\u8D8A\u6321\u5B57\u3002\u6807\u5FD7\u4E0E\u6587\u5B57\u540C\u4E00\u4E2A\u6570\u3002",
     min: 1,
     max: 100,
@@ -22450,10 +22561,10 @@ function normalizeExportStyle(input) {
   }
   return {
     format: isFormat(stored.format) ? stored.format : DEFAULT_EXPORT_STYLE.format,
-    pageWidthMode: isPageSizeMode(stored.pageWidthMode) ? stored.pageWidthMode : DEFAULT_EXPORT_STYLE.pageWidthMode,
+    pageMode: isPageSizeMode(stored.pageMode) ? stored.pageMode : DEFAULT_EXPORT_STYLE.pageMode,
     pageWidth: numbers.pageWidth,
-    pageHeightMode: isPageSizeMode(stored.pageHeightMode) ? stored.pageHeightMode : DEFAULT_EXPORT_STYLE.pageHeightMode,
     pageHeight: numbers.pageHeight,
+    paperPreset: isPaperPreset(stored.paperPreset) ? stored.paperPreset : DEFAULT_EXPORT_STYLE.paperPreset,
     theme: isExportTheme(stored.theme) ? stored.theme : DEFAULT_EXPORT_STYLE.theme,
     header: text(stored.header, DEFAULT_EXPORT_STYLE.header),
     headerAlign: isAlign(stored.headerAlign) ? stored.headerAlign : DEFAULT_EXPORT_STYLE.headerAlign,
@@ -22474,7 +22585,9 @@ function normalizeExportStyle(input) {
     footerColor: color(stored.footerColor),
     footerLink: text(stored.footerLink, DEFAULT_EXPORT_STYLE.footerLink),
     watermarkColor: color(stored.watermarkColor),
-    listGuides: typeof stored.listGuides === "boolean" ? stored.listGuides : DEFAULT_EXPORT_STYLE.listGuides,
+    headerEnabled: enabled(stored.headerEnabled, stored.header, stored.headerLogoSize),
+    footerEnabled: enabled(stored.footerEnabled, stored.footer, stored.footerLogoSize),
+    watermarkEnabled: enabled(stored.watermarkEnabled, stored.watermark, stored.watermarkLogoSize),
     logo: text(stored.logo, DEFAULT_EXPORT_STYLE.logo),
     headerLogoSize: numbers.headerLogoSize,
     footerLogoSize: numbers.footerLogoSize,
@@ -22497,6 +22610,15 @@ function isRecord(value) {
 function isExportTheme(value) {
   return value === "auto" || value === "light" || value === "dark";
 }
+function enabled(flag, text6, logoSize) {
+  if (typeof flag === "boolean") return flag;
+  const hasText = typeof text6 === "string" && text6.trim() !== "";
+  const hasLogo = typeof logoSize === "number" && logoSize > 0;
+  return hasText || hasLogo;
+}
+function isPaperPreset(value) {
+  return value === "free" || value === "a4" || value === "a3";
+}
 function isPageSizeMode(value) {
   return value === "auto" || value === "fixed";
 }
@@ -22510,7 +22632,7 @@ function isMode(value) {
   return value === "tile" || value === "single";
 }
 function isAnchor(value) {
-  return typeof value === "string" && WATERMARK_ANCHOR_GRID.some((row) => row.some((anchor) => anchor === value));
+  return typeof value === "string" && WATERMARK_ANCHOR_GRID.some((row2) => row2.some((anchor) => anchor === value));
 }
 
 // src/core/types.ts
@@ -22793,8 +22915,8 @@ function renderEduLogo(el) {
   svg2.createSvg("circle", { attr: { cx: "15", cy: "12", r: "2.4", fill: "#E8503A" } });
   svg2.createSvg("circle", { attr: { cx: "20", cy: "5", r: "2", fill: "#F5F3EE" } });
 }
-function renderSite(row, site) {
-  const tile = row.createDiv({ cls: "ziminos-about-tile" });
+function renderSite(row2, site) {
+  const tile = row2.createDiv({ cls: "ziminos-about-tile" });
   const head = tile.createDiv({ cls: "ziminos-about-tile-head" });
   if (site.logo === "avatar") {
     const avatar = head.createDiv({ cls: "ziminos-about-logo-round" });
@@ -22802,9 +22924,9 @@ function renderSite(row, site) {
   } else {
     renderEduLogo(head);
   }
-  const text5 = head.createDiv({ cls: "ziminos-about-tile-text" });
-  text5.createDiv({ cls: "ziminos-about-tile-name", text: site.name });
-  text5.createDiv({ cls: "ziminos-about-tile-sub", text: site.sub });
+  const text6 = head.createDiv({ cls: "ziminos-about-tile-text" });
+  text6.createDiv({ cls: "ziminos-about-tile-name", text: site.name });
+  text6.createDiv({ cls: "ziminos-about-tile-sub", text: site.sub });
   const list = tile.createDiv({ cls: "ziminos-about-domains" });
   for (const entry of site.domains) {
     const link = list.createEl("a", {
@@ -22816,8 +22938,8 @@ function renderSite(row, site) {
     link.createSpan({ cls: "ziminos-about-domain-region", text: entry.region });
   }
 }
-function renderChannel(row, channel) {
-  const pill = row.createEl("a", {
+function renderChannel(row2, channel) {
+  const pill = row2.createEl("a", {
     cls: "ziminos-about-pill",
     href: channel.url,
     attr: { "aria-label": channel.name, title: channel.name, rel: "noopener" }
@@ -22886,29 +23008,29 @@ var aboutViews = [
 ];
 
 // src/modules/appearance/statusBar.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/modules/appearance/reveal.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/core/localPath.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 var WINDOWS_SEPARATOR = "\\";
 function vaultBasePath(app) {
   const adapter = app.vault.adapter;
-  return adapter instanceof import_obsidian4.FileSystemAdapter ? adapter.getBasePath() : null;
+  return adapter instanceof import_obsidian5.FileSystemAdapter ? adapter.getBasePath() : null;
 }
 function localPath(app, relative) {
   const base = vaultBasePath(app);
   if (base === null) return null;
-  return import_obsidian4.Platform.isWin ? `${base}${WINDOWS_SEPARATOR}${relative.split("/").join(WINDOWS_SEPARATOR)}` : `${base}/${relative}`;
+  return import_obsidian5.Platform.isWin ? `${base}${WINDOWS_SEPARATOR}${relative.split("/").join(WINDOWS_SEPARATOR)}` : `${base}/${relative}`;
 }
 
 // src/modules/appearance/reveal.ts
 var NO_SHELL = "\u8FD9\u4E2A\u73AF\u5883\u6CA1\u6709\u7ED9\u51FA\u300C\u4EA4\u7ED9\u64CD\u4F5C\u7CFB\u7EDF\u6253\u5F00\u300D\u7684\u5165\u53E3\uFF08\u624B\u673A\u7AEF\u6CA1\u6709\uFF0C\u684C\u9762\u7AEF\u6362\u4E86\u8FD0\u884C\u65F6\u4E5F\u53EF\u80FD\u6CA1\u6709\uFF09\u3002ziminOS \u63A2\u4E0D\u5230\u5C31\u4E0D\u786C\u6765\u2014\u2014\u4F60\u53EF\u4EE5\u81EA\u5DF1\u6253\u5F00\u7B14\u8BB0\u5E93\u6587\u4EF6\u5939\u91CC\u7684 .obsidian/snippets/\u3002";
 var NO_LOCAL_PATH = "\u8FD9\u4E2A\u7B14\u8BB0\u5E93\u4E0D\u5728\u672C\u673A\u6587\u4EF6\u7CFB\u7EDF\u4E0A\uFF0C\u6CA1\u6709\u53EF\u4EE5\u4EA4\u7ED9\u64CD\u4F5C\u7CFB\u7EDF\u7684\u8DEF\u5F84\u3002";
 function canReveal(app) {
-  return import_obsidian5.Platform.isDesktopApp && vaultBasePath(app) !== null;
+  return import_obsidian6.Platform.isDesktopApp && vaultBasePath(app) !== null;
 }
 async function openSnippetFolder(app) {
   const shell = requireShell();
@@ -22931,7 +23053,7 @@ function requireShell() {
   return shell;
 }
 function resolveShell() {
-  if (!import_obsidian5.Platform.isDesktopApp) return null;
+  if (!import_obsidian6.Platform.isDesktopApp) return null;
   try {
     const electron = require("electron");
     const shell = electron == null ? void 0 : electron.shell;
@@ -22953,13 +23075,13 @@ async function readSnippets(app) {
   const folder = `${app.vault.configDir}/${SNIPPET_FOLDER_NAME}`;
   if (!await app.vault.adapter.exists(folder)) return [];
   const listed = await app.vault.adapter.list(folder);
-  const enabled = await readEnabledNames(app);
+  const enabled2 = await readEnabledNames(app);
   const states = [];
   for (const path of listed.files) {
     if (!path.endsWith(SNIPPET_EXTENSION)) continue;
     const base = path.slice(path.lastIndexOf("/") + 1, -SNIPPET_EXTENSION.length);
     if (!base) continue;
-    states.push({ ...splitGroup(base), name: base, enabled: enabled.has(base) });
+    states.push({ ...splitGroup(base), name: base, enabled: enabled2.has(base) });
   }
   return states.sort(compareSnippets);
 }
@@ -22977,13 +23099,13 @@ function compareSnippets(a3, b2) {
   }
   return a3.label.localeCompare(b2.label, "zh");
 }
-async function setSnippetEnabled(app, name, enabled) {
+async function setSnippetEnabled(app, name, enabled2) {
   const customCss = app.customCss;
   if (typeof (customCss == null ? void 0 : customCss.setCssEnabledStatus) === "function") {
-    customCss.setCssEnabledStatus(name, enabled);
+    customCss.setCssEnabledStatus(name, enabled2);
     return true;
   }
-  await writeEnabledNames(app, name, enabled);
+  await writeEnabledNames(app, name, enabled2);
   return false;
 }
 function appearancePath(app) {
@@ -22997,10 +23119,10 @@ function extractEnabledNames(config) {
   if (!Array.isArray(listed)) return /* @__PURE__ */ new Set();
   return new Set(listed.filter((item) => typeof item === "string"));
 }
-async function writeEnabledNames(app, name, enabled) {
+async function writeEnabledNames(app, name, enabled2) {
   const config = await readAppearanceConfig(app);
   const names = extractEnabledNames(config);
-  if (enabled) names.add(name);
+  if (enabled2) names.add(name);
   else names.delete(name);
   config[ENABLED_SNIPPETS_KEY] = [...names];
   await app.vault.adapter.write(appearancePath(app), `${JSON.stringify(config, null, 2)}
@@ -23076,7 +23198,7 @@ var AppearanceSwitch = class {
     this.statusEl = ctx.plugin.addStatusBarItem();
     this.statusEl.addClass("ziminos-appearance-switch");
     this.statusEl.addClass("mod-clickable");
-    (0, import_obsidian6.setTooltip)(this.statusEl, TEXTS.tooltip, { placement: "top" });
+    (0, import_obsidian7.setTooltip)(this.statusEl, TEXTS.tooltip, { placement: "top" });
     this.paintIcon();
     this.syncVisibility();
     this.statusEl.addEventListener("click", () => this.toggle());
@@ -23213,7 +23335,7 @@ var AppearanceSwitch = class {
     const button = footer.createDiv({ cls: "ziminos-appearance-folder" });
     paintIcon(button.createSpan(), TEXTS.folderIcon, TEXTS.folderFallback);
     button.createSpan({ text: TEXTS.folderLabel });
-    (0, import_obsidian6.setTooltip)(button, TEXTS.folderTooltip, { placement: "top" });
+    (0, import_obsidian7.setTooltip)(button, TEXTS.folderTooltip, { placement: "top" });
     button.addEventListener("click", () => void this.openFolder());
   }
   /**
@@ -23225,16 +23347,16 @@ var AppearanceSwitch = class {
    * 不该由我们来赌。
    */
   renderRow(list, snippet, revealable) {
-    const row = list.createDiv({ cls: "ziminos-appearance-row" });
-    row.createSpan({ cls: "ziminos-appearance-name", text: snippet.label });
-    if (revealable) this.renderOpenButton(row, snippet);
-    const toggle = new import_obsidian6.ToggleComponent(row);
+    const row2 = list.createDiv({ cls: "ziminos-appearance-row" });
+    row2.createSpan({ cls: "ziminos-appearance-name", text: snippet.label });
+    if (revealable) this.renderOpenButton(row2, snippet);
+    const toggle2 = new import_obsidian7.ToggleComponent(row2);
     let rollingBack = false;
-    toggle.setValue(snippet.enabled).onChange((value) => {
+    toggle2.setValue(snippet.enabled).onChange((value) => {
       if (rollingBack) return;
       void this.applyToggle(snippet, value, () => {
         rollingBack = true;
-        toggle.setValue(!value);
+        toggle2.setValue(!value);
         rollingBack = false;
       });
     });
@@ -23246,10 +23368,10 @@ var AppearanceSwitch = class {
    * 借它省下的几行样式，换来的是「主题改了这个类名，按钮就变成一坨没有边界的图形」。
    * 样式全部写在 styles.css 里自己那两条选择器上，与外观开关面板的其余部分同源。
    */
-  renderOpenButton(row, snippet) {
-    const button = row.createDiv({ cls: "ziminos-appearance-open" });
+  renderOpenButton(row2, snippet) {
+    const button = row2.createDiv({ cls: "ziminos-appearance-open" });
     paintIcon(button, TEXTS.openIcon, TEXTS.openFallback);
-    (0, import_obsidian6.setTooltip)(button, TEXTS.openTooltip, { placement: "top" });
+    (0, import_obsidian7.setTooltip)(button, TEXTS.openTooltip, { placement: "top" });
     button.addEventListener("click", () => void this.openFile(snippet));
   }
   // ============================================================
@@ -23265,10 +23387,10 @@ var AppearanceSwitch = class {
   async openFile(snippet) {
     try {
       if (!await openSnippetFile(this.ctx.app, snippet.name)) {
-        new import_obsidian6.Notice(TEXTS.openedInFolder);
+        new import_obsidian7.Notice(TEXTS.openedInFolder);
       }
     } catch (error) {
-      new import_obsidian6.Notice(TEXTS.openFailedPrefix + describe(error));
+      new import_obsidian7.Notice(TEXTS.openFailedPrefix + describe(error));
     }
   }
   /** 打开片段目录。成功就闭嘴——文件管理器自己跳到最前面，就是最好的反馈 */
@@ -23276,22 +23398,22 @@ var AppearanceSwitch = class {
     try {
       await openSnippetFolder(this.ctx.app);
     } catch (error) {
-      new import_obsidian6.Notice(TEXTS.folderFailedPrefix + describe(error));
+      new import_obsidian7.Notice(TEXTS.folderFailedPrefix + describe(error));
     }
   }
   /** 落一次开关：即刻生效就闭嘴，只落了盘就提醒重载，失败就回拨并说明原因 */
   async applyToggle(snippet, value, rollback) {
     try {
       const applied = await setSnippetEnabled(this.ctx.app, snippet.name, value);
-      if (!applied) new import_obsidian6.Notice(TEXTS.pendingReload);
+      if (!applied) new import_obsidian7.Notice(TEXTS.pendingReload);
     } catch (error) {
       rollback();
-      new import_obsidian6.Notice(TEXTS.failedPrefix + describe(error));
+      new import_obsidian7.Notice(TEXTS.failedPrefix + describe(error));
     }
   }
 };
 function paintIcon(el, name, fallback) {
-  (0, import_obsidian6.setIcon)(el, name);
+  (0, import_obsidian7.setIcon)(el, name);
   if (!el.querySelector("svg")) el.setText(fallback);
 }
 function describe(error) {
@@ -23299,11 +23421,11 @@ function describe(error) {
 }
 
 // src/modules/books/createBook.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 
 // src/core/modals.ts
-var import_obsidian7 = require("obsidian");
-var TextInputModal = class extends import_obsidian7.Modal {
+var import_obsidian8 = require("obsidian");
+var TextInputModal = class extends import_obsidian8.Modal {
   constructor(app, options) {
     super(app);
     /** Promise 的 resolve 句柄；结算后置空，避免重复结算与引用滞留 */
@@ -23339,8 +23461,8 @@ var TextInputModal = class extends import_obsidian7.Modal {
     buttonBar.style.justifyContent = "flex-end";
     buttonBar.style.gap = "8px";
     buttonBar.style.marginTop = "16px";
-    new import_obsidian7.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88").onClick(() => this.close());
-    new import_obsidian7.ButtonComponent(buttonBar).setButtonText("\u786E\u8BA4").setCta().onClick(() => this.submit(inputEl.value));
+    new import_obsidian8.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88").onClick(() => this.close());
+    new import_obsidian8.ButtonComponent(buttonBar).setButtonText("\u786E\u8BA4").setCta().onClick(() => this.submit(inputEl.value));
     inputEl.focus();
     inputEl.select();
   }
@@ -23362,7 +23484,7 @@ var TextInputModal = class extends import_obsidian7.Modal {
     if (resolve) resolve(value);
   }
 };
-var TextAreaModal = class extends import_obsidian7.Modal {
+var TextAreaModal = class extends import_obsidian8.Modal {
   constructor(app, options) {
     super(app);
     /** Promise 的 resolve 句柄；结算后置空，避免重复结算与引用滞留 */
@@ -23405,8 +23527,8 @@ var TextAreaModal = class extends import_obsidian7.Modal {
     buttonBar.style.justifyContent = "flex-end";
     buttonBar.style.gap = "8px";
     buttonBar.style.marginTop = "16px";
-    new import_obsidian7.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88").onClick(() => this.close());
-    new import_obsidian7.ButtonComponent(buttonBar).setButtonText("\u786E\u8BA4").setCta().onClick(() => this.submit(textareaEl.value));
+    new import_obsidian8.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88").onClick(() => this.close());
+    new import_obsidian8.ButtonComponent(buttonBar).setButtonText("\u786E\u8BA4").setCta().onClick(() => this.submit(textareaEl.value));
     textareaEl.focus();
   }
   onClose() {
@@ -23427,7 +23549,7 @@ var TextAreaModal = class extends import_obsidian7.Modal {
     if (resolve) resolve(value);
   }
 };
-var ChoiceModal = class extends import_obsidian7.FuzzySuggestModal {
+var ChoiceModal = class extends import_obsidian8.FuzzySuggestModal {
   constructor(app, options) {
     super(app);
     this.resolver = null;
@@ -23488,7 +23610,7 @@ async function createBook(ctx, create2) {
     placeholder: MESSAGES.namePlaceholder
   }).openAndGetValue();
   if (nameInput === null || !nameInput.trim()) {
-    new import_obsidian8.Notice(MESSAGES.nameMissing);
+    new import_obsidian9.Notice(MESSAGES.nameMissing);
     return null;
   }
   const name = wrapBookTitle(nameInput.trim());
@@ -23514,101 +23636,6 @@ function wrapBookTitle(input) {
 
 // src/modules/books/extractCard.ts
 var import_obsidian10 = require("obsidian");
-
-// src/core/time.ts
-var import_obsidian9 = require("obsidian");
-var momentFactory = import_obsidian9.moment;
-function normalizeDateTimeFormat(value) {
-  const candidate = typeof value === "string" ? value.trim() : "";
-  return candidate || DEFAULT_DATETIME_FORMAT;
-}
-function nowStamp(format) {
-  return momentFactory().format(normalizeDateTimeFormat(format));
-}
-function nowStampAndUid(format) {
-  const now = momentFactory();
-  return {
-    stamp: now.format(normalizeDateTimeFormat(format)),
-    uid: Number(now.format(UID_FORMAT))
-  };
-}
-function nowLocalDateTimeParts(format) {
-  const now = momentFactory();
-  return {
-    date: now.format(DAY_FORMAT),
-    time: now.format("HH:mm"),
-    datetime: now.format(normalizeDateTimeFormat(format))
-  };
-}
-function today() {
-  return momentFactory().format(DAY_FORMAT);
-}
-function dayText(value) {
-  var _a2;
-  if (value === null || value === void 0) return null;
-  if (value instanceof Date) {
-    const time = value.getTime();
-    const parsed = momentFactory(time);
-    return Number.isNaN(time) || !parsed.isValid() ? null : parsed.format(DAY_FORMAT);
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return null;
-    const parsed = momentFactory(value);
-    return parsed.isValid() ? parsed.format(DAY_FORMAT) : null;
-  }
-  const text5 = String(value).trim();
-  const day = (_a2 = /^\d{4}-\d{2}-\d{2}/.exec(text5)) == null ? void 0 : _a2[0];
-  if (!day) return null;
-  return momentFactory(day, DAY_FORMAT, true).isValid() ? day : null;
-}
-function dayOfMillis(millis) {
-  return momentFactory(millis).format(DAY_FORMAT);
-}
-function dayOfTitle(title) {
-  return momentFactory(title, DAY_FORMAT, true).isValid() ? title : null;
-}
-function shiftDay(day, amount, unit) {
-  const parsed = momentFactory(day, DAY_FORMAT, true);
-  if (!parsed.isValid()) return day;
-  return parsed.add(amount, unit).format(DAY_FORMAT);
-}
-function daysBetween(from, to) {
-  if (!from || !to) return null;
-  const start = momentFactory(from, DAY_FORMAT, true);
-  const end = momentFactory(to, DAY_FORMAT, true);
-  if (!start.isValid() || !end.isValid()) return null;
-  return Math.round(end.diff(start, "days"));
-}
-function currentPeriodTitle(period) {
-  return momentFactory().format(period.titleFormat);
-}
-function periodOfTitle(title) {
-  for (const period of Object.values(PERIODS)) {
-    if (periodStartOf(period, title) !== null) return period;
-  }
-  return null;
-}
-function periodStartOf(period, title) {
-  const parsed = momentFactory(title, period.titleFormat, true);
-  if (!parsed.isValid()) return null;
-  return parsed.startOf(period.startOfUnit).format(DAY_FORMAT);
-}
-function periodNeighbours(period, title, parentPeriod) {
-  const parsed = momentFactory(title, period.titleFormat, true);
-  if (!parsed.isValid()) return null;
-  const prev = parsed.clone().subtract(1, period.stepUnit).format(period.titleFormat);
-  const next = parsed.clone().add(1, period.stepUnit).format(period.titleFormat);
-  if (!parentPeriod) return { prev, next, parent: null };
-  const anchor = parsed.clone().startOf(period.startOfUnit);
-  const parent = (period.key === "weekly" ? anchor.add(3, "days") : anchor).format(
-    parentPeriod.titleFormat
-  );
-  return { prev, next, parent };
-}
-function titleOfDay(day, period) {
-  const parsed = momentFactory(day, DAY_FORMAT, true);
-  return parsed.isValid() ? parsed.format(period.titleFormat) : null;
-}
 
 // src/modules/books/identity.ts
 function isBookMoc(ctx, file) {
@@ -23789,8 +23816,8 @@ function flattenHighlight(highlight) {
     thoughts: highlight.thoughts.map((thought) => thought.replace(/\s+/g, " ").trim()).filter(Boolean)
   };
 }
-function normalizedHighlightKey(text5) {
-  let normalized = text5;
+function normalizedHighlightKey(text6) {
+  let normalized = text6;
   let previous = "";
   while (normalized !== previous) {
     previous = normalized;
@@ -23838,8 +23865,8 @@ function coalesceHighlights(incoming) {
 var KINDLE_SEPARATOR = /^={6,}\s*$/;
 var APPLE_MARKER = /^(?:摘录来自|Excerpt From)[:：]?\s*(.*)$/;
 function parseHighlightExport(raw) {
-  const text5 = raw.replace(/[﻿￼]/g, "").replace(/\r\n?/g, "\n");
-  const lines = text5.split("\n");
+  const text6 = raw.replace(/[﻿￼]/g, "").replace(/\r\n?/g, "\n");
+  const lines = text6.split("\n");
   if (lines.some((line) => KINDLE_SEPARATOR.test(line.trim()))) {
     return {
       source: "kindle",
@@ -24083,8 +24110,8 @@ function parseKindleBlock(block) {
   const authorMatch = /^(.*?)[（(]([^（()）]*)[)）]\s*$/.exec(titleLine);
   const title = (authorMatch ? authorMatch[1] : titleLine).trim();
   const author = (authorMatch ? authorMatch[2] : "").trim();
-  const text5 = content.join(" ").trim();
-  if (KINDLE_CLIP_LIMIT.test(text5)) return null;
+  const text6 = content.join(" ").trim();
+  if (KINDLE_CLIP_LIMIT.test(text6)) return null;
   return {
     title,
     author,
@@ -24093,7 +24120,7 @@ function parseKindleBlock(block) {
     location: spanOf(/(?:位置\s*#?\s*|location\s+)(\d+)(?:\s*-\s*(\d+))?/i, metaLine),
     // 「第 25 页」「on page ix」「page 14-14」；罗马数字页码取不到数值，按「没有页码」处理
     page: spanOf(/(?:第\s*(\d+)(?:\s*-\s*(\d+))?\s*页|page\s+(\d+)(?:\s*-\s*(\d+))?)/i, metaLine),
-    text: text5
+    text: text6
   };
 }
 function spanOf(pattern, metaLine) {
@@ -24192,14 +24219,14 @@ function parseApple(lines) {
       }
       break;
     }
-    const text5 = stripQuotes(pending2.join(" ").trim());
+    const text6 = stripQuotes(pending2.join(" ").trim());
     pending2 = [];
-    if (!text5) continue;
+    if (!text6) continue;
     const key = stripBookBraces(title);
     const bucket = (_a2 = books.get(key)) != null ? _a2 : { author, highlights: [] };
     if (!books.has(key)) books.set(key, bucket);
     if (!bucket.author && author) bucket.author = author;
-    bucket.highlights.push({ chapter: "", text: text5, thoughts: [] });
+    bucket.highlights.push({ chapter: "", text: text6, thoughts: [] });
   }
   return [...books.entries()].map(([title, bucket]) => ({
     title,
@@ -24207,8 +24234,8 @@ function parseApple(lines) {
     highlights: bucket.highlights
   }));
 }
-function stripQuotes(text5) {
-  return text5.replace(/^[“”"'「『]+/, "").replace(/[“”"'」』]+$/, "").trim();
+function stripQuotes(text6) {
+  return text6.replace(/^[“”"'「『]+/, "").replace(/[“”"'」』]+$/, "").trim();
 }
 function stripBookBraces(title) {
   const inner = /^《(.+)》$/.exec(title.trim());
@@ -24618,14 +24645,14 @@ var ImportConfirmModal = class extends import_obsidian11.Modal {
   }
   /** 一行「标签 + 值」 */
   renderRow(parent, label, value, emphasize = false) {
-    const row = parent.createDiv();
-    row.style.display = "grid";
-    row.style.gridTemplateColumns = "4em minmax(0, 1fr)";
-    row.style.gap = "10px";
-    row.style.padding = "5px 0";
-    const labelEl = row.createDiv({ text: label });
+    const row2 = parent.createDiv();
+    row2.style.display = "grid";
+    row2.style.gridTemplateColumns = "4em minmax(0, 1fr)";
+    row2.style.gap = "10px";
+    row2.style.padding = "5px 0";
+    const labelEl = row2.createDiv({ text: label });
     labelEl.style.color = "var(--text-muted)";
-    const valueEl = row.createDiv({ text: value });
+    const valueEl = row2.createDiv({ text: value });
     valueEl.style.overflowWrap = "anywhere";
     valueEl.style.lineHeight = "1.5";
     if (emphasize) {
@@ -25252,9 +25279,9 @@ async function listAppleBooks() {
     `SELECT DISTINCT ZANNOTATIONASSETID AS id FROM ZAEANNOTATION
          WHERE ZANNOTATIONSELECTEDTEXT IS NOT NULL AND ZANNOTATIONDELETED = 0`
   );
-  const ids = withHighlights.map((row) => {
+  const ids = withHighlights.map((row2) => {
     var _a2;
-    return String((_a2 = row.id) != null ? _a2 : "").trim();
+    return String((_a2 = row2.id) != null ? _a2 : "").trim();
   }).filter(Boolean);
   if (!ids.length) return [];
   const books = await query(
@@ -25262,12 +25289,12 @@ async function listAppleBooks() {
     `SELECT ZASSETID AS id, ZTITLE AS title, ZAUTHOR AS author FROM ZBKLIBRARYASSET
          WHERE ZASSETID IN (${ids.map(quote).join(",")})`
   );
-  return books.map((row) => {
+  return books.map((row2) => {
     var _a2, _b2, _c;
     return {
-      id: String((_a2 = row.id) != null ? _a2 : "").trim(),
-      title: String((_b2 = row.title) != null ? _b2 : "").trim(),
-      author: String((_c = row.author) != null ? _c : "").trim()
+      id: String((_a2 = row2.id) != null ? _a2 : "").trim(),
+      title: String((_b2 = row2.title) != null ? _b2 : "").trim(),
+      author: String((_c = row2.author) != null ? _c : "").trim()
     };
   }).filter((book) => book.id && book.title);
 }
@@ -25284,12 +25311,12 @@ async function readAppleBookHighlights(assetId) {
            AND ZANNOTATIONDELETED = 0
          ORDER BY ZANNOTATIONCREATIONDATE`
   );
-  return rows.map((row) => {
+  return rows.map((row2) => {
     var _a2, _b2, _c;
-    const note = String((_a2 = row.note) != null ? _a2 : "").trim();
+    const note = String((_a2 = row2.note) != null ? _a2 : "").trim();
     return {
-      chapter: String((_b2 = row.chapter) != null ? _b2 : "").trim(),
-      text: String((_c = row.text) != null ? _c : "").trim(),
+      chapter: String((_b2 = row2.chapter) != null ? _b2 : "").trim(),
+      text: String((_c = row2.text) != null ? _c : "").trim(),
       thoughts: note ? [note] : []
     };
   }).filter((highlight) => highlight.text);
@@ -25876,8 +25903,8 @@ function registerPasteLink(ctx) {
 }
 function readUrl(data) {
   var _a2, _b2;
-  const text5 = (_b2 = (_a2 = data == null ? void 0 : data.getData("text/plain")) == null ? void 0 : _a2.trim()) != null ? _b2 : "";
-  return URL_PATTERN.test(text5) ? text5 : null;
+  const text6 = (_b2 = (_a2 = data == null ? void 0 : data.getData("text/plain")) == null ? void 0 : _a2.trim()) != null ? _b2 : "";
+  return URL_PATTERN.test(text6) ? text6 : null;
 }
 function buildLink(selection, url) {
   if (!url) return null;
@@ -26262,9 +26289,9 @@ function eagleReferenceFromTarget(target) {
   let element = target && "nodeType" in target && target.nodeType === 1 ? target : null;
   for (let depth = 0; element && depth < 4; depth += 1, element = element.parentElement) {
     if (element.classList.contains("cm-editor")) break;
-    const text5 = controlText(element);
-    if (text5.length <= 512) {
-      const reference = singleEagleReferenceInText(text5);
+    const text6 = controlText(element);
+    if (text6.length <= 512) {
+      const reference = singleEagleReferenceInText(text6);
       if (reference) return reference;
     }
   }
@@ -26858,8 +26885,8 @@ var FolderCountBadges = class {
       return;
     }
     const badge = (_b2 = badgeOf(titleEl)) != null ? _b2 : titleEl.createSpan({ cls: BADGE_CLASS });
-    const text5 = String(count);
-    if (badge.textContent !== text5) badge.setText(text5);
+    const text6 = String(count);
+    if (badge.textContent !== text6) badge.setText(text6);
     (0, import_obsidian25.setTooltip)(badge, describe3(tally, recursive));
   }
   /** 撤掉全部痕迹。开关关掉与插件卸载共用它，因此「关掉」与「卸载」的结果一字不差 */
@@ -27202,9 +27229,9 @@ var RecentFilesView = class extends import_obsidian27.ItemView {
    * 点一下用 openLinkText 打开——它认路径也认别名，与库里所有双链走同一条解析。
    */
   renderRow(list, file) {
-    const row = list.createDiv({ cls: "ziminos-recent-row", text: file.basename });
-    (0, import_obsidian27.setTooltip)(row, file.path, { placement: "top" });
-    row.addEventListener("click", () => {
+    const row2 = list.createDiv({ cls: "ziminos-recent-row", text: file.basename });
+    (0, import_obsidian27.setTooltip)(row2, file.path, { placement: "top" });
+    row2.addEventListener("click", () => {
       void this.ctx.app.workspace.openLinkText(file.path, "", false);
     });
   }
@@ -32934,14 +32961,14 @@ function validateKeyword(keyword) {
   }
 }
 var latin1Regex = /^[\u0000-\u00FF]*$/;
-function validateLatin1(text5) {
-  if (!latin1Regex.test(text5)) {
+function validateLatin1(text6) {
+  if (!latin1Regex.test(text6)) {
     throw new Error("invalid latin1 text");
   }
 }
-function decodetEXt(text5, buffer, length) {
+function decodetEXt(text6, buffer, length) {
   const keyword = readKeyword(buffer);
-  text5[keyword] = readLatin1(buffer, length - keyword.length - 1);
+  text6[keyword] = readLatin1(buffer, length - keyword.length - 1);
 }
 function readKeyword(buffer) {
   buffer.mark();
@@ -33346,9 +33373,9 @@ var PngDecoder = class extends IOBuffer {
       case DisposeOpType.NONE:
         break;
       case DisposeOpType.BACKGROUND:
-        for (let row = 0; row < this._png.height; row++) {
+        for (let row2 = 0; row2 < this._png.height; row2++) {
           for (let col = 0; col < this._png.width; col++) {
-            const index2 = (row * frame.width + col) * this._png.channels;
+            const index2 = (row2 * frame.width + col) * this._png.channels;
             for (let channel = 0; channel < this._png.channels; channel++) {
               imageFrame.data[index2 + channel] = 0;
             }
@@ -33364,16 +33391,16 @@ var PngDecoder = class extends IOBuffer {
   }
   addFrameDataToCanvas(imageFrame, frame) {
     const maxValue = 1 << this._png.depth;
-    const calculatePixelIndices = (row, col) => {
-      const index2 = ((row + frame.yOffset) * this._png.width + frame.xOffset + col) * this._png.channels;
-      const frameIndex = (row * frame.width + col) * this._png.channels;
+    const calculatePixelIndices = (row2, col) => {
+      const index2 = ((row2 + frame.yOffset) * this._png.width + frame.xOffset + col) * this._png.channels;
+      const frameIndex = (row2 * frame.width + col) * this._png.channels;
       return { index: index2, frameIndex };
     };
     switch (frame.blendOp) {
       case BlendOpType.SOURCE:
-        for (let row = 0; row < frame.height; row++) {
+        for (let row2 = 0; row2 < frame.height; row2++) {
           for (let col = 0; col < frame.width; col++) {
-            const { index: index2, frameIndex } = calculatePixelIndices(row, col);
+            const { index: index2, frameIndex } = calculatePixelIndices(row2, col);
             for (let channel = 0; channel < this._png.channels; channel++) {
               imageFrame.data[index2 + channel] = frame.data[frameIndex + channel];
             }
@@ -33382,9 +33409,9 @@ var PngDecoder = class extends IOBuffer {
         break;
       // https://www.w3.org/TR/png-3/#13Alpha-channel-processing
       case BlendOpType.OVER:
-        for (let row = 0; row < frame.height; row++) {
+        for (let row2 = 0; row2 < frame.height; row2++) {
           for (let col = 0; col < frame.width; col++) {
-            const { index: index2, frameIndex } = calculatePixelIndices(row, col);
+            const { index: index2, frameIndex } = calculatePixelIndices(row2, col);
             for (let channel = 0; channel < this._png.channels; channel++) {
               const sourceAlpha = frame.data[frameIndex + this._png.channels - 1] / maxValue;
               const foregroundValue = channel % (this._png.channels - 1) === 0 ? 1 : frame.data[frameIndex + channel];
@@ -40788,8 +40815,8 @@ function watermarkSvg(input) {
   const offsetY = (input.tile.height - input.mark.height) / 2;
   const opacity = Math.min(1, Math.max(0, input.opacity / 100));
   const logo = input.logoDataUrl && input.mark.logoWidth > 0 ? `<image x="${input.mark.logoX}" y="${round(input.mark.logoY)}" width="${round(input.mark.logoWidth)}" height="${round(input.mark.logoHeight)}" href="${escapeXml(input.logoDataUrl)}"/>` : "";
-  const text5 = input.text ? `<text x="${round(input.mark.textX)}" y="${round(input.mark.textY)}" text-anchor="middle" dominant-baseline="central" fill="${escapeXml(input.color)}" font-family="${escapeXml(input.fontFamily)}" font-size="${input.fontSize}">${escapeXml(input.text)}</text>` : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${input.tile.width}" height="${input.tile.height}"><g opacity="${opacity}" transform="rotate(${input.angle} ${centerX} ${centerY}) translate(${round(offsetX)} ${round(offsetY)})">${logo}${text5}</g></svg>`;
+  const text6 = input.text ? `<text x="${round(input.mark.textX)}" y="${round(input.mark.textY)}" text-anchor="middle" dominant-baseline="central" fill="${escapeXml(input.color)}" font-family="${escapeXml(input.fontFamily)}" font-size="${input.fontSize}">${escapeXml(input.text)}</text>` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${input.tile.width}" height="${input.tile.height}"><g opacity="${opacity}" transform="rotate(${input.angle} ${centerX} ${centerY}) translate(${round(offsetX)} ${round(offsetY)})">${logo}${text6}</g></svg>`;
 }
 function round(value) {
   return Math.round(value * 100) / 100;
@@ -40813,13 +40840,13 @@ function exportLinkUrl(raw) {
   }
 }
 function pageWidthOf(style) {
-  return style.pageWidthMode === "fixed" ? Math.max(1, Math.round(style.pageWidth)) : null;
+  return style.pageMode === "fixed" ? Math.max(1, Math.round(style.pageWidth)) : null;
 }
 function pageMinHeightOf(style) {
-  return style.pageHeightMode === "fixed" ? Math.max(1, Math.round(style.pageHeight)) : null;
+  return style.pageMode === "fixed" ? Math.max(1, Math.round(style.pageHeight)) : null;
 }
-function escapeXml(text5) {
-  return text5.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+function escapeXml(text6) {
+  return text6.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
 // src/modules/export/decorate.ts
@@ -40834,8 +40861,9 @@ function applyDecorations(article, style, context, logo) {
   const content = article.querySelector(".markdown-preview-sizer");
   if (!content) return;
   article.querySelectorAll(DECORATION_SELECTOR).forEach((node2) => node2.remove());
-  article.toggleClass("ziminos-export-guides", style.listGuides);
+  article.addClass("ziminos-export-guides");
   const header2 = buildLine(content, "ziminos-export-header", {
+    enabled: style.headerEnabled,
     text: resolveExportText(style.header.trim(), context),
     align: style.headerAlign,
     color: style.headerColor,
@@ -40849,6 +40877,7 @@ function applyDecorations(article, style, context, logo) {
     content.prepend(header2);
   }
   const footer = buildLine(content, "ziminos-export-footer", {
+    enabled: style.footerEnabled,
     text: resolveExportText(style.footer.trim(), context),
     align: style.footerAlign,
     color: style.footerColor,
@@ -40863,8 +40892,8 @@ function applyDecorations(article, style, context, logo) {
 function buildLine(host, cls, input) {
   const showLogo = Boolean(input.logo) && input.logoSize > 0;
   const url = exportLinkUrl(input.link);
-  const text5 = input.text || (url ? input.link.trim() : "");
-  if (!text5 && !showLogo) return null;
+  const text6 = input.text || (url ? input.link.trim() : "");
+  if (!input.enabled || !text6 && !showLogo) return null;
   const line = host.createDiv({ cls });
   Object.assign(line.style, {
     display: "flex",
@@ -40884,8 +40913,8 @@ function buildLine(host, cls, input) {
       flex: "0 0 auto"
     });
   }
-  if (text5) {
-    const span = line.createSpan({ text: text5 });
+  if (text6) {
+    const span = line.createSpan({ text: text6 });
     if (url && input.format === "pdf") {
       span.style.textDecoration = "underline";
       span.style.textUnderlineOffset = "0.22em";
@@ -40894,16 +40923,16 @@ function buildLine(host, cls, input) {
   return line;
 }
 function applyWatermark(article, style, context, logo) {
-  const text5 = resolveExportText(style.watermark.trim(), context);
+  const text6 = resolveExportText(style.watermark.trim(), context);
   const showLogo = Boolean(logo) && style.watermarkLogoSize > 0;
-  if (!text5 && !showLogo) return;
+  if (!style.watermarkEnabled || !text6 && !showLogo) return;
   const computed = getComputedStyle(article);
   const fontFamily = computed.fontFamily || "sans-serif";
   const tiled = style.watermarkMode === "tile";
   const logoHeight = showLogo ? style.watermarkLogoSize : 0;
   const logoWidth = showLogo && logo ? Math.max(1, Math.round(logoHeight * logo.width / logo.height)) : 0;
   const mark = watermarkMark({
-    textWidth: text5 ? measureTextWidth(text5, style.watermarkSize, fontFamily) : 0,
+    textWidth: text6 ? measureTextWidth(text6, style.watermarkSize, fontFamily) : 0,
     fontSize: style.watermarkSize,
     logoWidth,
     logoHeight
@@ -40916,7 +40945,7 @@ function applyWatermark(article, style, context, logo) {
     tiled ? style.watermarkGapY : 0
   );
   const svg2 = watermarkSvg({
-    text: text5,
+    text: text6,
     logoDataUrl: showLogo && logo ? logo.dataUrl : "",
     mark,
     tile,
@@ -40945,12 +40974,12 @@ function applyWatermark(article, style, context, logo) {
     backgroundPosition: tiled ? "0 0" : watermarkPosition(style.watermarkAnchor, style.watermarkGapX, style.watermarkGapY)
   });
 }
-function measureTextWidth(text5, fontSize, fontFamily) {
+function measureTextWidth(text6, fontSize, fontFamily) {
   ruler != null ? ruler : ruler = document.createElement("canvas");
   const context = ruler.getContext("2d");
-  if (!context) return text5.length * fontSize * 0.9;
+  if (!context) return text6.length * fontSize * 0.9;
   context.font = `${fontSize}px ${fontFamily}`;
-  return context.measureText(text5).width || text5.length * fontSize * 0.9;
+  return context.measureText(text6).width || text6.length * fontSize * 0.9;
 }
 function linkRegions(article, style) {
   const regions = [];
@@ -41179,16 +41208,266 @@ function resolveOpenDialog() {
   }
 }
 
+// src/modules/export/panel.ts
+function buildExportPanel(host, panel) {
+  const refreshers = [];
+  const S2 = () => panel.value();
+  duo(
+    row(host, "\u683C\u5F0F", "PNG \u662F\u4E00\u6574\u5F20\u957F\u56FE\uFF1BPDF \u662F\u53EA\u542B\u4E00\u9875\u7684\u5B8C\u6574\u957F\u9875\u3002\u4E24\u8005\u62CD\u7684\u662F\u540C\u4E00\u5F20\u56FE").control,
+    ["png", EXPORT_FORMAT_LABELS.png],
+    ["pdf", EXPORT_FORMAT_LABELS.pdf],
+    () => S2().format,
+    (format) => panel.update({ format }),
+    refreshers
+  );
+  duo(
+    row(host, "\u7EB8\u5F20", "\u81EA\u9002\u5E94\uFF1D\u8DDF\u7740\u7F16\u8F91\u533A\u7684\u6B63\u6587\u680F\u8D70\uFF1B\u81EA\u5B9A\uFF1D\u9489\u6B7B\u5C3A\u5BF8\uFF0C\u6362\u53F0\u7535\u8111\u4E5F\u4E00\u6837").control,
+    ["auto", PAGE_SIZE_MODE_LABELS.auto],
+    ["fixed", PAGE_SIZE_MODE_LABELS.fixed],
+    () => S2().pageMode,
+    (pageMode) => panel.update({ pageMode }),
+    refreshers
+  );
+  const pageBody = host.createDiv({ cls: "ziminos-export-body" });
+  const presetRow = row(pageBody, "\u9884\u8BBE", "A4 / A3 \u6309 96dpi \u6362\u7B97\u6210\u50CF\u7D20\uFF1B\u9009\u4E2D\u5373\u628A\u4E0B\u9762\u4E24\u4E2A\u6570\u586B\u597D\uFF0C\u6B64\u540E\u7167\u6837\u80FD\u63A5\u7740\u62D6");
+  segmented(
+    presetRow.control,
+    ["free", "a4", "a3"].map((key) => [key, PAPER_PRESET_LABELS[key]]),
+    () => S2().paperPreset,
+    (preset) => {
+      const size = PAPER_PRESET_SIZES[preset];
+      panel.update(size ? { paperPreset: preset, ...size } : { paperPreset: preset });
+    },
+    refreshers
+  );
+  sliders(pageBody, "page", panel, refreshers);
+  segmented(
+    row(host, "\u660E\u6697", "\u5BFC\u51FA\u8FD9\u5F20\u7EB8\u7528\u54EA\u4E00\u5957\u914D\u8272\uFF0C\u4E0E Obsidian \u6B64\u523B\u662F\u4EC0\u4E48\u4E3B\u9898\u5206\u5F00\u3002\u5E38\u5E74\u7528\u6697\u8272\u5199\u4F5C\u3001\u5374\u8981\u4EA4\u4E00\u5F20\u767D\u5E95\u7ED9\u5BA2\u6237\uFF0C\u662F\u5F88\u5E38\u89C1\u7684\u4E00\u4EF6\u4E8B").control,
+    ["auto", "light", "dark"].map((key) => [key, EXPORT_THEME_LABELS[key]]),
+    () => S2().theme,
+    (theme) => panel.update({ theme }),
+    refreshers
+  );
+  buildLogoRow(host, panel, refreshers);
+  buildLine2(host, panel, "header", "\u9875\u7709", "\u663E\u793A\u5728\u6587\u7AE0\u6807\u9898\u4E0A\u65B9", refreshers);
+  buildLine2(host, panel, "footer", "\u9875\u811A", "\u663E\u793A\u5728\u6587\u7AE0\u6B63\u6587\u4E0B\u65B9", refreshers);
+  buildWatermark(host, panel, refreshers);
+  refreshers.push(() => {
+    pageBody.hidden = S2().pageMode !== "fixed";
+    presetRow.row.hidden = S2().format !== "pdf";
+  });
+  return () => {
+    for (const refresh of refreshers) refresh();
+  };
+}
+function buildLogoRow(host, panel, refreshers) {
+  const cell = row(host, "\u6807\u5FD7", "\u4E00\u5F20\u56FE\uFF0C\u9875\u7709\u9875\u811A\u6C34\u5370\u4E09\u5904\u5404\u81EA\u51B3\u5B9A\u653E\u591A\u5927\uFF1B0 \u5C31\u662F\u90A3\u4E00\u5904\u4E0D\u653E");
+  const box = cell.control.createDiv({ cls: "ziminos-export-logo" });
+  const thumb = box.createDiv({ cls: "ziminos-export-logo-thumb" });
+  const pick = box.createEl("button", { cls: "ziminos-export-mini", text: "\u9009\u56FE", attr: { type: "button" } });
+  const name = box.createDiv({ cls: "ziminos-export-logo-name" });
+  const clear = box.createEl("button", {
+    cls: "ziminos-export-reset",
+    text: "\u2715",
+    attr: { type: "button", title: "\u4E0D\u7528\u6807\u5FD7" }
+  });
+  pick.addEventListener("click", () => panel.pickLogo());
+  clear.addEventListener("click", () => panel.clearLogo());
+  refreshers.push(() => {
+    const url = panel.logoUrl();
+    thumb.style.backgroundImage = url ? `url("${url}")` : "";
+    name.setText(panel.logoName());
+  });
+}
+function buildLine2(host, panel, section, label, tip, refreshers) {
+  const isHeader = section === "header";
+  const onKey = isHeader ? "headerEnabled" : "footerEnabled";
+  const alignKey = isHeader ? "headerAlign" : "footerAlign";
+  const colorKey = isHeader ? "headerColor" : "footerColor";
+  const linkKey = isHeader ? "headerLink" : "footerLink";
+  const S2 = () => panel.value();
+  rule(host);
+  const head = row(host, label, tip);
+  head.row.addClass("ziminos-export-head");
+  swatch(head.control, colorKey, panel, refreshers);
+  toggle(head.control, () => S2()[onKey], (on) => panel.update({ [onKey]: on }), refreshers);
+  const body = host.createDiv({ cls: "ziminos-export-body" });
+  segmented(
+    row(body, "\u4F4D\u7F6E", "\u8FD9\u4E00\u884C\u9760\u7EB8\u7684\u54EA\u4E00\u8FB9").control,
+    ["left", "center", "right"].map((key) => [key, EXPORT_ALIGN_LABELS[key]]),
+    () => S2()[alignKey],
+    (align) => panel.update({ [alignKey]: align }),
+    refreshers
+  );
+  text5(
+    row(body, "\u6587\u5B57", "\u53EF\u7528 {title}\u3001{date}\u3001{time}\uFF1B\u7559\u7A7A\u5C31\u53EA\u653E\u6807\u5FD7\u6216\u94FE\u63A5").control,
+    section,
+    "\u7559\u7A7A\u5373\u4E0D\u52A0",
+    panel,
+    refreshers
+  );
+  buildLinkRow(body, panel, linkKey, refreshers);
+  sliders(body, section, panel, refreshers);
+  refreshers.push(() => {
+    body.hidden = !S2()[onKey];
+  });
+}
+function buildLinkRow(host, panel, key, refreshers) {
+  const cell = row(host, "\u94FE\u63A5", "");
+  text5(cell.control, key, "edu.example.com", panel, refreshers);
+  refreshers.push(() => {
+    const png = panel.value().format === "png";
+    cell.row.toggleClass("ziminos-export-warn", png);
+    cell.row.setAttribute("title", png ? "PNG \u662F\u56FE\u7247\uFF0C\u70B9\u4E0D\u4E86\u3002\u8981\u53EF\u70B9\u7684\u94FE\u63A5\uFF0C\u628A\u683C\u5F0F\u6362\u6210 PDF" : "\u586B\u4E00\u4E2A\u7F51\u5740\uFF0C\u8FD9\u4E00\u884C\u5728 PDF \u91CC\u6574\u6BB5\u53EF\u70B9\u5E76\u5E26\u4E0B\u5212\u7EBF\uFF08\u4E0D\u5E26 https:// \u4E5F\u8BA4\uFF09");
+  });
+}
+function buildWatermark(host, panel, refreshers) {
+  const S2 = () => panel.value();
+  rule(host);
+  const head = row(host, "\u6C34\u5370", "\u94FA\u5728\u6B63\u6587\u4E4B\u4E0A\u7684\u90A3\u4E00\u5C42");
+  head.row.addClass("ziminos-export-head");
+  swatch(head.control, "watermarkColor", panel, refreshers);
+  toggle(
+    head.control,
+    () => S2().watermarkEnabled,
+    (on) => panel.update({ watermarkEnabled: on }),
+    refreshers
+  );
+  const body = host.createDiv({ cls: "ziminos-export-body" });
+  segmented(
+    row(body, "\u5E03\u5C40", "\u5E73\u94FA\u88C1\u4E0D\u6389\uFF0C\u9002\u5408\u9632\u8F6C\u53D1\uFF1B\u5355\u4E2A\u5B89\u9759\uFF0C\u9002\u5408\u5F53\u843D\u6B3E").control,
+    ["tile", "single"].map((key) => [key, WATERMARK_MODE_LABELS[key]]),
+    () => S2().watermarkMode,
+    (mode) => panel.update({ watermarkMode: mode }),
+    refreshers
+  );
+  const anchorRow = row(body, "\u4F4D\u7F6E", "\u5355\u4E2A\u843D\u6B3E\u843D\u5728\u7EB8\u7684\u54EA\u4E00\u683C");
+  anchorRow.row.addClass("ziminos-export-anchor");
+  segmented(
+    anchorRow.control,
+    WATERMARK_ANCHOR_GRID.flat().map((key) => [key, WATERMARK_ANCHOR_LABELS[key]]),
+    () => S2().watermarkAnchor,
+    (anchor) => panel.update({ watermarkAnchor: anchor }),
+    refreshers,
+    "ziminos-export-grid"
+  );
+  text5(
+    row(body, "\u6587\u5B57", "\u53EF\u7528 {title}\u3001{date}\u3001{time}\uFF1B\u7559\u7A7A\u5C31\u53EA\u653E\u6807\u5FD7").control,
+    "watermark",
+    "\u7559\u7A7A\u5373\u4E0D\u52A0",
+    panel,
+    refreshers
+  );
+  sliders(body, "watermark", panel, refreshers);
+  refreshers.push(() => {
+    body.hidden = !S2().watermarkEnabled;
+    anchorRow.row.hidden = S2().watermarkMode !== "single";
+  });
+}
+function row(host, label, tip) {
+  const line = host.createDiv({ cls: "ziminos-export-row" });
+  const name = line.createDiv({ cls: "ziminos-export-label", text: label });
+  if (tip) name.setAttribute("title", tip);
+  return { row: line, control: line.createDiv({ cls: "ziminos-export-ctl" }) };
+}
+function rule(host) {
+  host.createDiv({ cls: "ziminos-export-rule" });
+}
+function duo(host, left, right, read, write, refreshers) {
+  const track = host.createDiv({ cls: "ziminos-export-duo" });
+  track.createEl("i", { cls: "ziminos-export-duo-thumb" });
+  const labels = [left, right].map((entry) => {
+    const span = track.createEl("span", { cls: "ziminos-export-duo-lab", text: entry[1] });
+    span.addEventListener("click", () => write(entry[0]));
+    return span;
+  });
+  refreshers.push(() => {
+    track.dataset.at = read() === left[0] ? "0" : "1";
+    void labels;
+  });
+}
+function toggle(host, read, write, refreshers) {
+  const button = host.createEl("button", {
+    cls: "ziminos-export-toggle",
+    attr: { type: "button", role: "switch" }
+  });
+  button.addEventListener("click", () => write(!read()));
+  refreshers.push(() => button.setAttribute("aria-checked", read() ? "true" : "false"));
+}
+function swatch(host, key, panel, refreshers) {
+  const box = host.createEl("button", {
+    cls: "ziminos-export-swatch",
+    attr: { type: "button", title: "\u6587\u5B57\u989C\u8272\uFF08A\uFF1D\u8DDF\u968F\u6B63\u6587\u8272\uFF09" }
+  });
+  const input = box.createEl("input", { attr: { type: "color" } });
+  const reset = host.createEl("button", {
+    cls: "ziminos-export-reset",
+    text: "\u21BA",
+    attr: { type: "button", title: "\u8DDF\u968F\u6B63\u6587\u8272" }
+  });
+  input.addEventListener("input", () => panel.update({ [key]: input.value }));
+  reset.addEventListener("click", () => panel.update({ [key]: "" }));
+  refreshers.push(() => {
+    const current = panel.value()[key];
+    box.toggleClass("is-auto", !current);
+    input.value = current || panel.inheritedColor();
+  });
+}
+function segmented(host, items, read, write, refreshers, extraClass) {
+  const group = host.createDiv({ cls: "ziminos-export-seg" });
+  if (extraClass) group.addClass(extraClass);
+  const buttons = items.map(([value, label]) => {
+    const button = group.createEl("button", { text: label, attr: { type: "button" } });
+    button.addEventListener("click", () => write(value));
+    return { value, button };
+  });
+  refreshers.push(() => {
+    const current = read();
+    for (const entry of buttons) entry.button.toggleClass("is-on", entry.value === current);
+  });
+}
+function text5(host, key, placeholder, panel, refreshers) {
+  const input = host.createEl("input", { attr: { type: "text", placeholder } });
+  input.addEventListener("input", () => panel.update({ [key]: input.value }));
+  refreshers.push(() => {
+    const current = panel.value()[key];
+    if (input.value !== current) input.value = current;
+  });
+}
+function sliders(host, section, panel, refreshers) {
+  for (const spec of EXPORT_SLIDERS.filter((entry) => entry.section === section)) {
+    const cell = row(host, spec.name, spec.desc);
+    const slider = cell.control.createEl("input", {
+      cls: "ziminos-export-slider",
+      attr: { type: "range", min: spec.min, max: spec.max, step: spec.step }
+    });
+    const readout = cell.control.createEl("input", {
+      cls: "ziminos-export-value",
+      attr: { type: "number", min: spec.min, max: spec.max, step: spec.step }
+    });
+    const put = (raw) => panel.update({
+      [spec.key]: Math.min(spec.max, Math.max(spec.min, Math.round(raw)))
+    });
+    slider.addEventListener("input", () => put(Number(slider.value)));
+    readout.addEventListener("input", () => {
+      const typed = Number.parseFloat(readout.value);
+      if (Number.isFinite(typed)) put(typed);
+    });
+    refreshers.push(() => {
+      const current = panel.value()[spec.key];
+      if (Number(slider.value) !== current) slider.value = String(current);
+      if (Number.parseFloat(readout.value) !== current) readout.value = String(current);
+    });
+  }
+}
+
 // src/modules/export/modal.ts
 var VIEWPORT_PADDING = 24;
-function syncText(text5, value) {
-  if (text5.getValue() !== value) text5.setValue(value);
-}
 var ExportPreviewModal = class extends import_obsidian30.Modal {
   constructor(app, paper, initial, context, confirm) {
     super(app);
     this.resolver = null;
-    this.refreshers = [];
+    this.refreshPanel = null;
     this.canvasEl = null;
     this.viewportEl = null;
     this.metaEl = null;
@@ -41214,15 +41493,25 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
   onOpen() {
     this.value = this.initial;
     this.logo = null;
-    this.refreshers.length = 0;
     this.modalEl.addClass("ziminos-export-modal");
     this.titleEl.setText("\u5BFC\u51FA\u5F53\u524D\u7B14\u8BB0");
     this.contentEl.empty();
     const layout = this.contentEl.createDiv({ cls: "ziminos-export-layout" });
     this.buildPreview(layout.createDiv({ cls: "ziminos-export-preview" }));
-    this.buildControls(layout.createDiv({ cls: "ziminos-export-controls" }));
+    this.refreshPanel = buildExportPanel(layout.createDiv({ cls: "ziminos-export-controls" }), {
+      value: () => this.value,
+      update: (patch) => this.update(patch),
+      logoUrl: () => {
+        var _a2, _b2;
+        return (_b2 = (_a2 = this.logo) == null ? void 0 : _a2.dataUrl) != null ? _b2 : "";
+      },
+      logoName: () => this.logoStatus(),
+      inheritedColor: () => hexOf(getComputedStyle(this.paper.article).color) || "#6b7280",
+      pickLogo: () => void this.pickLogo(),
+      clearLogo: () => this.update({ logo: "" })
+    });
     this.buildActions();
-    this.syncControls();
+    this.refreshPanel();
     this.redraw();
     void this.loadLogo();
   }
@@ -41234,10 +41523,10 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
     (_a2 = this.observer) == null ? void 0 : _a2.disconnect();
     this.observer = null;
     this.paper.unmount();
+    this.refreshPanel = null;
     this.canvasEl = null;
     this.viewportEl = null;
     this.metaEl = null;
-    this.refreshers.length = 0;
     this.contentEl.empty();
     this.settle(null);
   }
@@ -41252,11 +41541,10 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
     this.observer.observe(this.viewportEl);
   }
   /**
-   * 先定纸的尺寸，再施装饰，最后重算预览缩放——三步的先后不能换。
+   * 先定明暗、再定尺寸、然后施装饰，最后重算预览缩放——四步的先后不能换。
    *
-   * 改纸宽会让正文重新折行、纸变高，而水印层要盖满**此刻**这张纸；
-   * 装饰跑在尺寸前面的话，水印量到的是上一张纸的高度。内容一帧都不重渲：
-   * Markdown 早已是 DOM，改宽度只是让浏览器重排一次。
+   * 明暗改的是配色变量，而装饰层要读正文色去定水印颜色；纸宽会让正文重新折行、纸变高，
+   * 而水印层要盖满**此刻**这张纸。内容一帧都不重渲：Markdown 早已是 DOM，改宽度只是重排一次。
    */
   redraw() {
     this.paper.setTheme(this.value.theme);
@@ -41287,112 +41575,37 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
     );
   }
   // ============================================================
-  // 控件
+  // 标志
   // ============================================================
-  buildControls(host) {
-    new import_obsidian30.Setting(host).setName("\u683C\u5F0F").setDesc("PNG \u662F\u4E00\u6574\u5F20\u957F\u56FE\uFF1BPDF \u662F\u53EA\u542B\u4E00\u9875\u7684\u5B8C\u6574\u957F\u9875\u3002\u4E24\u8005\u62CD\u7684\u662F\u540C\u4E00\u5F20\u56FE\u3002").setClass("ziminos-export-field").addDropdown((dropdown) => {
-      for (const [format, label] of Object.entries(EXPORT_FORMAT_LABELS)) {
-        dropdown.addOption(format, label);
-      }
-      dropdown.onChange((format) => this.update({ format }));
-      this.refreshers.push(() => dropdown.setValue(this.value.format));
-    });
-    this.buildPage(host);
-    const themeSetting = new import_obsidian30.Setting(host).setName("\u660E\u6697").setDesc("\u5BFC\u51FA\u8FD9\u5F20\u7EB8\u7528\u54EA\u4E00\u5957\u914D\u8272\uFF0C\u4E0E Obsidian \u6B64\u523B\u662F\u4EC0\u4E48\u4E3B\u9898\u5206\u5F00\u3002\u5E38\u5E74\u7528\u6697\u8272\u5199\u4F5C\u3001\u5374\u8981\u4EA4\u4E00\u5F20\u767D\u5E95\u7ED9\u5BA2\u6237\uFF0C\u662F\u5F88\u5E38\u89C1\u7684\u4E00\u4EF6\u4E8B\u3002").setClass("ziminos-export-field");
-    this.addPicker(
-      themeSetting,
-      ["auto", "light", "dark"],
-      EXPORT_THEME_LABELS,
-      () => this.value.theme,
-      (theme) => this.update({ theme })
-    );
-    new import_obsidian30.Setting(host).setName("\u6B63\u6587").setHeading();
-    new import_obsidian30.Setting(host).setName("\u5217\u8868\u53C2\u8003\u7EBF").setDesc("\u7ED9\u5217\u8868\u753B\u4E0A\u7F29\u8FDB\u53C2\u8003\u7EBF\uFF0C\u4E00\u773C\u770B\u5F97\u51FA\u54EA\u51E0\u6761\u662F\u540C\u4E00\u5C42\u3002").setClass("ziminos-export-field").addToggle((toggle) => {
-      toggle.onChange((on) => this.update({ listGuides: on }));
-      this.refreshers.push(() => toggle.setValue(this.value.listGuides));
-    });
-    this.buildLogoPicker(host);
-    this.buildLine(host, "header", "\u9875\u7709", "\u663E\u793A\u5728\u6587\u7AE0\u6807\u9898\u4E0A\u65B9\u3002");
-    this.buildLine(host, "footer", "\u9875\u811A", "\u663E\u793A\u5728\u6587\u7AE0\u6B63\u6587\u4E0B\u65B9\u3002");
-    this.buildWatermark(host);
-  }
-  /**
-   * 纸张两边各自的定法。
-   *
-   * 宽与高分成两个开关而不是一个「自定尺寸」总开关：它们是两个独立的问题。
-   * 只想把宽度钉成 800 让手机上读着舒服、高度仍随内容长的人，是最常见的那一种；
-   * 合成一个开关，他就得连高度一起替自己决定一次。
-   */
-  buildPage(host) {
-    new import_obsidian30.Setting(host).setName("\u7EB8\u5F20").setHeading();
-    const rows = this.buildSliders(host, "page");
-    for (const row of rows) {
-      const modeKey = row.spec.key === "pageWidth" ? "pageWidthMode" : "pageHeightMode";
-      const picker = new import_obsidian30.Setting(host).setName(row.spec.key === "pageWidth" ? "\u5BBD\u5EA6" : "\u9AD8\u5EA6").setDesc(row.spec.key === "pageWidth" ? "\u81EA\u9002\u5E94\uFF1D\u8DDF\u7740\u7F16\u8F91\u533A\u7684\u6B63\u6587\u680F\u8D70\uFF1B\u81EA\u5B9A\uFF1D\u9489\u6B7B\u4E00\u4E2A\u6570\uFF0C\u6362\u53F0\u7535\u8111\u4E5F\u4E00\u6837\u3002" : "\u81EA\u9002\u5E94\uFF1D\u8DDF\u7740\u5185\u5BB9\u957F\uFF1B\u81EA\u5B9A\uFF1D\u81F3\u5C11\u8FD9\u4E48\u9AD8\uFF0C\u5185\u5BB9\u66F4\u591A\u65F6\u7167\u6837\u5F80\u4E0B\u957F\u3002").setClass("ziminos-export-field");
-      this.addPicker(
-        picker,
-        ["auto", "fixed"],
-        PAGE_SIZE_MODE_LABELS,
-        () => this.value[modeKey],
-        (mode) => this.update({ [modeKey]: mode })
-      );
-      row.setting.settingEl.before(picker.settingEl);
-      this.refreshers.push(() => row.setting.setDisabled(this.value[modeKey] !== "fixed"));
-    }
-  }
-  /**
-   * 选标志。两条路，各答一个不同的问题。
-   *
-   * **从电脑选**是主路：用户的 logo 本来就在电脑上，逼他先把图拖进笔记库、再回来选一遍，
-   * 是把实现细节（「我只认库内路径」）当成了他的工序。选完由插件复制进库，
-   * 于是那条路径仍然是库内路径——可同步、换台电脑还认得、手机上也画得出来。
-   *
-   * **从库里选**是次路，也是手机上唯一的一条：库里的图片是一个封闭集合，
-   * 因此走 ChoiceModal 而不是让人手打路径——这条纪律与 core/modals 里那句
-   * 「凡取值来自封闭集合一律走 ChoiceModal」同源：手打出来的路径能通过一切非空校验，
-   * 然后安静地渲不出图。
-   */
-  buildLogoPicker(host) {
-    new import_obsidian30.Setting(host).setName("\u54C1\u724C\u6807\u5FD7").setHeading();
-    const fromDisk = canImportLogo();
-    const setting = new import_obsidian30.Setting(host).setName("\u56FE\u7247").setClass("ziminos-export-field").setClass("ziminos-export-logo");
-    if (fromDisk) {
-      setting.addButton((button) => {
-        button.setButtonText("\u4ECE\u7535\u8111\u9009\u2026").setCta().onClick(() => void this.importLogo());
-      });
-    }
-    setting.addButton((button) => {
-      button.setButtonText(fromDisk ? "\u4ECE\u5E93\u91CC\u9009" : "\u9009\u62E9\u56FE\u7247\u2026").onClick(() => void this.pickFromVault());
-    });
-    setting.addExtraButton((button) => {
-      button.setIcon("x").setTooltip("\u4E0D\u7528\u6807\u5FD7").onClick(() => this.update({ logo: "" }));
-    });
-    this.refreshers.push(() => setting.setDesc(this.logoStatus()));
-  }
-  /** 从电脑上挑一张，复制进库。取消什么都不做；失败如实说一句，不静默 */
-  async importLogo() {
-    try {
-      const path = await importLogoFromDisk(this.app);
-      if (!path) return;
-      this.update({ logo: path });
-      new import_obsidian30.Notice(`\u6807\u5FD7\u5DF2\u653E\u8FDB\u7B14\u8BB0\u5E93\uFF1A${path}`);
-    } catch (error) {
-      new import_obsidian30.Notice(`\u9009\u56FE\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
   /** 三种状态各有各的话：没选过、选了但读不出、读出来了多大 */
   logoStatus() {
     const path = this.value.logo.trim();
-    if (!path) {
-      return canImportLogo() ? "\u4ECE\u7535\u8111\u4E0A\u6311\u4E00\u5F20\uFF08\u4F1A\u590D\u5236\u8FDB\u7B14\u8BB0\u5E93\uFF09\uFF0C\u6216\u4ECE\u5E93\u91CC\u5DF2\u6709\u7684\u56FE\u7247\u91CC\u9009\u3002\u9875\u7709\u3001\u9875\u811A\u4E0E\u6C34\u5370\u5404\u81EA\u51B3\u5B9A\u653E\u591A\u5927\uFF0C\u5C3A\u5BF8 0 \u5C31\u662F\u90A3\u4E00\u5904\u4E0D\u653E\u3002" : "\u4ECE\u5E93\u91CC\u5DF2\u6709\u7684\u56FE\u7247\u91CC\u9009\u4E00\u5F20\u3002\u9875\u7709\u3001\u9875\u811A\u4E0E\u6C34\u5370\u5404\u81EA\u51B3\u5B9A\u653E\u591A\u5927\uFF0C\u5C3A\u5BF8 0 \u5C31\u662F\u90A3\u4E00\u5904\u4E0D\u653E\u3002";
-    }
-    if (!this.logo) return `\u8FD9\u5F20\u56FE\u8BFB\u4E0D\u51FA\u6765\u4E86\uFF08\u53EF\u80FD\u5DF2\u88AB\u6539\u540D\u6216\u5220\u9664\uFF09\uFF1A${path}`;
-    return `${path}\u3000\xB7\u3000${this.logo.width} \xD7 ${this.logo.height}`;
+    if (!path) return "\u672A\u9009";
+    if (!this.logo) return `\u8BFB\u4E0D\u51FA\uFF1A${path}`;
+    return path;
   }
-  async pickFromVault() {
+  /**
+   * 选标志只有一枚按钮，平台决定它开哪一种。
+   *
+   * 桌面端开系统文件框——用户的 logo 本来就在电脑上，逼他先拖进笔记库再回来选一遍，
+   * 是把实现细节当成他的工序；选完由插件复制进库，存的仍是库内路径。
+   * 手机上没有那个框，就退回库内图片清单（一个封闭集合，走 ChoiceModal 而不是手打路径）。
+   */
+  async pickLogo() {
+    if (canImportLogo()) {
+      try {
+        const path = await importLogoFromDisk(this.app);
+        if (!path) return;
+        this.update({ logo: path });
+        new import_obsidian30.Notice(`\u6807\u5FD7\u5DF2\u653E\u8FDB\u7B14\u8BB0\u5E93\uFF1A${path}`);
+      } catch (error) {
+        new import_obsidian30.Notice(`\u9009\u56FE\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+      }
+      return;
+    }
     const images = this.app.vault.getFiles().filter((file) => isLogoFile(file));
     if (!images.length) {
-      new import_obsidian30.Notice(canImportLogo() ? "\u7B14\u8BB0\u5E93\u91CC\u8FD8\u6CA1\u6709\u56FE\u7247\u3002\u7528\u300C\u4ECE\u7535\u8111\u9009\u2026\u300D\u76F4\u63A5\u6311\u4E00\u5F20\uFF0C\u63D2\u4EF6\u4F1A\u66FF\u4F60\u590D\u5236\u8FDB\u5E93\u3002" : "\u7B14\u8BB0\u5E93\u91CC\u8FD8\u6CA1\u6709\u56FE\u7247\u3002\u5148\u628A\u6807\u5FD7\u653E\u8FDB\u5E93\u91CC\uFF0C\u518D\u56DE\u6765\u9009\u3002");
+      new import_obsidian30.Notice("\u7B14\u8BB0\u5E93\u91CC\u8FD8\u6CA1\u6709\u56FE\u7247\u3002\u5148\u628A\u6807\u5FD7\u653E\u8FDB\u5E93\u91CC\uFF0C\u518D\u56DE\u6765\u9009\u3002");
       return;
     }
     const picked = await new ChoiceModal(this.app, {
@@ -41400,173 +41613,34 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
       items: images,
       labelOf: (file) => file.path
     }).openAndGetChoice();
-    if (!picked) return;
-    this.update({ logo: picked.path });
+    if (picked) this.update({ logo: picked.path });
   }
-  /** 页眉与页脚是同一种东西的两个落点，所以只有一份画法 */
-  buildLine(host, section, name, description) {
-    const alignKey = section === "header" ? "headerAlign" : "footerAlign";
-    const logoSizeKey = section === "header" ? "headerLogoSize" : "footerLogoSize";
-    new import_obsidian30.Setting(host).setName(name).setHeading();
-    new import_obsidian30.Setting(host).setName("\u6587\u5B57").setDesc(`${description}\u7559\u7A7A\u5373\u4E0D\u6DFB\u52A0\uFF1B\u53EF\u7528 {title}\u3001{date}\u3001{time}\u3002`).setClass("ziminos-export-field").addText((text5) => {
-      text5.setPlaceholder("\u7559\u7A7A\u5373\u4E0D\u6DFB\u52A0").onChange((input) => this.update({ [section]: input }));
-      this.refreshers.push(() => syncText(text5, this.value[section]));
-    });
-    const linkKey = section === "header" ? "headerLink" : "footerLink";
-    const colorKey = section === "header" ? "headerColor" : "footerColor";
-    new import_obsidian30.Setting(host).setName("\u94FE\u63A5").setDesc("\u586B\u4E00\u4E2A\u7F51\u5740\uFF0C\u8FD9\u4E00\u884C\u5728 PDF \u91CC\u6574\u6BB5\u53EF\u70B9\uFF08\u4E0D\u5E26 https:// \u4E5F\u8BA4\uFF09\u3002").setClass("ziminos-export-field").addText((text5) => {
-      text5.setPlaceholder("edu.example.com").onChange((input) => this.update({ [linkKey]: input }));
-      this.refreshers.push(() => syncText(text5, this.value[linkKey]));
-    }).then((setting) => this.refreshers.push(() => {
-      setting.descEl.toggleClass("ziminos-export-warn", this.value.format === "png");
-      setting.setDesc(this.value.format === "png" ? "PNG \u662F\u56FE\u7247\uFF0C\u70B9\u4E0D\u4E86\u3002\u8981\u53EF\u70B9\u7684\u94FE\u63A5\uFF0C\u628A\u683C\u5F0F\u6362\u6210 PDF\u3002" : "\u586B\u4E00\u4E2A\u7F51\u5740\uFF0C\u8FD9\u4E00\u884C\u5728 PDF \u91CC\u6574\u6BB5\u53EF\u70B9\uFF08\u4E0D\u5E26 https:// \u4E5F\u8BA4\uFF09\u3002");
-    }));
-    this.addColor(host, colorKey, "\u6587\u5B57\u989C\u8272");
-    const alignSetting = new import_obsidian30.Setting(host).setName("\u4F4D\u7F6E").setClass("ziminos-export-field");
-    this.addPicker(
-      alignSetting,
-      ["left", "center", "right"],
-      EXPORT_ALIGN_LABELS,
-      () => this.value[alignKey],
-      (align) => this.update({ [alignKey]: align })
-    );
-    const rows = this.buildSliders(host, section);
-    this.refreshers.push(() => {
-      const state = this.stateOf(this.value[section], this.value[logoSizeKey]);
-      alignSetting.setDisabled(!state.mark);
-      applySliderState(rows, state);
-    });
+  /** 读盘是异步的，所以它自己排在预览之外；读完再同步一次控件与画面 */
+  async loadLogo() {
+    var _a2;
+    const token = ++this.logoToken;
+    const resolved = await resolveLogo(this.app, this.value.logo);
+    if (token !== this.logoToken) return;
+    this.logo = resolved;
+    (_a2 = this.refreshPanel) == null ? void 0 : _a2.call(this);
+    this.schedule();
   }
-  buildWatermark(host) {
-    new import_obsidian30.Setting(host).setName("\u6C34\u5370").setHeading();
-    new import_obsidian30.Setting(host).setName("\u6587\u5B57").setDesc("\u7559\u7A7A\u5373\u4E0D\u6DFB\u52A0\uFF1B\u53EF\u7528 {title}\u3001{date}\u3001{time}\u3002\u53EA\u653E\u6807\u5FD7\u4E5F\u6210\u7ACB\u3002").setClass("ziminos-export-field").addText((text5) => {
-      text5.setPlaceholder("\u7559\u7A7A\u5373\u4E0D\u6DFB\u52A0").onChange((input) => this.update({ watermark: input }));
-      this.refreshers.push(() => syncText(text5, this.value.watermark));
-    });
-    this.addColor(host, "watermarkColor", "\u6587\u5B57\u989C\u8272");
-    const modeSetting = new import_obsidian30.Setting(host).setName("\u6392\u5E03").setDesc("\u5E73\u94FA\u88C1\u4E0D\u6389\uFF0C\u9002\u5408\u9632\u8F6C\u53D1\uFF1B\u5355\u4E2A\u5B89\u9759\uFF0C\u9002\u5408\u5F53\u843D\u6B3E\u3002").setClass("ziminos-export-field");
-    this.addPicker(
-      modeSetting,
-      ["tile", "single"],
-      WATERMARK_MODE_LABELS,
-      () => this.value.watermarkMode,
-      (mode) => this.update({ watermarkMode: mode })
-    );
-    const anchorSetting = new import_obsidian30.Setting(host).setName("\u4F4D\u7F6E").setDesc("\u5355\u4E2A\u843D\u6B3E\u843D\u5728\u7EB8\u7684\u54EA\u4E00\u683C\u3002").setClass("ziminos-export-field");
-    this.addPicker(
-      anchorSetting,
-      WATERMARK_ANCHOR_GRID.flat(),
-      WATERMARK_ANCHOR_LABELS,
-      () => this.value.watermarkAnchor,
-      (anchor) => this.update({ watermarkAnchor: anchor }),
-      "ziminos-export-grid"
-    );
-    const rows = this.buildSliders(host, "watermark");
-    this.refreshers.push(() => {
-      const state = this.stateOf(this.value.watermark, this.value.watermarkLogoSize);
-      modeSetting.setDisabled(!state.mark);
-      anchorSetting.settingEl.toggleClass(
-        "ziminos-export-hidden",
-        !state.mark || this.value.watermarkMode !== "single"
-      );
-      applySliderState(rows, state);
-    });
-  }
-  /**
-   * 一个颜色栏。空串＝跟随正文色，因此它比一个普通取色器多一个「退回去」的按钮。
-   *
-   * 取色器本身没有空态：它永远握着一个具体色号。所以「跟随主题」只能由我们自己表达——
-   * 值为空时把当前正文色填进色块（看着是对的），状态却仍是空串（行为是对的），
-   * 旁边那枚 ✕ 是唯一能回到空串的路。少了它，用户点过一次取色器就再也回不到跟随主题。
-   */
-  addColor(host, key, name) {
-    const setting = new import_obsidian30.Setting(host).setName(name).setClass("ziminos-export-field");
-    setting.addColorPicker((picker) => {
-      picker.onChange((value) => this.update({ [key]: value }));
-      this.refreshers.push(() => picker.setValue(this.value[key] || this.inheritedColor()));
-    });
-    setting.addExtraButton((button) => {
-      button.setIcon("rotate-ccw").setTooltip("\u8DDF\u968F\u6B63\u6587\u8272").onClick(() => this.update({ [key]: "" }));
-    });
-    this.refreshers.push(() => setting.setDesc(
-      this.value[key] ? `\u7528\u8FD9\u4E2A\u8272\uFF1A${this.value[key]}` : "\u8DDF\u968F\u6B63\u6587\u8272\uFF08\u660E\u6697\u4E24\u5957\u4E3B\u9898\u4E0B\u90FD\u8BFB\u5F97\u51FA\uFF09\u3002"
-    ));
-  }
-  /** 正文此刻是什么色，用来给「跟随主题」那个状态填一个看着对的色块 */
-  inheritedColor() {
-    return hexOf(getComputedStyle(this.paper.article).color) || "#6b7280";
-  }
-  /**
-   * 一段装饰此刻有没有字、有没有图可用、整体显不显示。
-   *
-   * `logo` 问的是「选没选过一张读得出的图」而不是「这一处放不放」——
-   * 正因为如此，标志大小那根滑块在这一处尺寸为 0 时**依然可拖**，
-   * 否则它就是自己把自己锁死的那根滑块。
-   */
-  stateOf(text5, logoSize) {
-    const hasText = text5.trim() !== "";
-    const hasLogo = this.logo !== null;
-    return {
-      text: hasText,
-      logo: hasLogo,
-      mark: hasText || hasLogo && logoSize > 0
-    };
-  }
-  /** 照 EXPORT_SLIDERS 那张表铺滑块。范围与验形区间同源，界面拖得到的值重启后一定还认 */
-  buildSliders(host, section) {
-    return EXPORT_SLIDERS.filter((spec) => spec.section === section).map((spec) => {
-      const setting = new import_obsidian30.Setting(host).setName(spec.name).setDesc(spec.desc).setClass("ziminos-export-field");
-      const readout = setting.nameEl.createEl("input", {
-        cls: "ziminos-export-value",
-        attr: { type: "number", min: spec.min, max: spec.max, step: spec.step }
-      });
-      readout.addEventListener("input", () => {
-        const typed = Number.parseFloat(readout.value);
-        if (!Number.isFinite(typed)) return;
-        this.update({ [spec.key]: Math.min(spec.max, Math.max(spec.min, Math.round(typed))) });
-      });
-      setting.addSlider((slider) => {
-        slider.setLimits(spec.min, spec.max, spec.step).setInstant(true).onChange((input) => this.update({ [spec.key]: input }));
-        this.refreshers.push(() => {
-          const current = this.value[spec.key];
-          if (slider.getValue() !== current) slider.setValue(current);
-          if (Number.parseFloat(readout.value) !== current) readout.value = String(current);
-        });
-      });
-      return { spec, setting };
-    });
-  }
-  /**
-   * 一排互斥按钮。位置这件事该用位置来问：
-   * 下拉框把「左中右」和「九宫格」压成一列文字，而它们本来就是空间。
-   */
-  addPicker(setting, values, labels, read, write, extraClass) {
-    const group = setting.controlEl.createDiv({ cls: "ziminos-export-picker" });
-    if (extraClass) group.addClass(extraClass);
-    const buttons = values.map((value) => {
-      const button = group.createEl("button", { text: labels[value], attr: { type: "button" } });
-      button.addEventListener("click", () => write(value));
-      return { value, button };
-    });
-    this.refreshers.push(() => {
-      const current = read();
-      for (const entry of buttons) {
-        entry.button.toggleClass("is-active", entry.value === current);
-      }
-    });
-  }
+  // ============================================================
+  // 底部与状态
+  // ============================================================
   buildActions() {
-    new import_obsidian30.Setting(this.contentEl).setClass("ziminos-export-actions").addExtraButton((button) => {
-      button.setIcon("rotate-ccw").setTooltip("\u6062\u590D\u9ED8\u8BA4\u98CE\u683C").onClick(() => this.update(DEFAULT_EXPORT_STYLE));
-    }).addButton((button) => {
-      button.setButtonText("\u53D6\u6D88").onClick(() => this.close());
-    }).addButton((button) => {
-      button.setButtonText("\u5BFC\u51FA").setCta().onClick(() => void this.finish(button));
+    const bar = this.contentEl.createDiv({ cls: "ziminos-export-actions" });
+    const reset = bar.createEl("button", {
+      cls: "ziminos-export-reset",
+      text: "\u21BA",
+      attr: { type: "button", title: "\u6062\u590D\u9ED8\u8BA4\u98CE\u683C" }
     });
+    const cancel = bar.createEl("button", { text: "\u53D6\u6D88", attr: { type: "button" } });
+    const confirm = bar.createEl("button", { cls: "mod-cta", text: "\u5BFC\u51FA", attr: { type: "button" } });
+    reset.addEventListener("click", () => this.update(DEFAULT_EXPORT_STYLE));
+    cancel.addEventListener("click", () => this.close());
+    confirm.addEventListener("click", () => void this.finish(confirm));
   }
-  // ============================================================
-  // 状态
-  // ============================================================
   /**
    * 按下导出：先问去处，问到了才关窗。
    *
@@ -41576,7 +41650,7 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
   async finish(button) {
     if (this.asking) return;
     this.asking = true;
-    button.setDisabled(true);
+    button.disabled = true;
     try {
       if (!await this.confirm(this.value)) return;
       this.settle(this.value);
@@ -41585,27 +41659,16 @@ var ExportPreviewModal = class extends import_obsidian30.Modal {
       new import_obsidian30.Notice(`\u5BFC\u51FA\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.asking = false;
-      button.setDisabled(false);
+      button.disabled = false;
     }
   }
   update(patch) {
+    var _a2;
     const previous = this.value.logo;
     this.value = { ...this.value, ...patch };
     if (this.value.logo !== previous) void this.loadLogo();
-    this.syncControls();
+    (_a2 = this.refreshPanel) == null ? void 0 : _a2.call(this);
     this.schedule();
-  }
-  /** 读盘是异步的，所以它自己排在预览之外；读完再同步一次控件与画面 */
-  async loadLogo() {
-    const token = ++this.logoToken;
-    const resolved = await resolveLogo(this.app, this.value.logo);
-    if (token !== this.logoToken) return;
-    this.logo = resolved;
-    this.syncControls();
-    this.schedule();
-  }
-  syncControls() {
-    for (const refresh of this.refreshers) refresh();
   }
   settle(value) {
     const resolve = this.resolver;
@@ -41617,12 +41680,6 @@ function hexOf(color2) {
   const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(color2.trim());
   if (!match) return /^#[0-9a-f]{3,8}$/i.test(color2.trim()) ? color2.trim().toLowerCase() : "";
   return `#${[match[1], match[2], match[3]].map((part) => Number(part).toString(16).padStart(2, "0")).join("")}`;
-}
-function applySliderState(rows, state) {
-  for (const row of rows) {
-    if (row.spec.requires === "switch") continue;
-    row.setting.setDisabled(!state[row.spec.requires]);
-  }
 }
 
 // src/modules/export/paper.ts
@@ -41854,10 +41911,10 @@ function createProgressBody(host, options) {
   let settled = false;
   fill.style.width = "0%";
   return {
-    step: async (text5) => {
+    step: async (text6) => {
       if (settled) return;
       done = Math.min(total, done + 1);
-      label.textContent = text5;
+      label.textContent = text6;
       count.textContent = `${done} / ${total}`;
       fill.style.width = `${Math.round(done / total * 100)}%`;
       await paint();
@@ -41886,10 +41943,10 @@ function createProgressBody(host, options) {
     }
   };
 }
-function div(host, cls, text5) {
+function div(host, cls, text6) {
   const element = document.createElement("div");
   element.className = cls;
-  if (text5 !== void 0) element.textContent = text5;
+  if (text6 !== void 0) element.textContent = text6;
   host.appendChild(element);
   return element;
 }
@@ -41919,7 +41976,7 @@ var ExportProgressModal = class extends import_obsidian32.Modal {
     this.contentEl.empty();
     this.body = createProgressBody(this.contentEl, {
       total: this.total,
-      onTitle: (text5) => this.titleEl.setText(text5)
+      onTitle: (text6) => this.titleEl.setText(text6)
     });
   }
   onClose() {
@@ -53900,11 +53957,11 @@ function monthGrid(year, month) {
 
 // src/modules/calendar/view.ts
 var CALENDAR_VIEW_TYPE = "ziminos-calendar";
-function registerCalendar(ctx, openPeriod) {
+function registerCalendar(ctx, openPeriod, hasNote) {
   const holidays = new HolidayService(ctx);
   ctx.plugin.registerView(
     CALENDAR_VIEW_TYPE,
-    (leaf) => new ZiminosCalendarView(leaf, holidays, openPeriod)
+    (leaf) => new ZiminosCalendarView(leaf, holidays, openPeriod, hasNote)
   );
   ctx.commands.register(OPEN_CALENDAR_COMMAND, () => {
     void revealCalendar(ctx.app, true).catch(() => void 0);
@@ -53921,12 +53978,15 @@ async function revealCalendar(app, active) {
   });
 }
 var ZiminosCalendarView = class extends import_obsidian38.ItemView {
-  constructor(leaf, holidays, openPeriod) {
+  constructor(leaf, holidays, openPeriod, hasNote) {
     super(leaf);
     this.mode = "month";
     this.unsubscribe = null;
+    /** 笔记增删改名后重画的防抖句柄；无定时器、无轮询，只在真有事发生时排一次 */
+    this.repaint = null;
     this.holidays = holidays;
     this.openPeriod = openPeriod;
+    this.hasNote = hasNote;
     const today2 = /* @__PURE__ */ new Date();
     this.year = today2.getFullYear();
     this.month = today2.getMonth() + 1;
@@ -53943,6 +54003,12 @@ var ZiminosCalendarView = class extends import_obsidian38.ItemView {
   async onOpen() {
     this.contentEl.addClass("ziminos-calendar");
     this.unsubscribe = this.holidays.subscribe(() => this.renderCalendar());
+    const onChange = (file) => {
+      if (file instanceof import_obsidian38.TFile && file.extension === "md") this.scheduleRepaint();
+    };
+    this.registerEvent(this.app.vault.on("create", onChange));
+    this.registerEvent(this.app.vault.on("delete", onChange));
+    this.registerEvent(this.app.vault.on("rename", onChange));
     this.renderCalendar();
     void this.holidays.refreshCalendarYear(this.year);
   }
@@ -53950,7 +54016,27 @@ var ZiminosCalendarView = class extends import_obsidian38.ItemView {
     var _a2;
     (_a2 = this.unsubscribe) == null ? void 0 : _a2.call(this);
     this.unsubscribe = null;
+    if (this.repaint !== null) window.clearTimeout(this.repaint);
+    this.repaint = null;
     this.contentEl.empty();
+  }
+  /**
+   * 点一格＝写这一段复盘。写完立刻重画：那一格该当场变绿。
+   *
+   * 不靠上面那三个 vault 事件兜住这条路，是因为它们只在**新建**时触发；
+   * 点一格更常见的结果是「那篇已经在了，只是打开它」——那时没有任何事件，
+   * 而用户仍然期待看见自己刚点过的那一格是绿的（它本来就该是）。
+   */
+  async open(period, anchorDay) {
+    await this.openPeriod(period, anchorDay);
+    this.renderCalendar();
+  }
+  scheduleRepaint() {
+    if (this.repaint !== null) window.clearTimeout(this.repaint);
+    this.repaint = window.setTimeout(() => {
+      this.repaint = null;
+      this.renderCalendar();
+    }, 80);
   }
   renderCalendar() {
     this.contentEl.empty();
@@ -54068,9 +54154,10 @@ var ZiminosCalendarView = class extends import_obsidian38.ItemView {
         String(week.weekNumber),
         `\u521B\u5EFA\u6216\u6253\u5F00 ${week.weekYear} \u5E74\u7B2C ${week.weekNumber} \u5468\u590D\u76D8`,
         "ziminos-calendar-week",
-        () => void this.openPeriod("weekly", week.anchor)
+        () => void this.open("weekly", week.anchor)
       );
       weekButton.setAttribute("aria-label", `${week.weekYear} \u5E74\u7B2C ${week.weekNumber} \u5468`);
+      weekButton.toggleClass("has-note", this.hasNote("weekly", week.anchor));
       for (const day of week.days) this.renderDay(grid, day);
     }
   }
@@ -54082,10 +54169,11 @@ var ZiminosCalendarView = class extends import_obsidian38.ItemView {
       "",
       this.dayTitle(day, (_a2 = holiday == null ? void 0 : holiday.name) != null ? _a2 : "", (_b2 = holiday == null ? void 0 : holiday.isOffDay) != null ? _b2 : null),
       "ziminos-calendar-day",
-      () => void this.openPeriod("daily", day.date)
+      () => void this.open("daily", day.date)
     );
     button.toggleClass("is-other-month", !day.inMonth);
     button.toggleClass("is-today", day.isToday);
+    button.toggleClass("has-note", this.hasNote("daily", day.date));
     button.toggleClass("is-weekend", day.weekday >= 6 && !holiday);
     button.toggleClass("is-rest-day", (holiday == null ? void 0 : holiday.isOffDay) === true);
     button.toggleClass("is-work-day", (holiday == null ? void 0 : holiday.isOffDay) === false);
@@ -54133,16 +54221,16 @@ var ZiminosCalendarView = class extends import_obsidian38.ItemView {
     }
   }
   renderStatus(parent, status) {
-    const row = parent.createDiv({ cls: "ziminos-calendar-status" });
+    const row2 = parent.createDiv({ cls: "ziminos-calendar-status" });
     if (!status.hasSchedule) {
-      row.setText(`${this.year} \u5E74\u8C03\u4F11\u5B89\u6392\u5F85\u516C\u5E03\uFF0C\u8054\u7F51\u65F6\u81EA\u52A8\u8865\u9F50`);
+      row2.setText(`${this.year} \u5E74\u8C03\u4F11\u5B89\u6392\u5F85\u516C\u5E03\uFF0C\u8054\u7F51\u65F6\u81EA\u52A8\u8865\u9F50`);
       return;
     }
     if (status.lastCheckedAt) {
       const checked = new Date(status.lastCheckedAt).toLocaleDateString("zh-CN");
-      row.setText(`\u56FD\u52A1\u9662\u653E\u5047\u5B89\u6392\u5DF2\u4E8E ${checked} \u81EA\u52A8\u6838\u9A8C`);
+      row2.setText(`\u56FD\u52A1\u9662\u653E\u5047\u5B89\u6392\u5DF2\u4E8E ${checked} \u81EA\u52A8\u6838\u9A8C`);
     } else {
-      row.setText("\u6B63\u5728\u540E\u53F0\u6838\u9A8C\u56FD\u52A1\u9662\u653E\u5047\u5B89\u6392");
+      row2.setText("\u6B63\u5728\u540E\u53F0\u6838\u9A8C\u56FD\u52A1\u9662\u653E\u5047\u5B89\u6392");
     }
   }
   makePeriodButton(parent, label, period, anchor, title) {
@@ -54288,12 +54376,12 @@ var roster = {
     const circles = /* @__PURE__ */ new Map();
     let stale = 0;
     for (const person of people) {
-      const row = rosterRowOf(view, person);
-      if (row.overdue) stale += 1;
+      const row2 = rosterRowOf(view, person);
+      if (row2.overdue) stale += 1;
       const circle = circleOf(view, person);
       const bucket = circles.get(circle);
-      if (bucket) bucket.push(row);
-      else circles.set(circle, [row]);
+      if (bucket) bucket.push(row2);
+      else circles.set(circle, [row2]);
     }
     renderSummary(
       view.el,
@@ -54315,13 +54403,13 @@ var roster = {
         view.el,
         view.sourcePath,
         ["\u8C01", "\u4E00\u53E5\u8BDD", "\u5C42", "\u65B9\u5411", "\u4ED6\u80FD\u7ED9\u6211\u7684", "\u6700\u8FD1\u8054\u7CFB"],
-        rows.map((row) => [
-          noteLink(row.file),
-          toText(view.index.fieldOf(row.file, FIELDS.description)),
-          row.tier || "\u2014",
-          toText(view.index.fieldOf(row.file, FIELDS.direction)) || "\u2014",
-          toStringList(view.index.fieldOf(row.file, FIELDS.get)).join("\u3001") || "\u2014",
-          lastContactText(row)
+        rows.map((row2) => [
+          noteLink(row2.file),
+          toText(view.index.fieldOf(row2.file, FIELDS.description)),
+          row2.tier || "\u2014",
+          toText(view.index.fieldOf(row2.file, FIELDS.direction)) || "\u2014",
+          toStringList(view.index.fieldOf(row2.file, FIELDS.get)).join("\u3001") || "\u2014",
+          lastContactText(row2)
         ]),
         1
       );
@@ -54343,14 +54431,14 @@ function rosterRowOf(view, person) {
     overdue: days === null || days > limit
   };
 }
-function staleness(row) {
+function staleness(row2) {
   var _a2;
-  return (_a2 = row.days) != null ? _a2 : Number.MAX_SAFE_INTEGER;
+  return (_a2 = row2.days) != null ? _a2 : Number.MAX_SAFE_INTEGER;
 }
-function lastContactText(row) {
-  if (row.days === null) return "\u26A0\uFE0F \u4ECE\u672A";
-  const text5 = row.days === 0 ? "\u4ECA\u5929" : `${row.days} \u5929\u524D`;
-  return row.overdue ? `\u26A0\uFE0F ${text5}` : text5;
+function lastContactText(row2) {
+  if (row2.days === null) return "\u26A0\uFE0F \u4ECE\u672A";
+  const text6 = row2.days === 0 ? "\u4ECA\u5929" : `${row2.days} \u5929\u524D`;
+  return row2.overdue ? `\u26A0\uFE0F ${text6}` : text6;
 }
 function circleOf(view, person) {
   var _a2, _b2, _c, _d;
@@ -54446,11 +54534,11 @@ var balance = {
       view.el,
       view.sourcePath,
       ["\u8C01", "\u6211\u6B20\u4ED6", "\u4ED6\u6B20\u6211", "\u6700\u8FD1\u4E00\u7B14"],
-      rows.map((row) => [
-        noteLink(row.person),
-        row.owing || "\u2014",
-        row.owed || "\u2014",
-        row.last
+      rows.map((row2) => [
+        noteLink(row2.person),
+        row2.owing || "\u2014",
+        row2.owed || "\u2014",
+        row2.last
       ])
     );
   }
@@ -54494,11 +54582,11 @@ var clientRoster = {
       view.el,
       view.sourcePath,
       ["\u4EBA\u7269", "\u91D1\u989D", "\u4EA4\u4ED8", "\u521B\u5EFA\u65E5\u671F"],
-      rows.map((row) => [
-        noteLink(row.note),
-        row.paymentCount ? formatMoney(row.amount) : "\u2014",
-        clientDeliveryText(row),
-        row.created
+      rows.map((row2) => [
+        noteLink(row2.note),
+        row2.paymentCount ? formatMoney(row2.amount) : "\u2014",
+        clientDeliveryText(row2),
+        row2.created
       ])
     );
   }
@@ -54842,13 +54930,13 @@ async function paymentsOf(view, note) {
   }
   return payments;
 }
-function inlineFieldsOf(text5) {
+function inlineFieldsOf(text6) {
   const fields = {};
   INLINE_FIELD.lastIndex = 0;
-  let match = INLINE_FIELD.exec(text5);
+  let match = INLINE_FIELD.exec(text6);
   while (match) {
     fields[match[1].trim()] = match[2].trim();
-    match = INLINE_FIELD.exec(text5);
+    match = INLINE_FIELD.exec(text6);
   }
   return fields;
 }
@@ -54880,16 +54968,16 @@ function formatMoney(amount) {
   return `\xA5${amount.toLocaleString("zh-CN")}`;
 }
 function clientRosterSummary(rows) {
-  const paymentCount = rows.reduce((total, row) => total + row.paymentCount, 0);
+  const paymentCount = rows.reduce((total, row2) => total + row2.paymentCount, 0);
   if (!paymentCount) return `\u5171 **${rows.length}** \u4F4D\u5BA2\u6237\uFF0C\u8FD8\u6CA1\u6709\u4ED8\u8D39\u6D41\u6C34\u3002`;
-  const amount = rows.reduce((total, row) => total + row.amount, 0);
-  const pendingClients = rows.filter((row) => row.pendingCount > 0).length;
+  const amount = rows.reduce((total, row2) => total + row2.amount, 0);
+  const pendingClients = rows.filter((row2) => row2.pendingCount > 0).length;
   const delivery = pendingClients ? `\u5176\u4E2D **${pendingClients} \u4F4D**\u4ECD\u6709\u5F85\u4EA4\u4ED8\u3002` : "\u5168\u90E8\u4EA4\u4ED8\u5B8C\u6210\u3002";
   return `\u5171 **${rows.length}** \u4F4D\u5BA2\u6237\uFF0C\u7D2F\u8BA1 **${formatMoney(amount)}**\uFF1B${delivery}`;
 }
-function clientDeliveryText(row) {
-  if (!row.paymentCount) return "\u2014";
-  if (row.pendingCount) return `\u23F3 \u5F85\u4EA4\u4ED8 ${row.pendingCount} \u9879`;
+function clientDeliveryText(row2) {
+  if (!row2.paymentCount) return "\u2014";
+  if (row2.pendingCount) return `\u23F3 \u5F85\u4EA4\u4ED8 ${row2.pendingCount} \u9879`;
   return "\u2705 \u5DF2\u4EA4\u4ED8";
 }
 function formatDays(days) {
@@ -54929,7 +55017,7 @@ function toggleTaskLine(content, line, expectedChecked) {
 }
 function insertIntoSection(content, heading, line) {
   const { lines, lineEnding } = splitTextLines(content);
-  const headingIndex = lines.findIndex((text5) => text5.trim() === heading);
+  const headingIndex = lines.findIndex((text6) => text6.trim() === heading);
   if (headingIndex < 0) {
     return [content.replace(/\s*$/, ""), "", heading, "", line, ""].join(lineEnding);
   }
@@ -58045,15 +58133,15 @@ var ProjectTransitionConfirmModal = class extends import_obsidian50.Modal {
   }
 };
 function createModalInfoRow(parent, label, value, emphasize = false) {
-  const row = parent.createDiv();
-  row.style.display = "grid";
-  row.style.gridTemplateColumns = "4em minmax(0, 1fr)";
-  row.style.gap = "10px";
-  row.style.alignItems = "start";
-  row.style.padding = "5px 0";
-  const labelElement = row.createDiv({ text: label });
+  const row2 = parent.createDiv();
+  row2.style.display = "grid";
+  row2.style.gridTemplateColumns = "4em minmax(0, 1fr)";
+  row2.style.gap = "10px";
+  row2.style.alignItems = "start";
+  row2.style.padding = "5px 0";
+  const labelElement = row2.createDiv({ text: label });
   labelElement.style.color = "var(--text-muted)";
-  const valueElement = row.createDiv({ text: value });
+  const valueElement = row2.createDiv({ text: value });
   valueElement.style.minWidth = "0";
   valueElement.style.overflowWrap = "anywhere";
   valueElement.style.lineHeight = "1.5";
@@ -59160,11 +59248,11 @@ var RibbonDock = class {
    * 手机上则完全看不出变化，那一句 Notice 就是为它准备的。
    */
   syncVisibility() {
-    const enabled = new Set(this.ctx.settings.ribbonCommands);
+    const enabled2 = new Set(this.ctx.settings.ribbonCommands);
     for (const command of this.ctx.commands.list()) {
       const id = command.spec.id;
       const existing = this.buttons.get(id);
-      if (!enabled.has(id)) {
+      if (!enabled2.has(id)) {
         if (existing && !existing.hasClass(HIDDEN_CLASS)) {
           existing.addClass(HIDDEN_CLASS);
           if (import_obsidian55.Platform.isPhone) new import_obsidian55.Notice(MOBILE_PENDING);
@@ -59794,8 +59882,8 @@ var SettingsPanels = class {
       TEXTS6.autoFormatDesc
     );
     new import_obsidian57.Setting(containerEl).setName(TEXTS6.formatRulesHeading).setDesc(TEXTS6.formatRulesIntro).setHeading();
-    for (const rule of FORMAT_RULES) {
-      this.renderRuleRow(containerEl, rule.key, rule.name, rule.desc);
+    for (const rule2 of FORMAT_RULES) {
+      this.renderRuleRow(containerEl, rule2.key, rule2.name, rule2.desc);
     }
   }
   /**
@@ -59806,8 +59894,8 @@ var SettingsPanels = class {
    * 老库升级时那条新规则不在清单里，于是默认不开，这与「不替用户改他没选过的东西」同源。
    */
   renderRuleRow(containerEl, key, name, desc) {
-    new import_obsidian57.Setting(containerEl).setName(name).setDesc(desc).addToggle((toggle) => {
-      toggle.setValue(this.ctx.settings.formatRules.includes(key)).onChange(async (value) => {
+    new import_obsidian57.Setting(containerEl).setName(name).setDesc(desc).addToggle((toggle2) => {
+      toggle2.setValue(this.ctx.settings.formatRules.includes(key)).onChange(async (value) => {
         this.ctx.settings.formatRules = this.nextFormatRules(key, value);
         await this.ctx.saveSettings();
       });
@@ -59820,11 +59908,11 @@ var SettingsPanels = class {
    * 于是顺序永远等于规则表的顺序，data.json 里混进的不认识的 id 也在第一次勾选时被扫掉。
    * 返回新数组，绝不原地改——它在用户没调过时与 DEFAULT_SETTINGS 共用引用。
    */
-  nextFormatRules(key, enabled) {
+  nextFormatRules(key, enabled2) {
     const chosen = new Set(this.ctx.settings.formatRules);
-    if (enabled) chosen.add(key);
+    if (enabled2) chosen.add(key);
     else chosen.delete(key);
-    return FORMAT_RULES.map((rule) => rule.key).filter((candidate) => chosen.has(candidate));
+    return FORMAT_RULES.map((rule2) => rule2.key).filter((candidate) => chosen.has(candidate));
   }
   // ============================================================
   // 五、外观开关：一个开关，随开荒页交付
@@ -59882,8 +59970,8 @@ var SettingsPanels = class {
       iconEl.style.color = GROUP_COLORS[spec.group];
       frag.createSpan({ text: name });
     });
-    new import_obsidian57.Setting(containerEl).setName(label).setClass("ziminos-ribbon-row").addToggle((toggle) => {
-      toggle.setValue(this.ctx.settings.ribbonCommands.includes(id)).onChange(async (value) => {
+    new import_obsidian57.Setting(containerEl).setName(label).setClass("ziminos-ribbon-row").addToggle((toggle2) => {
+      toggle2.setValue(this.ctx.settings.ribbonCommands.includes(id)).onChange(async (value) => {
         this.ctx.settings.ribbonCommands = this.nextRibbonCommands(id, value);
         await this.ctx.saveSettings();
         this.actions.syncRibbon();
@@ -59899,9 +59987,9 @@ var SettingsPanels = class {
    * 第一次勾选就顺手扫掉，不会留一条永远没人认领的记录。
    * 返回的是新数组，绝不原地改——ribbonCommands 在用户没调过时与 DEFAULT_SETTINGS 共用引用。
    */
-  nextRibbonCommands(id, enabled) {
+  nextRibbonCommands(id, enabled2) {
     const chosen = new Set(this.ctx.settings.ribbonCommands);
-    if (enabled) chosen.add(id);
+    if (enabled2) chosen.add(id);
     else chosen.delete(id);
     return this.ctx.commands.list().map((command) => command.spec.id).filter((candidate) => chosen.has(candidate));
   }
@@ -60056,13 +60144,13 @@ var SettingsPanels = class {
     void this.actions.describeEagleStatus().then((status) => {
       if (connection.descEl.isConnected) connection.setDesc(status);
     });
-    new import_obsidian57.Setting(containerEl).setName(TEXTS6.eaglePortName).setDesc(TEXTS6.eaglePortDesc).addText((text5) => text5.setPlaceholder(String(EAGLE_DEFAULTS.port)).setValue(String(this.ctx.settings.eaglePort)).onChange(async (value) => {
+    new import_obsidian57.Setting(containerEl).setName(TEXTS6.eaglePortName).setDesc(TEXTS6.eaglePortDesc).addText((text6) => text6.setPlaceholder(String(EAGLE_DEFAULTS.port)).setValue(String(this.ctx.settings.eaglePort)).onChange(async (value) => {
       const candidate = Number(value);
       if (!Number.isInteger(candidate) || candidate < EAGLE_PORT_RANGE.min || candidate > EAGLE_PORT_RANGE.max) return;
       this.ctx.settings.eaglePort = candidate;
       await this.ctx.saveSettings();
     }));
-    new import_obsidian57.Setting(containerEl).setName(TEXTS6.eagleFolderName).setDesc(TEXTS6.eagleFolderDesc).addText((text5) => text5.setPlaceholder("\u9879\u76EE\u5916\u7559\u7A7A\uFF1A\u672A\u5F52\u7C7B").setValue(this.ctx.settings.eagleFolderId).onChange(async (value) => {
+    new import_obsidian57.Setting(containerEl).setName(TEXTS6.eagleFolderName).setDesc(TEXTS6.eagleFolderDesc).addText((text6) => text6.setPlaceholder("\u9879\u76EE\u5916\u7559\u7A7A\uFF1A\u672A\u5F52\u7C7B").setValue(this.ctx.settings.eagleFolderId).onChange(async (value) => {
       this.ctx.settings.eagleFolderId = value.trim();
       await this.ctx.saveSettings();
     }));
@@ -60191,8 +60279,8 @@ var ZiminosSettingTab = class extends import_obsidian58.PluginSettingTab {
    * 天然看得见新值；只有已经画在屏幕上的东西（状态栏按钮）才需要有人去推它一把。
    */
   renderToggle(containerEl, key, name, desc, onApplied) {
-    new import_obsidian58.Setting(containerEl).setName(name).setDesc(desc).addToggle((toggle) => {
-      toggle.setValue(this.ctx.settings[key]).onChange(async (value) => {
+    new import_obsidian58.Setting(containerEl).setName(name).setDesc(desc).addToggle((toggle2) => {
+      toggle2.setValue(this.ctx.settings[key]).onChange(async (value) => {
         this.ctx.settings[key] = value;
         await this.ctx.saveSettings();
         onApplied == null ? void 0 : onApplied();
@@ -60238,8 +60326,8 @@ var ZiminosSettingTab = class extends import_obsidian58.PluginSettingTab {
   renderTextField(containerEl, field2) {
     const fallback = DEFAULT_SETTINGS[field2.key];
     const desc = field2.advanced ? `${field2.hint}${TEXTS6.advancedSuffixPrefix}${fallback}${TEXTS6.advancedSuffixTail}` : field2.hint;
-    new import_obsidian58.Setting(containerEl).setName(field2.name).setDesc(desc).addText((text5) => {
-      text5.setPlaceholder(fallback).setValue(this.ctx.settings[field2.key]).onChange(async (value) => {
+    new import_obsidian58.Setting(containerEl).setName(field2.name).setDesc(desc).addText((text6) => {
+      text6.setPlaceholder(fallback).setValue(this.ctx.settings[field2.key]).onChange(async (value) => {
         this.ctx.settings[field2.key] = value;
         await this.ctx.saveSettings();
       });
@@ -60299,10 +60387,22 @@ var ZiminosPlugin = class extends import_obsidian59.Plugin {
     registerImportHighlightsCommand(ctx);
     registerExcerptCardCommand(ctx);
     registerInspirationCaptureCommand(ctx);
-    registerCalendar(ctx, async (periodKey, day) => {
-      const file = await openPeriodNote(ctx, PERIODS[periodKey], { day });
-      if (file && periodKey === "daily") await promptThemeIfMissing(ctx, file);
-    });
+    registerCalendar(
+      ctx,
+      async (periodKey, day) => {
+        const file = await openPeriodNote(ctx, PERIODS[periodKey], { day });
+        if (file && periodKey === "daily") await promptThemeIfMissing(ctx, file);
+      },
+      // 日历只想知道「这一格要不要涂绿」。目录规则、文件名格式与那个可改的根目录
+      // 全归 review，路径在这里拼一次即可——让日历自己学会一套，
+      // 就会有第二处对「日记住哪儿」的理解，而两处迟早不一致。
+      (periodKey, day) => {
+        const period = PERIODS[periodKey];
+        const title = titleOfDay(day, period);
+        if (!title) return false;
+        return ctx.app.vault.getAbstractFileByPath(`${periodFolderOf(ctx, period)}/${title}.md`) instanceof import_obsidian59.TFile;
+      }
+    );
     registerPeriodicCommands(ctx, (file) => promptThemeIfMissing(ctx, file));
     registerPeriodAutoInit(ctx);
     registerThemeCommand(ctx);
