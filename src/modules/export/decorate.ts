@@ -2,13 +2,15 @@
  * [INPUT]: 依赖 core/exportStyle 的 ExportStyle 契约，依赖 ./layout 的占位符与水印几何纯函数，
  *          依赖 ./logo 的 ResolvedLogo（已经解析好的字节，本层不读盘）
  * [OUTPUT]: 对外提供 applyDecorations——把一套风格施加到一张已经渲好的纸上，
- *           以及 LinkRegion/linkRegions——页眉页脚那块可点区域在纸上的坐标（只有 PDF 用得上）
+ *           以及 LinkRegion/linkRegions——页眉页脚与正文外链那些可点区域在纸上的坐标（只有 PDF 用得上）
  * [POS]: 导出模块的装饰层，与 paper.ts 严格分工：那边回答「这篇笔记有多大」，这边回答「它周围写什么」。
  *        本文件唯一的设计承诺是**幂等**：同一张纸连调十次与调一次结果一字不差。
  *        幂等不是性质而是前提——预览每拖动一次滑块就重放一次，而用户拖完立刻点导出时，
  *        排队中的那一帧可能还没轮到；导出前再照终值放一次，看见的与拿到的才必然是同一张图。
  *        第二条纪律是**全同步**：标志的字节由 ./logo 预先解析好递进来，本层一个 await 都不许有，
- *        否则帧与帧会乱序，用户会看见上一帧的水印盖在这一帧的排版上
+ *        否则帧与帧会乱序，用户会看见上一帧的水印盖在这一帧的排版上。
+ *        第三条是**可点区域只有一套算法**：页眉页脚与正文外链共用 pushRects 一个换算——
+ *        v0.32.0 之前分两套，offsetTop 那套把页脚的 y 算了两遍，整条链接落到纸外面
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -276,6 +278,7 @@ function measureTextWidth(text: string, fontSize: number, fontFamily: string): n
  */
 export function linkRegions(article: HTMLElement, style: ExportStyle): LinkRegion[] {
     const regions: LinkRegion[] = [];
+    const frame = frameOf(article);
     // 关着的那一段不会有元素，因此这里不必再判一次开关——
     // querySelector 找不到就自然没有可点区域，两处判断只留一处。
     const collect = (selector: string, raw: string): void => {
@@ -284,9 +287,12 @@ export function linkRegions(article: HTMLElement, style: ExportStyle): LinkRegio
         if (!url) return;
 
         const line = article.querySelector<HTMLElement>(selector);
-        const box = line ? inkWithin(line, article) : null;
 
-        if (box) regions.push({ url, ...box });
+        // 量的是这一行里**有墨的那几段**（标志与文字），不是整条 flex 行：
+        // 那一行横跨整个正文栏，整条可点意味着用户点在页脚左边一片空白上也会跳走。
+        for (const child of line?.children ?? []) {
+            if (child instanceof HTMLElement) pushRects(regions, url, child, frame);
+        }
     };
 
     collect('.ziminos-export-header', style.headerLink);
@@ -295,90 +301,80 @@ export function linkRegions(article: HTMLElement, style: ExportStyle): LinkRegio
     // 正文里本来就有的链接同样该能点。
     // 「导出成 PDF 之后所有外链变成死字」是个不该由用户承担的退化——
     // 那些链接是他写进笔记里的，图片留不住它们，而 PDF 留得住。
-    for (const region of anchorRegions(article)) regions.push(region);
+    for (const anchor of article.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+        const url = bodyLinkUrl(anchor);
+
+        if (url) pushRects(regions, url, anchor, frame);
+    }
 
     return regions;
 }
 
 /**
- * 正文里每一个外链的可点区域。
+ * 纸的原点与缩放，量一次给所有可点区域共用。
  *
- * 用 `getClientRects()` 而不是一个整的包围盒：一条横跨两行的链接，包围盒会把中间那段
- * 与它无关的空白也圈进去，用户点在两行之间的缝隙上也会跳转。逐行取矩形才对得上他看见的下划线。
- *
- * 只放 http/https 过去：`app://`、`obsidian://` 与库内双链在 Obsidian 之外没有意义，
- * 把它们写进 PDF 只会得到一个点了没反应（或者更糟，弹一个陌生的协议提示）的链接。
+ * 预览里这张纸是被 transform 缩过的，客户端矩形会一并带上那个比例。
+ * 拿「画出来多宽 ÷ 布局上多宽」把它除回去，于是缩放与不缩放时给出同一组坐标。
  */
-function anchorRegions(article: HTMLElement): LinkRegion[] {
-    const regions: LinkRegion[] = [];
-    const base = article.getBoundingClientRect();
-    // 预览里这张纸是被 transform 缩过的，客户端矩形会一并带上那个比例。
-    // 拿「画出来多宽 ÷ 布局上多宽」把它除回去，于是本函数在缩放与不缩放时给出同一组坐标。
-    const scale = base.width > 0 && article.offsetWidth > 0 ? base.width / article.offsetWidth : 1;
-
-    for (const anchor of article.querySelectorAll<HTMLAnchorElement>('a[href]')) {
-        const url = exportLinkUrl(anchor.getAttribute('href') ?? '');
-
-        if (!url) continue;
-
-        for (const rect of anchor.getClientRects()) {
-            if (rect.width < 1 || rect.height < 1) continue;
-
-            regions.push({
-                url,
-                x: (rect.left - base.left) / scale,
-                y: (rect.top - base.top) / scale,
-                width: rect.width / scale,
-                height: rect.height / scale,
-            });
-        }
-    }
-
-    return regions;
+interface LinkFrame {
+    readonly left: number;
+    readonly top: number;
+    readonly scale: number;
 }
 
-/** 一行里全部子元素的并集，换算成相对 article 的坐标 */
-function inkWithin(line: HTMLElement, article: HTMLElement): Omit<LinkRegion, 'url'> | null {
-    const origin = offsetWithin(line, article);
-
-    if (!origin) return null;
-
-    const children = [...line.children].filter((child): child is HTMLElement => child instanceof HTMLElement);
-
-    if (!children.length) return null;
-
-    let left = Number.POSITIVE_INFINITY;
-    let top = Number.POSITIVE_INFINITY;
-    let right = Number.NEGATIVE_INFINITY;
-    let bottom = Number.NEGATIVE_INFINITY;
-
-    for (const child of children) {
-        left = Math.min(left, child.offsetLeft);
-        top = Math.min(top, child.offsetTop);
-        right = Math.max(right, child.offsetLeft + child.offsetWidth);
-        bottom = Math.max(bottom, child.offsetTop + child.offsetHeight);
-    }
-
-    if (!Number.isFinite(left) || right <= left || bottom <= top) return null;
+function frameOf(article: HTMLElement): LinkFrame {
+    const base = article.getBoundingClientRect();
 
     return {
-        x: origin.x + left,
-        y: origin.y + top,
-        width: right - left,
-        height: bottom - top,
+        left: base.left,
+        top: base.top,
+        scale: base.width > 0 && article.offsetWidth > 0 ? base.width / article.offsetWidth : 1,
     };
 }
 
-function offsetWithin(element: HTMLElement, ancestor: HTMLElement): { x: number; y: number } | null {
-    let x = 0;
-    let y = 0;
-    let node: HTMLElement | null = element;
+/**
+ * 一个元素占的可点区域，坐标以纸的左上角为原点。
+ *
+ * **全库只有这一处算这件事**，而这正是 v0.32.0 修掉的那个 bug 的形状：
+ * 此前页眉页脚走 `offsetTop` 逐级累加、正文走客户端矩形，两套算法算同一件事。
+ * `offsetTop` 那套错在一个看不见的前提上——它量的是「离最近那个**定位祖先**多远」，
+ * 而页眉页脚那一行只设了 display:flex、没有 position，于是它子元素的 offsetTop
+ * 量的是离正文栏顶端多远，再加上行自己的 y 就把同一段距离算了两遍。
+ * 页眉在 y≈0，算两遍还是 0，看不出来；页脚在 y≈1240，一加就落到纸外面，整条链接失效。
+ * 所以修法不是给那一行补一个 position——那是让几何依赖一条为别的目的写下的 CSS；
+ * 是把两套合成一套，让「页眉的链接能点」与「正文的链接能点」从此是同一件事的两次调用。
+ *
+ * 用 `getClientRects()` 而不是一个整的包围盒：一条横跨两行的链接，包围盒会把中间那段
+ * 与它无关的空白也圈进去，用户点在两行之间的缝隙上也会跳转。逐行取矩形才对得上他看见的下划线。
+ */
+function pushRects(out: LinkRegion[], url: string, element: HTMLElement, frame: LinkFrame): void {
+    for (const rect of element.getClientRects()) {
+        if (rect.width < 1 || rect.height < 1) continue;
 
-    while (node && node !== ancestor) {
-        x += node.offsetLeft;
-        y += node.offsetTop;
-        node = node.offsetParent instanceof HTMLElement ? node.offsetParent : null;
+        out.push({
+            url,
+            x: (rect.left - frame.left) / frame.scale,
+            y: (rect.top - frame.top) / frame.scale,
+            width: rect.width / frame.scale,
+            height: rect.height / frame.scale,
+        });
     }
+}
 
-    return node === ancestor ? { x, y } : null;
+/**
+ * 正文里这个 `<a>` 该不该变成 PDF 里的一个动作。
+ *
+ * 它**刻意不与页眉页脚共用 `exportLinkUrl`**，因为「没写协议」这四个字在两种输入里
+ * 意思正好相反：设置里那个输入框写着 `edu.zhaozimin.cn`，意思是「他省略了 https://」；
+ * 而 DOM 里一个没有协议的 href，意思是「这根本不是一条外链」——库内双链、标签、脚注
+ * 跳转全长这样。把补协议那条规则套到 href 上，`[[MOC数据库代码]]` 就会变成
+ * `https://moc数据库代码/`，用户拿到的 PDF 里多出几个指向不存在域名的链接，
+ * 而且点下去之前没有任何迹象。这不是少了一条判断，是一条规则被用到了它不成立的地方。
+ */
+function bodyLinkUrl(anchor: HTMLAnchorElement): string {
+    const raw = (anchor.getAttribute('href') ?? '').trim();
+
+    // 已经带 http/https 的才往下走；其余（app://、obsidian://、#标签、库内相对路径）
+    // 在 Obsidian 之外都没有意义，交给 exportLinkUrl 的协议白名单再滤一道
+    return /^https?:\/\//i.test(raw) ? exportLinkUrl(raw) : '';
 }

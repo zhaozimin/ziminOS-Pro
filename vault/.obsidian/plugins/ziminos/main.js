@@ -40983,72 +40983,48 @@ function measureTextWidth(text6, fontSize, fontFamily) {
 }
 function linkRegions(article, style) {
   const regions = [];
+  const frame = frameOf(article);
   const collect = (selector, raw) => {
+    var _a2;
     const url = exportLinkUrl(raw);
     if (!url) return;
     const line = article.querySelector(selector);
-    const box = line ? inkWithin(line, article) : null;
-    if (box) regions.push({ url, ...box });
+    for (const child of (_a2 = line == null ? void 0 : line.children) != null ? _a2 : []) {
+      if (child instanceof HTMLElement) pushRects(regions, url, child, frame);
+    }
   };
   collect(".ziminos-export-header", style.headerLink);
   collect(".ziminos-export-footer", style.footerLink);
-  for (const region of anchorRegions(article)) regions.push(region);
-  return regions;
-}
-function anchorRegions(article) {
-  var _a2;
-  const regions = [];
-  const base = article.getBoundingClientRect();
-  const scale = base.width > 0 && article.offsetWidth > 0 ? base.width / article.offsetWidth : 1;
   for (const anchor of article.querySelectorAll("a[href]")) {
-    const url = exportLinkUrl((_a2 = anchor.getAttribute("href")) != null ? _a2 : "");
-    if (!url) continue;
-    for (const rect of anchor.getClientRects()) {
-      if (rect.width < 1 || rect.height < 1) continue;
-      regions.push({
-        url,
-        x: (rect.left - base.left) / scale,
-        y: (rect.top - base.top) / scale,
-        width: rect.width / scale,
-        height: rect.height / scale
-      });
-    }
+    const url = bodyLinkUrl(anchor);
+    if (url) pushRects(regions, url, anchor, frame);
   }
   return regions;
 }
-function inkWithin(line, article) {
-  const origin = offsetWithin(line, article);
-  if (!origin) return null;
-  const children = [...line.children].filter((child) => child instanceof HTMLElement);
-  if (!children.length) return null;
-  let left = Number.POSITIVE_INFINITY;
-  let top = Number.POSITIVE_INFINITY;
-  let right = Number.NEGATIVE_INFINITY;
-  let bottom = Number.NEGATIVE_INFINITY;
-  for (const child of children) {
-    left = Math.min(left, child.offsetLeft);
-    top = Math.min(top, child.offsetTop);
-    right = Math.max(right, child.offsetLeft + child.offsetWidth);
-    bottom = Math.max(bottom, child.offsetTop + child.offsetHeight);
-  }
-  if (!Number.isFinite(left) || right <= left || bottom <= top) return null;
+function frameOf(article) {
+  const base = article.getBoundingClientRect();
   return {
-    x: origin.x + left,
-    y: origin.y + top,
-    width: right - left,
-    height: bottom - top
+    left: base.left,
+    top: base.top,
+    scale: base.width > 0 && article.offsetWidth > 0 ? base.width / article.offsetWidth : 1
   };
 }
-function offsetWithin(element, ancestor) {
-  let x3 = 0;
-  let y3 = 0;
-  let node2 = element;
-  while (node2 && node2 !== ancestor) {
-    x3 += node2.offsetLeft;
-    y3 += node2.offsetTop;
-    node2 = node2.offsetParent instanceof HTMLElement ? node2.offsetParent : null;
+function pushRects(out, url, element, frame) {
+  for (const rect of element.getClientRects()) {
+    if (rect.width < 1 || rect.height < 1) continue;
+    out.push({
+      url,
+      x: (rect.left - frame.left) / frame.scale,
+      y: (rect.top - frame.top) / frame.scale,
+      width: rect.width / frame.scale,
+      height: rect.height / frame.scale
+    });
   }
-  return node2 === ancestor ? { x: x3, y: y3 } : null;
+}
+function bodyLinkUrl(anchor) {
+  var _a2;
+  const raw = ((_a2 = anchor.getAttribute("href")) != null ? _a2 : "").trim();
+  return /^https?:\/\//i.test(raw) ? exportLinkUrl(raw) : "";
 }
 
 // src/modules/export/logo.ts

@@ -448,19 +448,51 @@ test('链接只写进 PDF，PNG 当场说自己点不了', () => {
 
     const decorate = code('src/modules/export/decorate.ts');
 
-    // 量的是那一行里真正有墨的部分，不是整行的盒子——一行 flex 横跨整张纸宽
-    assert.match(decorate, /function inkWithin/);
-    // 页眉页脚走 offsetLeft/offsetTop 链，天生不受祖先 transform 影响
-    assert.match(decorate, /offsetParent/);
-
     // 正文里本来就有的链接同样要能点：导出成 PDF 之后外链全变死字，
     // 是个不该由用户承担的退化——那些链接是他自己写进笔记里的
-    assert.match(decorate, /function anchorRegions/);
     assert.match(decorate, /querySelectorAll<HTMLAnchorElement>\('a\[href\]'\)/);
     // 逐行取矩形：一条横跨两行的链接，整包围盒会把中间那段无关的空白也圈成可点
     assert.match(decorate, /getClientRects\(\)/);
     // 客户端矩形会带上预览那层缩放，必须除回去，否则本函数在缩放与否时答案不同
     assert.match(decorate, /article\.offsetWidth/);
+});
+
+test('可点区域只有一套算法：页眉页脚与正文走同一条', () => {
+    const decorate = code('src/modules/export/decorate.ts');
+
+    // v0.31.0 之前是两套：页眉页脚 offsetTop 逐级累加，正文客户端矩形。
+    // offsetTop 那套错在一个看不见的前提上——它量的是「离最近那个**定位祖先**多远」，
+    // 而页眉页脚那一行只设了 display:flex、没有 position，于是子元素的 offsetTop
+    // 量的是离正文栏顶端多远，再加上行自己的 y 就把同一段距离算了两遍。
+    // 页眉在 y≈0，算两遍还是 0；页脚在 y≈1240，一加就落到纸外，真机 PDF 里 Rect 是负数。
+    assert.doesNotMatch(decorate, /offsetParent|function inkWithin|function offsetWithin/);
+
+    // 只剩一个换算函数，两处都调它
+    assert.match(decorate, /function pushRects/);
+    assert.equal(decorate.match(/pushRects\(regions, url/g)?.length, 2);
+
+    // 量的仍是那一行里真正有墨的几段，不是整条 flex 行——
+    // 那一行横跨整个正文栏，整条可点意味着点在页脚左边一片空白上也会跳走
+    assert.match(decorate, /for \(const child of line\?\.children \?\? \[\]\)/);
+});
+
+test('库内双链不许被补成网址：href 里没协议的意思是「这不是外链」', () => {
+    const decorate = code('src/modules/export/decorate.ts');
+
+    // 「没写协议」在两种输入里意思相反：输入框里是「他省略了 https://」，
+    // DOM 里是「这根本不是外链」。同一条规则套到 href 上，[[MOC数据库代码]] 会变成
+    // https://moc数据库代码/ ——真机导出的 PDF 里确实多出了四个这样的链接，
+    // 指向不存在的 punycode 域名，而且点下去之前没有任何迹象
+    assert.match(decorate, /function bodyLinkUrl/);
+    // 这一条读**原始**源码而不是去注释的那份：要找的那行里有个正则字面量 /^https?:\/\//，
+    // 而 code() 的去注释规则会把其中的 // 当成行注释从那里切掉。
+    // 「不许出现 X」必须看去注释的源码，「必须出现 X」有时反过来——两种断言看的不是同一份文本。
+    assert.match(source('src/modules/export/decorate.ts'), /\^https\?:\\\/\\\/\/i\.test\(raw\)/);
+    // 正文一路不许再直接调那个会补协议的函数
+    assert.doesNotMatch(decorate, /exportLinkUrl\(anchor/);
+
+    // 页眉页脚那两个输入框照旧补协议——用户想推广的就是 edu.example.com 那种写法
+    assert.match(decorate, /const url = exportLinkUrl\(raw\)/);
 });
 
 test('先问去处再做图：保存框立刻弹出，选完路径弹窗才关', () => {
