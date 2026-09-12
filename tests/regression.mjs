@@ -1042,3 +1042,58 @@ test('日历只在真有事发生时重画：无定时器、无轮询', () => {
     assert.doesNotMatch(view, /setInterval/);
 });
 
+/**
+ * Obsidian 运行时的 View / ItemView / Component 身上真有、但子类不该拿去当自己名字的成员。
+ *
+ * 名单分两半，危险程度不同：
+ *   · open / close / load / unload —— `obsidian.d.ts`（1.13.1，8482 行）里**一个字都没有**，
+ *     在真机控制台沿原型链枚举才看得见（View.prototype 有 open、close，
+ *     Component.prototype 有 load、unload）。撞上它们编译器一声不吭，运行期宿主调进你的方法，
+ *     参数全是 undefined——v0.30.0 的日历就是这么整个开不出来的：
+ *     右侧栏一片空白，报错只出现在没人会打开的开发者控制台里。
+ *   · app / leaf / containerEl / contentEl / scope / icon / navigation / addAction /
+ *     register* / addChild / removeChild —— 这些声明文件里有，但同名字段会把宿主那份遮掉，
+ *     同样不报错。
+ *
+ * 刻意不收 onOpen / onClose / onload / onunload / getViewType / getDisplayText / getIcon /
+ * getState / setState / getEphemeralState / setEphemeralState / onResize / onPaneMenu：
+ * 那些是宿主明写着留给子类去覆盖的钩子，覆盖它们正是用法。
+ */
+const HOST_VIEW_MEMBERS = new Set([
+    'open', 'close', 'load', 'unload',
+    'app', 'leaf', 'containerEl', 'contentEl', 'scope', 'icon', 'navigation', 'addAction',
+    'register', 'registerEvent', 'registerDomEvent', 'registerInterval',
+    'addChild', 'removeChild',
+]);
+
+test('ItemView 子类不占用宿主自己的成员名', () => {
+    const files = ['src/modules/calendar/view.ts', 'src/modules/explorer/recentFiles.ts'];
+    let classesChecked = 0;
+
+    for (const relative of files) {
+        const source = readFileSync(path.join(ROOT, relative), 'utf8');
+        const start = source.search(/^class \w+ extends ItemView \{$/m);
+
+        assert.ok(start >= 0, `${relative} 里找不到 ItemView 子类`);
+        classesChecked += 1;
+
+        // 类体：从类头到第一个顶格的 }，也就是这个类自己结束的地方
+        const body = source.slice(start).split(/^\}$/m)[0];
+        const members = [...body.matchAll(
+            /^ {4}(?:private |protected |public )?(?:static )?(?:readonly |async )*([A-Za-z_$][\w$]*)\s*[(:=]/gm,
+        )].map((match) => match[1]);
+
+        assert.ok(members.length > 5, `${relative} 的成员没解析出来，正则该修了`);
+
+        for (const name of members) {
+            assert.ok(
+                !HOST_VIEW_MEMBERS.has(name),
+                `${relative} 的 ${name} 与 Obsidian 自己的成员同名：`
+                + '编译期不会报错，运行期宿主会调进你这一份（或读到你这一份），视图直接开不出来。换个名字。',
+            );
+        }
+    }
+
+    assert.equal(classesChecked, files.length);
+});
+

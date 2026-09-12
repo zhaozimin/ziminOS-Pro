@@ -144,8 +144,17 @@ class ZiminosCalendarView extends ItemView {
      * 不靠上面那三个 vault 事件兜住这条路，是因为它们只在**新建**时触发；
      * 点一格更常见的结果是「那篇已经在了，只是打开它」——那时没有任何事件，
      * 而用户仍然期待看见自己刚点过的那一格是绿的（它本来就该是）。
+     *
+     * 名字里那三个多余的字是一次事故的赔款。它上一版就叫 `open`，而 `View.prototype`
+     * **自己有一个 `open`**——Obsidian 打开视图时调的正是它。我们的同名方法把它盖掉，
+     * 于是宿主调进来、拿到 undefined 的周期、在 `period.label` 上抛异常，
+     * 日历整个开不出来：右侧栏一片空白，编译期一个字都不报。
+     * 它不报是因为 `obsidian.d.ts`（8482 行）里根本没写这个成员——
+     * **声明文件是宿主答应支持的那一部分，不是它运行时真有的那一部分**。
+     * 继承宿主的类时，方法名只能取那些不可能是框架词汇的：
+     * `openAndRepaint` 同时说出了做什么与做完之后怎样，`open` 只是个通用动词。
      */
-    private async open(period: PeriodKey, anchorDay: string): Promise<void> {
+    private async openAndRepaint(period: PeriodKey, anchorDay: string): Promise<void> {
         await this.openPeriod(period, anchorDay);
         this.renderCalendar();
     }
@@ -308,7 +317,7 @@ class ZiminosCalendarView extends ItemView {
                 String(week.weekNumber),
                 `创建或打开 ${week.weekYear} 年第 ${week.weekNumber} 周复盘`,
                 'ziminos-calendar-week',
-                () => void this.open('weekly', week.anchor),
+                () => void this.openAndRepaint('weekly', week.anchor),
             );
 
             weekButton.setAttribute('aria-label', `${week.weekYear} 年第 ${week.weekNumber} 周`);
@@ -325,7 +334,7 @@ class ZiminosCalendarView extends ItemView {
             '',
             this.dayTitle(day, holiday?.name ?? '', holiday?.isOffDay ?? null),
             'ziminos-calendar-day',
-            () => void this.open('daily', day.date),
+            () => void this.openAndRepaint('daily', day.date),
         );
 
         button.toggleClass('is-other-month', !day.inMonth);

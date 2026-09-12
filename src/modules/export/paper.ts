@@ -7,6 +7,9 @@
  *        唯一一处刻意不照抄的是左右不对称：那份不对称是屏幕上留给滚动条的，纸上没有滚动条，
  *        照抄过来只会让正文明显偏左，所以取平均把它摆正（列宽不变）。
  *        发明尺寸就是在替用户排版，而那件事他已经在 Obsidian 的设置里回答过一次了。
+ *        页边只由正文栏一处给出，纸自己的内边距一律清零（主题会顺手给 `.markdown-preview-view`
+ *        塞一份，留着它正文就会从纸里溢出去）；量纸宽问的也是纸自己的宽而不是含溢出的 scrollWidth。
+ *        明暗则**真的切界面**：只在子树上挂类够不着 `body.theme-dark .foo` 那一整类规则。
  *        它与 decorate.ts 分家是整个预览功能的根：内容渲染昂贵且只该发生一次
  *        （解析 Markdown、内联远端图、等字体与版面稳定），装饰廉价却要在每一次拖动滑块时重来。
  *        两者原本焊在一个函数里，于是「实时」只能靠整篇重渲染，而那是卡顿的另一个名字。
@@ -32,12 +35,21 @@ export interface ExportPaper {
      */
     resize(width: number | null, minHeight: number | null): void;
     /**
-     * 让这张纸用哪一套明暗，不动 Obsidian 自己的主题。
+     * 让这张纸用哪一套明暗——做法是**真的把界面切过去**，导出完再切回来。
      *
-     * 做法是往舞台上挂 `theme-light` / `theme-dark` 一个类——主题把配色变量定义在这两个
-     * **不带 body 限定**的类选择器下（Obsidian 自己如此，Minimal 全篇 347 处里只有 1 处带 body），
-     * 于是同一套变量在这棵子树里被重新算一遍，纸就换了底色，而屏幕上其余部分一动不动。
-     * 挂在舞台而不是纸上：被拍的是纸，它自身的计算样式里因此只剩解算好的颜色，不留下这层开关。
+     * v0.29.0 的做法是只往舞台上挂一个 `theme-light` / `theme-dark`，赌的是「主题把配色变量
+     * 定义在不带 body 限定的类选择器下」。这个赌注对**变量**基本成立，对**规则**不成立：
+     * 凡是写成 `body.theme-dark .foo { background: … }` 的（Minimal 有、Style Settings 生成的
+     * 有、这本库里十三个 CSS 片段也有），子树里挂多少个类都够不着那个 `body`。
+     * 表现就是用户报的那一条：纸换了底色，Bases 的表头、代码块、引用块这些却留着原来那身颜色。
+     *
+     * 用户给的判据是「把整个 Obsidian 想象成换了明暗主题，然后再导出」——那就别想象，
+     * 直接换：类挂到 Obsidian 自己挂的那个地方（body），于是每一条规则、每一个变量、
+     * 每一个片段都按新主题重算一遍，不存在够不着的死角。代价是界面会跟着变一下，
+     * 这正是它的意思：预览就是导出物本身，那么此刻屏幕上这套配色也就该是导出物那套。
+     *
+     * 换回来必须是无条件的，所以 release() 里放着同一个函数——导出失败、用户取消、
+     * Esc 关窗走的都是那条 finally。
      */
     setTheme(theme: ExportTheme): void;
     /** 交给预览：把舞台挪进宿主并按 scale 缩放 */
@@ -120,6 +132,14 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
     });
     const content = article.createDiv({ cls: 'markdown-preview-sizer' });
     const metrics = measureSource(ctx, file);
+    /**
+     * 把界面的明暗放回用户原来那一套。
+     *
+     * 它是一份**必须还的债**：setTheme 改的是 document.body，那是全局的。
+     * 因此每次改之前先还上一笔，release 里再无条件还一次——导出失败、按取消、Esc 关窗，
+     * 三条路最后都汇进 exporter 那个 finally，而那里只调 release。
+     */
+    let restoreTheme: (() => void) | null = null;
 
     component.load();
     parkStage(stage);
@@ -150,20 +170,27 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
     return {
         article,
         setTheme: (theme) => {
+            // 先还清上一笔再借新的：预览里换三次明暗就是连着借三次，
+            // 不先还的话最后记住的「原来那一套」会是上一次借出去的那一套。
+            restoreTheme?.();
+            restoreTheme = null;
             stage.removeClass('theme-light');
             stage.removeClass('theme-dark');
             stage.style.colorScheme = '';
 
             if (theme === 'auto') return;
 
-            stage.addClass(theme === 'light' ? 'theme-light' : 'theme-dark');
+            const wanted = theme === 'light' ? 'theme-light' : 'theme-dark';
+
+            // 舞台这一层留着：body 那一层是给「够不着的规则」看的，这一层是给纸自己看的，
+            // 万一别的东西把 body 改回去了，纸至少还是对的。两层不冲突，同一个类名。
+            stage.addClass(wanted);
             stage.style.colorScheme = theme;
+            restoreTheme = swapInterfaceTheme(wanted);
         },
         resize: (width, minHeight) => {
-            const paperWidth = width ?? metrics.width;
-
-            article.style.width = `${paperWidth}px`;
-            content.style.width = `${paperWidth}px`;
+            article.style.width = `${width ?? metrics.width}px`;
+            // 正文栏不跟着改：它是 width:100%，纸一变它自己就跟到。
             // 最小高度落在纸上而不是正文栏上：正文栏撑高会把页脚一起往下推，
             // 而「纸至少这么高」要的是纸的下缘，不是把正文中间拉开一段空白。
             article.style.minHeight = `${minHeight ?? 1}px`;
@@ -185,14 +212,54 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
             document.body.appendChild(stage);
             parkStage(stage);
         },
+        // 宽取纸**自己**的宽，高取内容撑出来的高——两个方向刻意不对称，因为问题不一样。
+        //
+        // 宽度上，v0.25.0 已经定过：不因宽内容加宽，超宽表格与长代码行留在自己那个横向滚动的
+        // 盒子里。可这里一直问的是 scrollWidth，也就是「含溢出」的宽——那条决定只兑现了一半，
+        // 纸不加宽，拍下来的画布却加宽了，多出来的部分没有纸的底色，就是右边那条空带子。
+        // offsetWidth 还有一层好处：它不受 transform 影响，预览把舞台缩过之后问它照样是真值。
+        //
+        // 高度上没有这个问题：纸本来就该跟着内容往下长，那正是「长图」三个字的意思。
         measure: () => ({
-            width: Math.ceil(Math.max(1, article.scrollWidth)),
+            width: Math.ceil(Math.max(1, article.offsetWidth)),
             height: Math.ceil(Math.max(1, article.scrollHeight)),
         }),
         release: () => {
+            // 第一件事，不是最后一件：下面两行就算抛了，用户的界面也已经回到他自己那套明暗。
+            restoreTheme?.();
+            restoreTheme = null;
             component.unload();
             stage.remove();
         },
+    };
+}
+
+/** Obsidian 自己就用这两个类表达明暗，因此换明暗＝换这两个类，没有第二套写法 */
+const INTERFACE_THEMES = ['theme-light', 'theme-dark'] as const;
+
+/**
+ * 把整个界面切到某一套明暗，返回一个把它原样放回去的函数。
+ *
+ * 改的是 `document.body` 上那两个类，也正是 Obsidian 自己改的那两个——所以这不是「模拟」
+ * 一次主题切换，它**就是**一次主题切换，只不过由我们发起、并且用完就还。
+ * 这一步不经任何 Obsidian API：类名是 CSS 的公开契约（十三个片段、Minimal 与
+ * Style Settings 全都写着它），改 DOM 不是调接口，因此不构成新的红线缺口。
+ *
+ * 记的是「原来有没有这个类」而不是「原来是哪一套」：前者放回去一定对，
+ * 后者在两个类都不在（主题自己按系统配色走）这种情形下会凭空加出一个。
+ */
+function swapInterfaceTheme(wanted: string): () => void {
+    const body = document.body;
+    const had = INTERFACE_THEMES.map((name) => ({ name, present: body.hasClass(name) }));
+
+    INTERFACE_THEMES.forEach((name) => body.removeClass(name));
+    body.addClass(wanted);
+
+    return () => {
+        INTERFACE_THEMES.forEach((name) => body.removeClass(name));
+        had.forEach((entry) => {
+            if (entry.present) body.addClass(entry.name);
+        });
     };
 }
 
@@ -239,9 +306,16 @@ function measureSource(ctx: ZiminosContext, file: TFile): PaperMetrics {
 
     // 按顺序找而不是交给一条并列选择器：querySelector 返回的是**文档顺序**里的第一个，
     // 两种视图同时在场时谁先谁后并无保证，而这两者量出来的东西差着一整条编辑器的宽度。
+    //
+    // 挑的是第一个**量得到**的，不是第一个存在的——这两件事在编辑态并不是一回事。
+    // 一篇笔记只要被阅读视图渲染过一次，那个 `.markdown-preview-sizer` 就一直留在 DOM 里；
+    // 切回编辑态它不会消失，只是宽度变成 0。旧写法认「存在」，于是在编辑态永远第一个撞上它，
+    // 随即因为宽度不合法整套回落到 FALLBACK——**「量自编辑区」这条主线一次都没有真正跑过**，
+    // 而它什么都不报：导出的纸看上去有模有样，只是那三个数是写死的。
     const element = COLUMN_SELECTORS
         .map((selector) => view.contentEl.querySelector<HTMLElement>(selector))
-        .find((found): found is HTMLElement => found !== null);
+        .find((found): found is HTMLElement =>
+            found !== null && found.getBoundingClientRect().width >= 1);
 
     if (!element) return FALLBACK_METRICS;
 
@@ -284,6 +358,11 @@ function styleArticle(article: HTMLElement, content: HTMLElement, metrics: Paper
         width: `${metrics.width}px`,
         minHeight: '1px',
         height: 'auto',
+        // 页边只能有一个来源。这张纸挂着 `.markdown-preview-view`，主题会顺手再给它
+        // 一份左右内边距（真机实测 32px），而正文栏拿的是**整张纸的宽度**——
+        // 于是正文栏从这份内边距里整整溢出 32px，纸的右边多出一条没有底色的带子，
+        // 长度正好是那 32px。清零不是覆盖主题的排版，恰恰是让排版只由下面那一处说了算。
+        padding: '0',
         overflow: 'visible',
         color: 'var(--text-normal)',
         background: 'var(--background-primary)',
@@ -295,10 +374,12 @@ function styleArticle(article: HTMLElement, content: HTMLElement, metrics: Paper
     if (metrics.fontFamily) article.style.fontFamily = metrics.fontFamily;
     if (metrics.lineHeight) article.style.lineHeight = metrics.lineHeight;
 
+    // 正文栏跟着纸走，而不是自己记一个宽度：两处各记一份，`resize` 就得记得同时改两处，
+    // 漏一处的表现是正文从纸里溢出来——而那是无声的，纸看上去只是「右边空了一块」。
     Object.assign(content.style, {
         boxSizing: 'border-box',
         position: 'relative',
-        width: `${metrics.width}px`,
+        width: '100%',
         maxWidth: 'none',
         minHeight: '1px',
         padding: `${metrics.paddingY}px ${metrics.paddingX}px`,

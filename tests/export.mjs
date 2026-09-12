@@ -316,9 +316,9 @@ test('内容渲一次、装饰重放无数次：预览不得重新解释 Markdow
     const decorate = code('src/modules/export/decorate.ts');
     const modal = code('src/modules/export/modal.ts');
 
-    // 纸面层独占昂贵的那一半
+    // 纸面层独占昂贵的那一半，也独占「这张纸此刻多大」这个问题
     assert.match(paper, /MarkdownRenderer\.render/);
-    assert.match(paper, /article\.scrollWidth/);
+    assert.match(paper, /article\.offsetWidth/);
     assert.match(paper, /article\.scrollHeight/);
 
     // 装饰层先清后建，这是幂等的全部实现
@@ -521,6 +521,37 @@ test('正文左右等宽：屏幕上留给滚动条的那点不对称，不该�
     assert.match(paper, /\$\{metrics\.paddingY\}px \$\{metrics\.paddingX\}px/);
 });
 
+test('页边只有一个来源，纸宽只有一个答案：右边不再多出一条没底色的带子', () => {
+    const paper = code('src/modules/export/paper.ts');
+
+    // 一、纸自己的内边距清零。它挂着 .markdown-preview-view，主题会顺手再塞一份（真机 32px）；
+    // 留着它，页边就有两个来源，而正文栏还会从这份内边距里溢出去整整那么多
+    assert.match(paper, /padding: '0'/);
+
+    // 二、正文栏跟着纸走，不自己记一个宽度。两处各记一份，resize 漏改一处就溢出，而且无声
+    assert.match(paper, /width: '100%'/);
+    assert.doesNotMatch(paper, /content\.style\.width/);
+
+    // 三、量纸宽问的是纸自己的宽。scrollWidth 是「含溢出」的宽——纸不加宽、画布却加宽，
+    // 多出来那块没有纸的底色，就是用户看见的右边那条空带子
+    assert.match(paper, /width: Math\.ceil\(Math\.max\(1, article\.offsetWidth\)\)/);
+    assert.doesNotMatch(paper, /article\.scrollWidth/);
+    // 高度反过来必须含内容：纸本来就该跟着内容往下长，那正是「长图」的意思
+    assert.match(paper, /height: Math\.ceil\(Math\.max\(1, article\.scrollHeight\)\)/);
+});
+
+test('量的是第一个量得到的那一栏，不是第一个存在的', () => {
+    const paper = code('src/modules/export/paper.ts');
+
+    // 一篇笔记被阅读视图渲过一次，那个 .markdown-preview-sizer 就一直留在 DOM 里；
+    // 切回编辑态它不消失，只是宽度变 0。认「存在」就会在编辑态永远先撞上它，
+    // 随即整套回落 FALLBACK——「量自编辑区」这条主线于是一次都没真正跑过，且什么都不报
+    assert.match(paper, /found !== null && found\.getBoundingClientRect\(\)\.width >= 1/);
+
+    // 顺序仍然是「阅读态 → 编辑态正文栏 → 编辑器整栏」，兜底仍然整套一起回落
+    assert.match(paper, /COLUMN_SELECTORS = \['\.markdown-preview-sizer', '\.cm-content', '\.cm-sizer'\]/);
+});
+
 test('参考线只画给嵌套列表：顶层没有父级，那条线什么都不表示', () => {
     const css = source('vault/.obsidian/plugins/ziminos/styles.css');
 
@@ -563,11 +594,26 @@ test('导出明暗与 Obsidian 当前主题分开，默认仍是跟随', () => {
 
     const paper = code('src/modules/export/paper.ts');
 
-    // 靠往舞台挂一个类让主题的变量在这棵子树里重算，屏幕上其余部分一动不动
-    assert.match(paper, /stage\.addClass\(theme === 'light' \? 'theme-light' : 'theme-dark'\)/);
-    assert.match(paper, /stage\.removeClass\('theme-light'\)/);
-    // 绝不去动 Obsidian 自己的主题：那会把整个界面闪一下
-    assert.doesNotMatch(paper, /document\.body\.(add|remove|toggle)Class/);
+    // v0.29.0 只往舞台挂一个类，赌「主题把配色变量定义在不带 body 限定的选择器下」。
+    // 这个赌注对变量基本成立，对规则不成立：`body.theme-dark .foo { … }` 这种写法
+    // （Minimal 有、Style Settings 生成的有、这本库十三个片段也有）在子树里挂多少类都够不着，
+    // 于是纸换了底色、Bases 表头与代码块却留着原来那身颜色。用户的判据是
+    // 「把整个 Obsidian 想象成换了明暗主题再导出」——那就别想象，真的换。
+    assert.match(paper, /function swapInterfaceTheme/);
+    assert.match(paper, /body\.addClass\(wanted\)/);
+    assert.match(paper, /const body = document\.body/);
+
+    // 换了就必须还得回来，而且是无条件的：导出失败、取消、Esc 关窗都走 release 那条路
+    assert.match(paper, /restoreTheme\?\.\(\)/);
+    assert.ok(
+        paper.indexOf('release: () => {') > 0
+        && /release: \(\) => \{\s*restoreTheme\?\.\(\);/.test(paper),
+        'release 的第一件事就该是把界面的明暗还回去',
+    );
+
+    // 记的是「原来有没有这个类」而不是「原来是哪一套」：
+    // 两个类都不在（跟随系统配色）时，后者会凭空加出一个
+    assert.match(paper, /present: body\.hasClass\(name\)/);
 
     // 明暗必须排在装饰之前：装饰层要读正文色去定水印颜色
     for (const file of ['src/modules/export/modal.ts', 'src/modules/export/exporter.ts']) {
