@@ -2,7 +2,8 @@
 #
 # 打第二版（付费·三库）的分发包。
 #
-# [INPUT]: 依赖仓库里的 vault/、vault-pro/、skill-pro/、fonts/ 与 npm run build 的产物
+# [INPUT]: 依赖仓库里的 vault/、vault-pro/、skill-pro/、fonts/ 与 npm run build 的产物，
+#          依赖 pack-zip.py 写出带 UTF-8 标志位的 zip
 # [OUTPUT]: 一个自足的 zip + 同名 .sha256，解压出来的目录可直接充当 skill-pro/SKILL.md 的施工源
 # [POS]: 唯一的分发出口。手工拖拽打包迟早漏一个文件或带上一份陈旧的 main.js，
 #        而漏掉的那个文件不会在打包时报错——只会在测试者装到一半时报错。
@@ -190,47 +191,10 @@ mkdir -p "$out_dir"
 zip_path="$out_dir/$name.zip"
 rm -f "$zip_path" "$zip_path.sha256"
 
-# 用 Python 的 zipfile 而不是 zip 命令行。
-# 理由是这个包里 104 个条目**全部**含中文文件名（三本库名、十二个带【】的 CSS 片段、安装说明），
-# 而 macOS 自带的 Info-ZIP 不给它们置 UTF-8 标志位（通用位第 11 位）。
-# 不置位的后果只在别人机器上发作：Windows 自带解压会按系统代码页去猜那串字节，
-# 解出来是一堆乱码目录名，而安装契约按名字找目录，于是第一步就失败——
-# 打包这边不会有任何报错。zipfile 对非 ASCII 名一律置位，跨平台因此可预期。
-python3 - "$work" "$name" "$zip_path" << 'PACK'
-import os, stat, sys, zipfile
-
-work, name, zip_path = sys.argv[1], sys.argv[2], sys.argv[3]
-root = os.path.join(work, name)
-count = 0
-
-with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-    for folder, dirs, files in os.walk(root):
-        dirs.sort()
-        for filename in sorted(files):
-            if filename == ".DS_Store":
-                continue
-
-            full = os.path.join(folder, filename)
-            arc = os.path.join(name, os.path.relpath(full, root)).replace(os.sep, "/")
-            info = zipfile.ZipInfo(arc)
-            info.compress_type = zipfile.ZIP_DEFLATED
-            # 保留权限位，免得脚本解出来丢掉可执行属性
-            info.external_attr = (stat.S_IMODE(os.stat(full).st_mode)) << 16
-            with open(full, "rb") as handle:
-                z.writestr(info, handle.read())
-            count += 1
-
-# 自证：非 ASCII 的条目必须全部带上 UTF-8 标志位，否则这个包不许发出去
-with zipfile.ZipFile(zip_path) as z:
-    bad = [i.filename for i in z.infolist()
-           if any(ord(c) > 127 for c in i.filename) and not (i.flag_bits & 0x800)]
-
-if bad:
-    print("有 %d 个中文文件名没带 UTF-8 标志位，拒绝出包" % len(bad), file=sys.stderr)
-    sys.exit(1)
-
-print("    %d 个文件，中文名全部带 UTF-8 标志位" % count)
-PACK
+# 这个包里几乎每个条目都含中文文件名（三本库名、带【】的 CSS 片段、安装说明），
+# 而 macOS 自带的 zip 命令不给它们置 UTF-8 标志位——Windows 自带解压会解出乱码目录名，
+# 安装契约按名字找目录，于是第一步就失败。怎么写才安全只在 pack-zip.py 里写一份。
+python3 "$repo_root/pack-zip.py" "$stage" "$zip_path"
 
 ( cd "$out_dir" && shasum -a 256 "$name.zip" > "$name.zip.sha256" )
 

@@ -14,6 +14,8 @@ TypeScript 7.0 + esbuild 0.28 + Obsidian API 1.13（manifest minAppVersion 1.13.
 
 **本仓库自 v0.16.0 起同时交付两个版次，两版共用同一份 `main.js`。** 第一版（免费·单库）是已经在外面流传的那套：一本笔记库，安装契约 `skill/SKILL.md`，README 首页那段一键指令指向它。第二版（付费）是三库系统——《兼收并蓄》收一切还没消化的东西、《以人为本》就是第一版那本工作台、《赛博永生》按卡帕西 LLM wiki 把已完成的项目编译成知识——外加一个口述入口，安装契约 `skill-pro/SKILL.md`。
 
+**第一版另有一条不经智能体的来路（v0.33.0 · 不改插件，规格 §55）。** 契约第二步是 `git clone`，它在开发者电脑上从不失败，于是一直没人把它当成前提——直到学员用 Windows、电脑上没有 Git，智能体第一步就停住。Git 从来不是产品的一部分，用户最终拿到的只是 `vault/` 加四款字体，所以答案不是教学员装 Git，而是把**同一份交付物换一种形态**：`make-v1-package.sh` 把它摆成人看得懂的样子，挂上 Gitee 第一版仓库的发行版（匿名可下），学员照包里的《安装说明》解压、装字体、打开、初始化。两条来路装出来的是同一种库，不是两套做法：清单从契约解析、只从 HEAD 取料、字节与第一版仓库 main 对账。手动升级只做智能体升级的前一半——换程序，不做合并——代价是新片段默认关着，说明里写着去 🎨 打开。
+
 两版的隔离不是配置开关而是**装配期开关**：第二版安装器写下一个第一版永远没有的版次标记 `edition.json`，`src/core/edition.ts` 在 onload 最前面读它，main 拿到 free 就根本不接第二版那条线——没有命令、没有视图、没有监听，免费库的行为与第二版出现之前逐字节相同。标记可删，删了就退回第一版。失败方向是刻意的：文件缺席、读不动、JSON 坏了、字段不认识，一律回落 free，因为坏标记把付费功能塞进免费库（用户看不见）比坏标记让付费库退化（用户会来问）严重得多。`skill/SKILL.md` 与 `vault/` 的既有内容一个字都不许**因为第二版**而改动——这条护的是第一版用户，不是把那两处冻成化石。v0.17.0 改过 `skill/SKILL.md` 里的克隆地址，理由与第二版无关：GitHub 的 `zhaozimin/ziminOS` 已经访问不到（账号封禁，403），那行指令对谁都不成立了；不改它，第一版的安装是断的。判据因此是**动机**而不是文件名：为第二版让路 = 违规，为「这行字已经不是事实了」= 必须改。
 
 <directory>
@@ -76,7 +78,7 @@ vault-pro/ - 第二版特有的笔记库成品 (3子目录: 兼收并蓄 进料�
 
 vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，Obsidian/Eagle 两份 manifest 都由构建链同步，main.js 是刻意入库的构建产物（三十八枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 服务二十四个笔记内视图、中国日历与最近文件两个 ItemView、Eagle 附件呈现、外观开关浮层、文件夹计数、状态栏当前路径、导出预览弹窗（连同会被拍进 PNG/PDF 的页眉页脚）、八张设置页与作者名片（手工维护，不经 esbuild），ziminOS-Eagle-Bridge.eagleplugin 是同版伴侣的可安装 ZIP 产物；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
 vault/.obsidian/snippets/ - 十三个 CSS 片段，外观包的可拆装部分；十一个默认启用，全部由右下角外观开关逐个开关。第十三个「突出废弃内容」把 Markdown 删除线收成系统语义：编辑/阅读两态同时弱化文字、铺淡警示色背景、画 2px 警示色线；段内双链另加风险底色、边界与下划线，已断双链升为红色双边界，不插标签打断原句。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源
-tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，并以专项测试钉住微信单一路由、客户答疑双闸、导出画布/PDF 尺寸、版本同构与既有业务行为
+tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，并以专项测试钉住微信单一路由、客户答疑双闸、导出画布/PDF 尺寸、手动安装包与说明同构、版本同构与既有业务行为
 src/ - 插件源码 (2子目录: core 无业务基础设施与命令/视图/版次闸门；modules 含 setup、projects、books、inspiration、calendar、review、contacts、appearance、format、editing、eagle、export 当前笔记导出、explorer、legacy、ribbon、eternal、about)
 </directory>
 
@@ -110,11 +112,13 @@ Obsidian 1.6 把切换笔记库、帮助、设置三个按钮从左侧 ribbon �
 
 <config>
 AGENTS.md - 智能体任务路由，**桌面智能体自动读到的第一份指令**，因此是全仓库路由的第一现场。它按版次分流：提到三库/pro/付费或点名另外两本库 → skill-pro/SKILL.md，否则 → skill/SKILL.md；开发请求进入项目规格。v0.17.0 重写：它从第二版落库（b630b4a）起一直停在「只有一本库」的世界，写着无条件的「安装请求→skill/SKILL.md」与「不得创建另一层目录」——后一句恰好把三库布局明令禁止了，于是拿着第二版指令来的智能体被它劫持成第一版，只装出一本库且**不报错**。教训是它必须与契约同增同减，因此带 [PROTOCOL] 头并由回归钉住：每一份存在的施工契约都必须出现在它的路由表里
-README.md - Gitee 公开首页与安装入口。**两个版次住两个 Gitee 仓库**：第一版 `ziminzhao/zimin-os-v1`、第二版 `ziminzhao/ziminos-pro`（GitHub 上的 `zhaozimin/ziminOS` 已 403）。首页不复制施工逻辑，只把两个版次导向各自契约。v0.21.0 的手机口令解决远程窗口读不到系统根认路文件的问题，并以 `notectl.py status` 自证连接；v0.22.0 的 Eagle 入口则只把学员导向单文件 HTML 手册，不在首页再造一份安装契约
+README.md - Gitee 公开首页与安装入口。**两个版次住两个 Gitee 仓库**：第一版 `ziminzhao/zimin-os-v1`、第二版 `ziminzhao/ziminos-pro`（GitHub 上的 `zhaozimin/ziminOS` 已 403）。首页不复制施工逻辑，只把两个版次导向各自契约；第一版不经智能体的那条来路同理，首页只给发行版 `releases/latest` 与包里《安装说明》的名字。v0.21.0 的手机口令解决远程窗口读不到系统根认路文件的问题，并以 `notectl.py status` 自证连接；v0.22.0 的 Eagle 入口则只把学员导向单文件 HTML 手册，不在首页再造一份安装契约
 package.json - 依赖与六条脚本：dev 常驻 watch，test 跑插件审计回归，build 先 tsc 严格检查、esbuild 打 Obsidian 主包再调用 package-eagle.sh，package:eagle 可单独重建伴侣包，demo 由 docs/export-demo/ 的四份源重新生成那份交互演示页，check 串行构建与测试
 package-eagle.sh - Eagle 伴侣唯一打包出口；核对两端版本后以固定白名单、权限与时间戳组装可复现的 `.eagleplugin` ZIP，产物原子落进 vault 的 ziminOS 插件目录，不安装、不读取 Eagle 用户数据
 publish-v1.sh - 两个 Gitee 仓库之间**唯一**的同步通道，方向只有 pro → v1 一条。它把两版共享的 src / vault / eagle-companion / fonts / skill / tests 与构建配置单向发布到第一版公开仓库；README / AGENTS / CLAUDE / docs 不在同步范围，两个仓库各自说给各自的读者听。方向不能反：pro 的 src/ 是 v1 的**严格超集**，从 v1 往回同步会删掉第二版。它存在的理由是一次事故——两个仓库曾各自能改同一份 src/，分叉出 editing/explorer/legacy 与 eternal/edition 两批改动，最后靠一次 23 个文件的三方合并才收回来。四道闸：工作区必须干净、`npm run check` 必须过、构建后 main.js 不许再变（防止推出去的产物与源码对不上）、**同步后的目标仓库必须自己跑得过回归**（那份测试是推过去的，不能只在这边跑过就算数）。防泄漏是硬断言而不是靠清单自觉：目标里出现 skill-pro / vault-pro / edition.json 一律中止
 make-pro-package.sh - 第二版的打包出口；先跑插件与智能体两层回归，再组装、校验并产出 zip 与 SHA-256。第二版的**事实源仓库是 Gitee 的 `ziminzhao/ziminos-pro`**（GitHub 上的 `zhaozimin/ziminOS` 只有第一版，没有 vault-pro/ 与 skill-pro/），因此 skill-pro/SKILL.md 的两条来路——分发包与 clone——取的是同一个仓库的两种形态
+make-v1-package.sh - 第一版面向「人」的分发出口：不用智能体、不用装 Git，下载解压照《安装说明》自己装。三条判据：清单不另写（「装完该有什么」「升级换什么」从 skill/SKILL.md 解析，解析不出 main.js 或升级分支开始替换 data.json 就中止）；包是第一版仓库 main 的另一种形态（`git archive HEAD` 取料，被 .gitignore 挡住的开发库状态带不出门，再经 Gitee 公开 API 比对 vault/ 与 fonts/ 的树哈希，对不上就先 publish-v1.sh；不重复构建，因为 esbuild 会把 node_modules 的相对位置写进注释）；布局给人看（ziminOS 笔记库 / 只放字体的「字体」/ 只放程序、按 Obsidian 三枚「打开…文件夹」按钮分组的「升级文件」/ 许可证 / 安装说明.html）。产物挂第一版仓库的 Gitee 发行版：匿名可下，单附件 ≤100MB、全仓附件 ≤1GB，旧版附件要定期删
+pack-zip.py - 两个分发包共用的唯一 zip 写出口；中文名一律置 UTF-8 标志位（macOS 自带 zip 不置，Windows 自带解压会解出乱码目录名），条目顺序与时间戳确定、写完逐条核 CRC。从 make-pro-package.sh 抽出来是因为第二个包出现了——同一段知识写两份，迟早只修一份，修漏的那份不在打包时报错
 tsconfig.json - 严格模式 + noEmit；类型检查与代码产出彻底分工，产出只由 esbuild 负责
 用户先创建并命名文件夹 A，再用桌面 Agent 打开 A；Gitee README 顶部那段「一分钟安装」是对人的入口，默认分支的 skill/SKILL.md 是 Agent 的唯一施工契约。此时 A 同时是 Agent 工作区与最终 Obsidian 笔记库。安装时不再询问名称或路径，不创建子目录，不在 A 内克隆源码；Gitee 官方仓库只能进入 A 外部的系统临时目录，最终把 vault/ 的内部内容直接铺到 A 根。全新安装交付锁定的 Dataview、Outliner、Quiet Outline、外观包（含十三个 CSS 片段与它们的默认启用清单）、`.obsidian/.gitignore` 隐私护栏与 fonts/ 的四款字体——字体装进用户级字体目录（免管理员，不碰系统级），appearance.json 的 textFontFamily 预设文楷 GB 屏幕版，正文换字走 Obsidian 官方设置正门、插件零参与；升级只更新受管运行文件、合并必要开关与缺失的隐私忽略规则，绝不覆盖用户配色、用户自己放进 snippets/ 的片段、其他插件配置（含 Outliner 与 Quiet Outline 各自的 data.json）、ziminOS 自己那三份运行时状态文件（holiday-cache / recent-files / cursor-positions）、用户自选的正文字体、用户已有忽略规则与用户字体目录里已存在的同名文件。任何安装或审计流程都不得输出可能含微信读书 Cookie 的 ziminOS data.json；禁止让用户打开仓库或仓库内的 vault/，禁止安装 Node/npm 依赖，交付后必须清理临时源码。
 docs/插件代码审计修复报告-2026-08-18.html - 对外交付的单文件审计报告；源码与设计规格仍是事实源
@@ -127,6 +131,7 @@ esbuild.config.mjs - Obsidian 构建出口；打包前把 package.json 版本同
 docs/第三方组件.md - 运行依赖、独立交付资产与外部设计参照的版本/上游/许可真源；v0.23.0 增加 dom-to-image-more、jsPDF 及两款导出参考插件边界
 docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26–§42 记录既有演进，§43 定义微信快捷收集单一路由、整张 PNG/单页 PDF 导出与客户答疑双闸检索。与 V1 规格并存，交集处以 V2 为准
 docs/导出预览交互演示.html - 导出弹窗的单文件交互演示，**生成物**（`npm run demo`，真源在 docs/export-demo/）。它存在的理由是一条判据：**示意图会撒谎，生成物不会**——手抄的仿真页在代码改过之后仍然一动不动地讲旧故事，而且没人会在那一刻发现。因此页内的导出样式逐字取自插件 styles.css、几何与装饰由 esbuild 从 src/ 直接打包、控件清单运行时读 EXPORT_SLIDERS，改了插件却忘了重新生成会被回归当场拦下。可离线打开、可转发，读者能直接拿自己的 logo 试
+docs/第一版手动安装指南.html - 由 make-v1-package.sh 原样复制成包里的「安装说明.html」；全新安装五步、验收、手动升级与常见问题，覆盖 Windows/macOS，零脚本（带网络标记解压出来的文件脚本不一定跑得起来）。它翻译契约不另造做法：升级只换契约点名的程序文件，唯一铁律是「只拖文件，不拖文件夹」——macOS 访达把文件夹拖到同名文件夹上选「替换」会连同 data.json 整个换掉
 docs/Eagle附件桥接安装与使用指南.html - 面向学员的单文件安装说明；把三库升级口令、Eagle 伴侣安装/配对、无本地副本验收、四类内容容器/日记分流、移动附件语义与端口/换库/图床冲突排障收成一份 macOS/Windows 可转发手册
 </delivery>
 

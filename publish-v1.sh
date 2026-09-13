@@ -44,11 +44,14 @@ SHARED=(
     LICENSE
 )
 
-# 第二版专属，一个字节都不许进公开仓库
+# 只住在第二版仓库的：付费交付物，以及只在事实源仓库里跑的发布工具。一个字节都不许进公开仓库。
+# make-v1-package.sh 打的是第一版的包，却同样只在这边跑——它核对的正是本脚本推过去的那份结果
 PRO_ONLY=(
     skill-pro
     vault-pro
     make-pro-package.sh
+    make-v1-package.sh
+    pack-zip.py
     publish-v1.sh
 )
 

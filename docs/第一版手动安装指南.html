@@ -1,0 +1,250 @@
+<!--
+  [INPUT]: 依赖 make-v1-package.sh 摆出的包内布局（安装说明.html / ziminOS / 字体 / 升级文件 / 许可证）、
+           skill/SKILL.md 升级分支点名的 ziminOS 程序文件、插件开荒页的按钮与提示文案，以及 Obsidian 中文界面的按钮名
+  [OUTPUT]: 随第一版安装包分发的单文件安装说明：全新安装、验收、手动升级与常见问题，覆盖 Windows 与 macOS
+  [POS]: docs 的用户交付说明，由 make-v1-package.sh 原样复制成包里的「安装说明.html」。
+         它翻译契约与产品行为，不另造做法：升级只换契约点名的程序文件，一份设置都不碰。
+         包里的名字、契约的文件清单与插件文案若改了而这里没跟上，tests/packaging.mjs 当场变红
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ziminOS 安装说明</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18202b;
+      --muted: #657083;
+      --paper: #f6f8fc;
+      --panel: #ffffff;
+      --line: #dce3ee;
+      --blue: #275fce;
+      --blue-soft: #edf3ff;
+      --amber: #b66a08;
+      --amber-soft: #fff4dd;
+      --green: #16734a;
+      --green-soft: #eaf8f1;
+      --red: #b13939;
+      --red-soft: #fff0f0;
+      --shadow: 0 18px 52px rgba(27, 45, 78, .09);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--paper); color: var(--ink); line-height: 1.72; }
+    a { color: var(--blue); text-underline-offset: 3px; }
+    code { padding: .12em .36em; border-radius: 5px; background: #edf1f7; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; }
+    .page { width: min(1060px, calc(100% - 32px)); margin: 0 auto; padding: 30px 0 70px; }
+    .hero { position: relative; overflow: hidden; padding: clamp(30px, 6vw, 66px); border-radius: 28px; background: #14264a; color: #f7f9ff; box-shadow: var(--shadow); }
+    .hero::after { content: "z"; position: absolute; right: 3%; bottom: -20%; color: rgba(255,255,255,.06); font: 900 260px/1 Georgia, serif; }
+    .eyebrow { margin: 0 0 12px; color: #f2b24b; font-size: 13px; font-weight: 800; letter-spacing: .16em; }
+    h1 { max-width: 800px; margin: 0; font-size: clamp(34px, 6vw, 64px); line-height: 1.1; letter-spacing: -.04em; }
+    .lead { max-width: 790px; margin: 22px 0 0; color: #d7e1f5; font-size: clamp(16px, 2vw, 20px); }
+    .tags { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 28px; }
+    .tag { padding: 6px 11px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; color: #e5ecfb; font-size: 13px; }
+    .quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 34px; }
+    .quick a { min-height: 98px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: inherit; text-decoration: none; box-shadow: 0 8px 24px rgba(27,45,78,.045); }
+    .quick b { display: block; margin-bottom: 5px; color: var(--blue); font-size: 18px; }
+    .quick span { color: var(--muted); font-size: 13px; }
+    section { margin-top: 26px; padding: clamp(23px, 4vw, 40px); border: 1px solid var(--line); border-radius: 22px; background: var(--panel); box-shadow: 0 10px 34px rgba(27,45,78,.045); }
+    .kicker { margin-bottom: 5px; color: var(--blue); font-size: 12px; font-weight: 900; letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0 0 10px; font-size: clamp(25px, 3vw, 34px); line-height: 1.25; letter-spacing: -.025em; }
+    h3 { margin: 25px 0 8px; font-size: 19px; }
+    p { margin: 9px 0; }
+    .muted { color: var(--muted); }
+    .os { display: inline-block; margin-right: 6px; padding: 0 8px; border-radius: 6px; background: #182743; color: white; font-size: 12px; font-weight: 800; line-height: 1.8; vertical-align: 1px; }
+    .callout { margin: 18px 0; padding: 17px 19px; border-left: 5px solid var(--blue); border-radius: 11px; background: var(--blue-soft); }
+    .callout.warn { border-color: var(--amber); background: var(--amber-soft); }
+    .callout.danger { border-color: var(--red); background: var(--red-soft); }
+    .callout.ok { border-color: var(--green); background: var(--green-soft); }
+    .callout strong:first-child { display: block; margin-bottom: 3px; }
+    .steps { counter-reset: step; display: grid; gap: 14px; margin-top: 19px; }
+    .step { position: relative; padding: 18px 19px 18px 64px; border: 1px solid var(--line); border-radius: 15px; background: #fbfcff; }
+    .step::before { counter-increment: step; content: counter(step); position: absolute; left: 18px; top: 18px; display: grid; width: 31px; height: 31px; place-items: center; border-radius: 50%; background: var(--blue); color: white; font-weight: 800; }
+    .step h3 { margin: 0 0 4px; font-size: 17px; }
+    .step p { margin: 6px 0; }
+    .checklist { padding: 0; list-style: none; }
+    .checklist li { position: relative; margin: 9px 0; padding-left: 30px; }
+    .checklist li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--green); font-weight: 900; }
+    .table-wrap { overflow-x: auto; margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; }
+    table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 13px 14px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+    th { background: #182743; color: white; }
+    td code { white-space: nowrap; }
+    tr:last-child td { border-bottom: 0; }
+    .footer { padding: 30px 10px 0; color: var(--muted); font-size: 13px; text-align: center; }
+    @media (max-width: 760px) {
+      .quick { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 460px) {
+      .page { width: min(100% - 20px, 1060px); padding-top: 10px; }
+      .hero, section { border-radius: 17px; }
+      .quick { grid-template-columns: 1fr; }
+      .step { padding-left: 54px; }
+      .step::before { left: 13px; }
+    }
+    @media print {
+      body { background: white; }
+      .page { width: 100%; padding: 0; }
+      .hero, section, .quick a { box-shadow: none; break-inside: avoid; }
+      .quick { display: none; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <p class="eyebrow">ZIMINOS · 第一版 · 手动安装</p>
+      <h1>不用智能体，<br>十分钟装好 ziminOS</h1>
+      <p class="lead">这个包就是装好之后的样子：一本配好的笔记库、四款阅读字体、一份以后升级用的程序文件。解压、装字体、用 Obsidian 打开、点一次初始化。不需要 Git，不需要 Node.js，也不需要 AI。</p>
+      <div class="tags"><span class="tag">Windows 10 / 11</span><span class="tag">macOS</span><span class="tag">Obsidian 1.13.0 或更高</span><span class="tag">约 10 分钟</span></div>
+    </header>
+
+    <nav class="quick" aria-label="章节导航">
+      <a href="#package"><b>包里有什么</b><span>解压后的五样东西</span></a>
+      <a href="#install"><b>全新安装</b><span>第一次装，照五步做</span></a>
+      <a href="#upgrade"><b>以后怎么升级</b><span>只换程序，不碰设置</span></a>
+      <a href="#faq"><b>常见问题</b><span>卡住了先看这里</span></a>
+    </nav>
+
+    <section id="package">
+      <div class="kicker">What's Inside</div>
+      <h2>解压后你会看到这五样</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>名字</th><th>是什么</th><th>什么时候用</th></tr></thead>
+          <tbody>
+            <tr><td><code>安装说明.html</code></td><td>你正在看的这一份</td><td>随时</td></tr>
+            <tr><td><code>ziminOS</code></td><td>笔记库本身。ziminOS 插件、Dataview、Outliner、Quiet Outline、Minimal 主题、Style Settings、外观片段与默认配色都已经在里面</td><td>全新安装</td></tr>
+            <tr><td><code>字体</code></td><td>四款阅读字体，共五个文件：霞鹜文楷（屏幕阅读版）、思源宋体 CN（常规与粗体）、朱雀仿宋、霞鹜新晰黑＋</td><td>全新安装</td></tr>
+            <tr><td><code>升级文件</code></td><td>只有程序，一份设置都没有</td><td>已经装过、要换新版时</td></tr>
+            <tr><td><code>许可证</code></td><td>四款字体的开源许可</td><td>不用管</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout"><strong>「ziminOS」里有一个叫 .obsidian 的文件夹。</strong>Obsidian 的全部配置都在里面，macOS 默认把它藏起来，看不见不代表没有。所以下面每一步说的都是「移动整个文件夹」，而不是「把里面的东西拖出来」。</div>
+    </section>
+
+    <section id="install">
+      <div class="kicker">Fresh Install</div>
+      <h2>全新安装：五步</h2>
+      <div class="callout warn"><strong>先装好 Obsidian。</strong>到 <a href="https://obsidian.md/download">obsidian.md</a> 下载 1.13.0 或更高版本。已经装了的，打开「设置 → 关于」点「检查更新」。</div>
+      <div class="steps">
+        <article class="step">
+          <h3>解压安装包</h3>
+          <p><span class="os">Windows</span>右键压缩包 →「全部解压缩」→「解压」。</p>
+          <p><span class="os">macOS</span>双击压缩包。</p>
+          <p class="muted">一定要解压出来再用。双击压缩包往里点，看到的只是预览，Obsidian 打不开里面的库。</p>
+        </article>
+        <article class="step">
+          <h3>装字体（在打开 Obsidian 之前）</h3>
+          <p><span class="os">Windows</span>打开「字体」文件夹，按 <code>Ctrl&nbsp;+&nbsp;A</code> 全选，右键 →「安装」。选「安装」，不要选「为所有用户安装」，后者要管理员权限。Windows 11 的右键菜单里没看到，先点「显示更多选项」。</p>
+          <p><span class="os">macOS</span>打开「字体」文件夹，逐个双击五个字体文件，在弹出的窗口里点「安装」。</p>
+          <p class="muted">跳过这一步也能用，只是正文不是霞鹜文楷。如果装的时候 Obsidian 开着，装完要完全退出 Obsidian 再打开，因为它只在启动时读一次系统字体。</p>
+        </article>
+        <article class="step">
+          <h3>把笔记库放到长期住的地方，改个名字</h3>
+          <p>把「ziminOS」这个文件夹<strong>整个</strong>拖到你打算长期存放的位置，比如 D 盘，或者「文档」里。然后改成你喜欢的名字：这个名字就是你这套系统的名字。</p>
+          <p class="muted">别把它留在「下载」里，那里迟早会被清理。也别只拖文件夹里面的东西：里面藏着 .obsidian，只拖看得见的那一个文件，等于只搬了一半。</p>
+        </article>
+        <article class="step">
+          <h3>用 Obsidian 打开它</h3>
+          <p>打开 Obsidian，在「打开本地仓库」那一行点「打开」，选中刚才那个文件夹。如果 Obsidian 已经开着别的库：点左下角的库名 →「管理仓库…」，就回到这个界面。</p>
+          <p>第一次打开会问「你是否信任这个仓库的作者？」，点<strong>「信任仓库作者并启用插件」</strong>。</p>
+          <p class="muted">英文界面上这两处是 Open folder as vault 与 Trust author and enable plugins。</p>
+        </article>
+        <article class="step">
+          <h3>点一次初始化</h3>
+          <p>点左下角的齿轮打开设置，在左边那一列往下找到 <strong>ziminOS</strong>。顶上第一张标签「开荒」里，点「初始化」。</p>
+          <p>屏幕上出现「开荒完成 ✅」、放一次礼花，就成了。它会自动打开库里的 README，日常怎么用都写在那一篇里。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="verify">
+      <div class="kicker">Check</div>
+      <h2>装好了吗？看这五处</h2>
+      <ul class="checklist">
+        <li>最左边那一列多出 ziminOS 的图标（新建项目、记录灵感、今天的日记……），鼠标停上去会告诉你它是谁。</li>
+        <li>右侧栏有一张中国日历，显示农历、节气和法定休/班。</li>
+        <li>右下角有一个 🎨 按钮，点开是外观片段的开关。</li>
+        <li>正文是霞鹜文楷：「设置 → 外观 → 正文字体」里写着 <code>LXGW WenKai GB Screen</code>。</li>
+        <li>「设置 → 第三方插件」的「已安装插件」里，ziminOS 的版本号和安装包文件名里的一样。</li>
+      </ul>
+      <div class="callout ok"><strong>装完之后</strong>解压出来的其余东西（字体、升级文件、许可证、这份说明）都可以删掉。以后升级时下载新的安装包就行。</div>
+    </section>
+
+    <section id="upgrade">
+      <div class="kicker">Upgrade</div>
+      <h2>以后怎么升级</h2>
+      <div class="callout danger"><strong>升级只换程序，绝不整份覆盖。</strong>不要把新包里的「ziminOS」文件夹复制到你原来的库上，也不要替换整个 .obsidian。你在设置里做过的每个决定、左边摆好的图标、微信读书的登录，都存在那里面，盖掉就找不回来了。你写的笔记不在程序文件里，升级碰不到它们。</div>
+      <p>下面每一步都守一条规则：<strong>只拖文件，不拖文件夹。</strong>macOS 上把一个文件夹拖到同名文件夹上选「替换」，会把目标整个换掉，连同里面你自己的设置；拖文件只替换同名的那几个。</p>
+      <div class="steps">
+        <article class="step">
+          <h3>下载新版安装包并解压</h3>
+          <p>和第一次一样。新包里的「ziminOS」这回用不到，<strong>别打开它</strong>，你的笔记在你原来那本库里。</p>
+        </article>
+        <article class="step">
+          <h3>换 ziminOS 程序（每次都做）</h3>
+          <p>在 Obsidian 里打开你原来那本库 →「设置 → 第三方插件」，点「已安装插件」右边的文件夹图标（鼠标停上去显示「打开插件文件夹」）。</p>
+          <p>再打开新包里的「升级文件 → 插件文件夹 → ziminos」，选中里面的四个文件：<code>main.js</code>、<code>manifest.json</code>、<code>styles.css</code>、<code>ziminOS-Eagle-Bridge.eagleplugin</code>，拖进刚才打开的那个文件夹里的 <code>ziminos</code> 文件夹，选「替换」。</p>
+        </article>
+        <article class="step">
+          <h3>换外观片段（每次一起做）</h3>
+          <p>「设置 → 外观」，在「CSS 样式代码片段」那一行点文件夹图标（「打开样式代码片段文件夹」）。把新包「升级文件 → 样式代码片段文件夹」里的全部 <code>.css</code> 文件拖进去，选「替换」。你自己放进去的片段名字不一样，不会被碰到。</p>
+          <p class="muted">这一版新出现的片段默认是关着的，想用就点右下角 🎨 打开。你以前关掉的片段，替换之后照样关着。</p>
+        </article>
+        <article class="step">
+          <h3>另外四个插件与主题（一般不用动）</h3>
+          <p>它们锁着版本，很少变；哪一版变了，发行说明会写。到时办法相同：「升级文件 → 插件文件夹」里的 <code>dataview</code>、<code>obsidian-outliner</code>、<code>obsidian-quiet-outline</code>、<code>obsidian-style-settings</code> 各自点进去全选文件，拖进插件文件夹里同名的那个文件夹；「升级文件 → 主题文件夹 → Minimal」里的文件，拖进「设置 → 外观」里「打开主题文件夹」进去的那个 <code>Minimal</code>。</p>
+          <p class="muted">升级文件里一份设置文件都没有，所以照着拖，不会盖掉你调过的配色与插件设置。</p>
+        </article>
+        <article class="step">
+          <h3>完全退出 Obsidian，再打开</h3>
+          <p><span class="os">Windows</span>点窗口右上角关闭。<span class="os">macOS</span>按 <code>Cmd&nbsp;+&nbsp;Q</code>。</p>
+          <p>重新打开后，「设置 → 第三方插件」里 ziminOS 的版本号应当是新包文件名里的那个。<strong>不要再点「初始化」</strong>——你的库早就开过荒了。</p>
+        </article>
+      </div>
+      <div class="callout"><strong>这次更新带了新字体？</strong>照全新安装的第二步装上，再完全退出 Obsidian 重开。「重新加载」不够，Obsidian 只在启动时读一次系统字体。</div>
+    </section>
+
+    <section id="faq">
+      <div class="kicker">Troubleshooting</div>
+      <h2>常见问题</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>现象</th><th>多半是因为</th><th>怎么办</th></tr></thead>
+          <tbody>
+            <tr><td>Obsidian 打不开那个文件夹</td><td>还在压缩包里，没有真的解压出来</td><td>先解压，再打开解压出来的那一份</td></tr>
+            <tr><td>没问「是否信任」，左边也没有 ziminOS 的图标</td><td>点成了「在安全模式中打开该仓库」</td><td>「设置 → 第三方插件」关掉「安全模式」，再在「已安装插件」里把 ziminOS、Dataview、Style Settings、Outliner、Quiet Outline 的开关打开</td></tr>
+            <tr><td>点「初始化」提示「检测到已有笔记，ziminOS 只在空库开荒」</td><td>这本库里已经有别的笔记，比如把包里的东西拷进了你原来的库</td><td>用包里那本全新的「ziminOS」单独开一本，不要和已有笔记的库混在一起</td></tr>
+            <tr><td>正文不是霞鹜文楷</td><td>字体没装上，或者装的时候 Obsidian 开着</td><td>装好字体后完全退出 Obsidian 再打开；「重新加载」不够</td></tr>
+            <tr><td>Windows 右键里没有「安装」</td><td>选中的东西里混进了文件夹或别的文件；或者 Windows 11 把它收进了二级菜单</td><td>只选字体文件；Windows 11 先点「显示更多选项」；也可以双击字体文件，在预览窗口里点「安装」</td></tr>
+            <tr><td>macOS 上看不到 .obsidian</td><td>它是隐藏文件夹，本来就看不见</td><td>用不着看见它：升级时 Obsidian 设置里的「打开插件文件夹」这类按钮会直接带你进去。非要看，在访达里按 <code>Cmd&nbsp;+&nbsp;Shift&nbsp;+&nbsp;.</code></td></tr>
+            <tr><td>设置里找不到 ziminOS</td><td>Obsidian 低于 1.13.0，插件没有加载</td><td>「设置 → 关于 → 检查更新」，或到 obsidian.md 重新下载</td></tr>
+            <tr><td>升级之后版本号没变</td><td>文件拖错了位置，或者 Obsidian 没有完全退出</td><td>确认拖进的是插件文件夹里名叫 <code>ziminos</code> 的那个文件夹，再完全退出、重新打开</td></tr>
+            <tr><td>以前是智能体帮我装的，能手动升级吗</td><td>—</td><td>能。两种装法装出来的是同一种库，照「以后怎么升级」做就行</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="links">
+      <div class="kicker">Links</div>
+      <h2>去哪儿下新版、学用法</h2>
+      <ul>
+        <li>下载最新安装包：<a href="https://gitee.com/ziminzhao/zimin-os-v1/releases/latest">https://gitee.com/ziminzhao/zimin-os-v1/releases/latest</a></li>
+        <li>插件教程：<a href="https://edu.zhaozimin.cn">edu.zhaozimin.cn</a>（大陆）/ <a href="https://edu.zhaozimin.com">edu.zhaozimin.com</a>（海外）</li>
+        <li>Obsidian 官网：<a href="https://obsidian.md/download">https://obsidian.md/download</a></li>
+      </ul>
+      <p class="muted">ziminOS 以 MIT 许可发布；随库交付的 Dataview、Outliner、Quiet Outline 与 Minimal 为 MIT，Style Settings 为 GPL-3.0；四款字体为 SIL OFL 1.1 与 IPA 字体许可，原文在「许可证」文件夹里。</p>
+    </section>
+
+    <footer class="footer">ziminOS 安装说明 · 随第一版安装包分发</footer>
+  </main>
+</body>
+</html>
