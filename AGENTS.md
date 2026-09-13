@@ -43,7 +43,7 @@
 ## 五、两版共同
 
 - 施工源只能临时放在工作区之外，不得在工作区内下载、解压或克隆。
-- **施工源先取 Gitee 发行版上的包，走不通再 `git clone`**：发行版附件走公开接口，不需要 Git、不需要登录，一台没装过开发工具的 Windows 电脑也取得到。不要下载仓库的「下载 ZIP」（未登录只拿到 HTML 跳转页），不要用 raw 地址逐个文件拼仓库（大文件 403、个别文件 451）。两份契约的第二节各有 Python 与 PowerShell 写法。
+- **施工源先取 Gitee 发行版上的包，走不通再 `git clone`**：版本号从 raw 读 `manifest.json`、包从 `releases/download` 取，不需要 Git、不需要登录，一台没装过开发工具的 Windows 电脑也取得到。**不要用 `api/v5` 开放接口找发行版**：它对未登录请求限流（403 Rate Limit Exceeded）。不要下载仓库的「下载 ZIP」（未登录只拿到 HTML 跳转页），不要用 raw 地址逐个文件拼仓库（大文件 403、个别文件 451）。两份契约的第二节各有 Python 与 PowerShell 写法。
 - 不得安装 Node.js、npm 依赖或任何额外插件、主题、字体。
 - 施工源仓库**按版次分开**，取错了不会在下载或克隆那一步报错：
   - 第一版 → `https://gitee.com/ziminzhao/zimin-os-v1.git`

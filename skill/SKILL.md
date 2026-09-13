@@ -57,65 +57,71 @@ vault_root="$(pwd -P)"
 
 ### 取法一：下载 Gitee 发行版上的安装包（首选，不需要 Git，也不需要登录）
 
-1. 读公开接口 `https://gitee.com/api/v5/repos/ziminzhao/zimin-os-v1/releases/latest`，在返回的 `assets` 里找名字形如 `ziminOS-v版本号-setup.zip` 的那一项，下载它的 `browser_download_url`。
-2. 核对下载结果：几十 MB，开头两个字节是 `PK`。拿到的若是几十 KB 的 HTML，说明取错了地址——回到第 1 步。
-3. 解到临时目录里，得到 `ziminOS-v版本号-setup/`。这是给人手动安装的形态，**改两次名就是下文要的仓库形态**：`ziminOS-v版本号-setup/ziminOS` → `$install_staging_dir/repo/vault`，`ziminOS-v版本号-setup/字体` → `$install_staging_dir/repo/fonts`。包里另外的 `升级文件/`、`许可证/`、`安装说明.html` 不参与安装。
+1. 读 `https://gitee.com/ziminzhao/zimin-os-v1/raw/main/vault/.obsidian/plugins/ziminos/manifest.json`，取出 `version`（例如 `0.33.0`）。
+2. 下载 `https://gitee.com/ziminzhao/zimin-os-v1/releases/download/v版本号/ziminOS-v版本号-setup.zip`。返回 404 说明这一版的包还没挂上发行版，直接改走取法二，不要换别的下载办法去试。
+3. 核对下载结果：几十 MB，开头两个字节是 `PK`。
+4. 解到临时目录里，得到 `ziminOS-v版本号-setup/`。这是给人手动安装的形态，**改两次名就是下文要的仓库形态**：`ziminOS-v版本号-setup/ziminOS` → `$install_staging_dir/repo/vault`，`ziminOS-v版本号-setup/字体` → `$install_staging_dir/repo/fonts`。包里另外的 `升级文件/`、`许可证/`、`安装说明.html` 不参与安装。
+
+**不要用 `api/v5` 开头的开放接口去找发行版。** 它对未登录的请求限流，同一个出口 IP 下请求一多就返回 `403 Rate Limit Exceeded`——一间教室的学员同时安装、或者智能体多重试几次，都会撞上。上面两个地址走的是网页与文件通道，不受这个限制。
 
 Python 标准库写法，macOS、Linux、Windows 通用：
 
 ```python
 import json, os, shutil, tempfile, urllib.error, urllib.request, zipfile
 
-API = "https://gitee.com/api/v5/repos/ziminzhao/zimin-os-v1/releases/latest"
-try:
-    release = json.load(urllib.request.urlopen(API, timeout=60))
-except urllib.error.HTTPError as error:
-    raise SystemExit("发行版接口返回 %s（多半是还没有发行版），改走取法二" % error.code)
-asset = next((a for a in release["assets"] if a["name"].endswith("-setup.zip")), None)
-if asset is None:
-    raise SystemExit("最新发行版上没有 ziminOS-v*-setup.zip，改走取法二")
+REPO = "https://gitee.com/ziminzhao/zimin-os-v1"
+with urllib.request.urlopen(REPO + "/raw/main/vault/.obsidian/plugins/ziminos/manifest.json", timeout=60) as response:
+    version = json.load(response)["version"]
+name = "ziminOS-v%s-setup" % version
 
 install_staging_dir = tempfile.mkdtemp(prefix="ziminos-install.")
-archive = os.path.join(install_staging_dir, asset["name"])
-with urllib.request.urlopen(asset["browser_download_url"], timeout=120) as response, open(archive, "wb") as out:
-    shutil.copyfileobj(response, out)
+archive = os.path.join(install_staging_dir, name + ".zip")
+try:
+    with urllib.request.urlopen("%s/releases/download/v%s/%s.zip" % (REPO, version, name), timeout=120) as response, \
+            open(archive, "wb") as out:
+        shutil.copyfileobj(response, out)
+except urllib.error.HTTPError as error:
+    raise SystemExit("发行版上取不到 %s.zip（HTTP %s），改走取法二" % (name, error.code))
 
 with open(archive, "rb") as handle:
     if handle.read(2) != b"PK":
-        raise SystemExit("下载到的不是 zip，停下来")
+        raise SystemExit("下载到的不是 zip，改走取法二")
 with zipfile.ZipFile(archive) as z:
     z.extractall(install_staging_dir)
 
-package = os.path.join(install_staging_dir, asset["name"][: -len(".zip")])
+package = os.path.join(install_staging_dir, name)
 os.makedirs(os.path.join(install_staging_dir, "repo"))
 os.rename(os.path.join(package, "ziminOS"), os.path.join(install_staging_dir, "repo", "vault"))
 os.rename(os.path.join(package, "字体"), os.path.join(install_staging_dir, "repo", "fonts"))
-print(release["tag_name"], os.path.join(install_staging_dir, "repo"))
+print(version, os.path.join(install_staging_dir, "repo"))
 ```
 
-没有 Python 时用 PowerShell（Windows 自带）。前两行不能省：旧系统默认的 TLS 版本连不上 Gitee，而下载进度条会把几十 MB 的下载拖慢十倍以上：
+没有 Python 时用 PowerShell（Windows 自带）。前两行不能省：旧系统默认的 TLS 版本连不上 Gitee，而下载进度条会把几十 MB 的下载拖慢十倍以上。版本号那个文件是 `text/plain`，要用 `ConvertFrom-Json` 自己解析；字体文件夹按「里面装着 `.ttf` 的那个」认，命令里不写中文——PowerShell 5.1 读无 BOM 的 UTF-8 脚本会把中文读成乱码：
 
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = 'SilentlyContinue'
-$release = Invoke-RestMethod 'https://gitee.com/api/v5/repos/ziminzhao/zimin-os-v1/releases/latest'
-$asset = $release.assets | Where-Object { $_.name -like '*-setup.zip' } | Select-Object -First 1
+$repo = 'https://gitee.com/ziminzhao/zimin-os-v1'
+$manifest = Invoke-WebRequest "$repo/raw/main/vault/.obsidian/plugins/ziminos/manifest.json" -UseBasicParsing
+$version = ($manifest.Content | ConvertFrom-Json).version
+$name = "ziminOS-v$version-setup"
 $install_staging_dir = Join-Path $env:TEMP ('ziminos-install.' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item (Join-Path $install_staging_dir 'repo') -ItemType Directory | Out-Null
-$archive = Join-Path $install_staging_dir $asset.name
-Invoke-WebRequest $asset.browser_download_url -OutFile $archive -UseBasicParsing
+$archive = Join-Path $install_staging_dir "$name.zip"
+Invoke-WebRequest "$repo/releases/download/v$version/$name.zip" -OutFile $archive -UseBasicParsing
 Expand-Archive $archive -DestinationPath $install_staging_dir
-$package = Join-Path $install_staging_dir ($asset.name -replace '\.zip$', '')
+$package = Join-Path $install_staging_dir $name
 Move-Item (Join-Path $package 'ziminOS') (Join-Path $install_staging_dir 'repo\vault')
-# 字体文件夹按内容认（里面只有它装着 .ttf），不在命令里写中文：PowerShell 5.1 读无 BOM 的 UTF-8 脚本会读成乱码
 $fonts = Get-ChildItem $package -Directory | Where-Object { Get-ChildItem $_.FullName -Filter *.ttf } | Select-Object -First 1
 Move-Item $fonts.FullName (Join-Path $install_staging_dir 'repo\fonts')
 ```
 
+下载那一行报 404，同样改走取法二。
+
 **这两件事都有人试过，每一件都白白花掉十分钟，不要做：**
 
 - 不要下载仓库的「下载 ZIP」地址（`…/repository/archive/…zip`）：未登录拿到的是一张几十 KB 的 HTML 跳转页，带什么请求头都一样。
-- 不要用 raw 地址或文件树接口逐个文件拼仓库：大字体文件返回 403，个别文件返回 451，永远拼不全。
+- 不要用 raw 地址或文件树接口逐个文件拼仓库：大字体文件返回 403，个别文件返回 451，永远拼不全。（取法一第 1 步只读一个 `manifest.json` 取版本号，不在此列。）
 
 ### 取法二：git clone（取法一走不通时）
 

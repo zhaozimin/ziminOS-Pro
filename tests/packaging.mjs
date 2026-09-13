@@ -199,14 +199,30 @@ test('两份契约按各自打包脚本产出的名字、去各自仓库的发�
 
     const v1Suffix = v1Name[1].replace('ziminOS-v${version}', '');
 
-    assert.ok(v1Contract.includes('api/v5/repos/ziminzhao/zimin-os-v1/releases/latest'));
-    assert.ok(v1Contract.includes(`${v1Suffix}.zip`), `第一版契约没按 ${v1Suffix}.zip 找安装包`);
-    assert.ok(proContract.includes('api/v5/repos/ziminzhao/ziminos-pro/releases/latest'));
-    assert.ok(proContract.includes('ziminOS-pro-v'), '第二版契约没按 ziminOS-pro-v 找分发包');
+    const code = (contract) => [...contract.matchAll(/```(?:python|powershell)\n([\s\S]*?)\n```/g)].map((m) => m[1]).join('\n');
+
+    // 版本号从 raw 的 manifest 读，包从 releases/download 取：两个都不是开放接口，不吃未登录限流
+    assert.ok(v1Contract.includes('REPO = "https://gitee.com/ziminzhao/zimin-os-v1"'));
+    assert.ok(v1Contract.includes(`"ziminOS-v%s${v1Suffix}" % version`), `第一版契约没按 ziminOS-v版本${v1Suffix}.zip 找安装包`);
+    assert.ok(proContract.includes('REPO = "https://gitee.com/ziminzhao/ziminos-pro"'));
+    assert.ok(proContract.includes('"ziminOS-pro-v%s" % version'), '第二版契约没按 ziminOS-pro-v版本.zip 找分发包');
+
+    for (const [file, contract] of [['skill/SKILL.md', v1Contract], ['skill-pro/SKILL.md', proContract]]) {
+        const snippets = code(contract);
+
+        assert.ok(snippets.includes('/raw/main/vault/.obsidian/plugins/ziminos/manifest.json'), `${file} 的取法一不再从 manifest 读版本号`);
+        assert.ok(snippets.includes('/releases/download/v'), `${file} 的取法一不再走 releases/download`);
+        // Gitee 的开放接口对未登录请求限流（403 Rate Limit Exceeded），一间教室同时安装就会撞上
+        assert.equal(snippets.includes('api/v5'), false, `${file} 的代码又去调被限流的开放接口了`);
+        // PowerShell 5.1 读无 BOM 的 UTF-8 脚本会把中文读成乱码
+        for (const block of contract.matchAll(/```powershell\n([\s\S]*?)\n```/g)) {
+            assert.equal(/[^\x00-\x7f]/.test(block[1]), false, `${file} 的 PowerShell 写法里出现了非 ASCII 字符`);
+        }
+    }
 
     // 取错仓库的代价不对称：第一版指向 pro 的发行版，等于把付费交付物发给每一个免费用户
-    assert.equal(v1Contract.includes('repos/ziminzhao/ziminos-pro'), false, '第一版契约不该去第二版的发行版取包');
-    assert.equal(proContract.includes('repos/ziminzhao/zimin-os-v1'), false, '第二版契约不该去第一版的发行版取包');
+    assert.equal(code(v1Contract).includes('ziminos-pro'), false, '第一版契约不该去第二版的发行版取包');
+    assert.equal(code(proContract).includes('zimin-os-v1'), false, '第二版契约不该去第一版的发行版取包');
 
     // 第一版的包是给人看的形态，契约靠两次改名把它归一成仓库形态：改名的对象必须是包里真有的那两个文件夹
     const names = packageNames();
