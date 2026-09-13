@@ -49,7 +49,15 @@ fail() {
 }
 
 fetch() {
-    curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 -o "$2" "$1"
+    # 每一次下载都走这里。Gitee 偶尔对单次请求回 451 / 403 / 429 或掐断连接，隔几秒同一个请求就过——
+    # 不重试，这一下就把智能体送回二十分钟的逐条执行。不用 curl 的 --retry-all-errors：
+    # macOS 11 自带的 curl 7.64 不认识它，整条下载会直接失败
+    local attempt
+    for attempt in 1 2 3 4; do
+        curl -fsSL --connect-timeout 20 -o "$2" "$1" && return 0
+        [ "$attempt" -lt 4 ] && sleep $((attempt * 2))
+    done
+    return 1
 }
 
 sha256_of() {

@@ -58,11 +58,26 @@ function Write-BootstrapFailure([string] $Message) {
     Write-Host 'ZIMINOS_RESULT status=failed exit=30'
 }
 
+function Invoke-Download([string] $Url, [string] $OutFile, [int] $TimeoutSec) {
+    # Every download goes through here. Gitee now and then answers a single request with 451/403/429
+    # or drops the connection, and the same request a few seconds later goes through; without a retry
+    # that one hiccup would send the agent back to the slow step-by-step install.
+    for ($attempt = 1; $attempt -le 4; $attempt++) {
+        try {
+            Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -TimeoutSec $TimeoutSec
+            return
+        } catch {
+            if ($attempt -eq 4) { throw $_ }
+            Start-Sleep -Seconds (2 * $attempt)
+        }
+    }
+}
+
 function Save-Verified([string[]] $Urls, [string] $Sha256, [string] $OutFile) {
     $errors = @()
     foreach ($url in $Urls) {
         try {
-            Invoke-WebRequest -Uri $url -OutFile $OutFile -UseBasicParsing -TimeoutSec 900
+            Invoke-Download $url $OutFile 900
             $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $OutFile).Hash.ToLowerInvariant()
             if ($actual -eq $Sha256.ToLowerInvariant()) { return }
             $errors += "$url returned a file with SHA-256 $actual"
@@ -141,18 +156,18 @@ try {
 
     Write-Step 'downloading installer'
     $core = Join-Path $Work 'ziminos_install.py'
-    Invoke-WebRequest -Uri "$repo/raw/main/installer/ziminos_install.py" -OutFile $core -UseBasicParsing -TimeoutSec 300
+    Invoke-Download "$repo/raw/main/installer/ziminos_install.py" $core 300
 
     if (-not $Source) {
         # Version from main's manifest, package straight from releases/download: no rate-limited API involved.
         $manifestFile = Join-Path $Work 'manifest.json'
-        Invoke-WebRequest -Uri "$repo/raw/main/vault/.obsidian/plugins/ziminos/manifest.json" -OutFile $manifestFile -UseBasicParsing -TimeoutSec 300
+        Invoke-Download "$repo/raw/main/vault/.obsidian/plugins/ziminos/manifest.json" $manifestFile 300
         $version = ([IO.File]::ReadAllText($manifestFile, [Text.Encoding]::UTF8) | ConvertFrom-Json).version
         if ($Edition -eq 'pro') { $name = "ziminOS-pro-v$version" } else { $name = "ziminOS-v$version-setup" }
         $zipUrl = "$repo/releases/download/v$version/$name.zip"
 
         $shaFile = Join-Path $Work "$name.zip.sha256"
-        Invoke-WebRequest -Uri "$zipUrl.sha256" -OutFile $shaFile -UseBasicParsing -TimeoutSec 300
+        Invoke-Download "$zipUrl.sha256" $shaFile 300
         $expected = ([IO.File]::ReadAllText($shaFile) -split '\s+')[0]
 
         Write-Step "downloading $name.zip"

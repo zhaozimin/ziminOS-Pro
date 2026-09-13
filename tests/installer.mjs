@@ -221,6 +221,12 @@ test('启动脚本守住平台纪律：PowerShell 纯 ASCII、不往输出流写
     assert.ok(sh.indexOf('xcode-select -p') !== -1 && sh.indexOf('xcode-select -p') < sh.indexOf('python_ok /usr/bin/python3'));
     assert.equal((sh.match(/sha="[0-9a-f]{64}"/g) || []).length, 2, 'install.sh 应为两种 Mac 处理器各钉一个校验值');
 
+    // Gitee 偶尔对单次请求回 451 或掐断连接：真正发出下载的调用各只许有一处，就是带重试的那个函数
+    const code = (text) => text.split('\n').filter((line) => !line.trim().startsWith('#')).join('\n');
+    assert.equal((code(ps1).match(/Invoke-WebRequest/g) || []).length, 1, 'install.ps1 有绕过 Invoke-Download 重试的下载');
+    assert.equal((code(sh).match(/\bcurl\b/g) || []).length, 1, 'install.sh 有绕过 fetch 重试的下载');
+    assert.equal(code(sh).includes('--retry-all-errors'), false, 'macOS 11 自带的 curl 不认识 --retry-all-errors');
+
     for (const [name, script] of [['install.ps1', ps1], ['install.sh', sh]]) {
         assert.equal(script.includes('api/v5'), false, `${name} 调了对未登录请求限流的开放接口`);
         assert.ok(script.includes('raw/main/installer/ziminos_install.py'), `${name} 取安装程序的路径变了`);
