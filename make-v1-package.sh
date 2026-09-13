@@ -4,7 +4,7 @@
 #
 # [INPUT]: 依赖 git（只从 HEAD 取交付物）、npm test、python3 与 pack-zip.py；
 #          依赖 skill/SKILL.md 的两份清单——「装完必须存在的交付物」与「升级时整份替换的程序文件」；
-#          依赖 docs/第一版手动安装指南.html；联网读 Gitee 公开 API 核对第一版仓库
+#          依赖 docs/第一版手动安装指南.html；经 SSH 只取第一版仓库 main 的提交与树（不取文件内容）核对两边一致
 # [OUTPUT]: ziminOS-v{版本}-setup.zip 与同名 .sha256，并打印一段可直接贴进 Gitee 发行版的说明
 # [POS]: 第一版面向「人」的唯一分发出口，与面向智能体的 make-pro-package.sh 并列。
 #        三条判据决定了它的形状：
@@ -34,6 +34,7 @@ contract="skill/SKILL.md"
 guide="docs/第一版手动安装指南.html"
 # 与 publish-v1.sh 的 V1_REMOTE 是同一个仓库。Gitee 上它已改名为 ziminos-mini，旧名至今仍解析
 v1_repo="ziminzhao/zimin-os-v1"
+V1_REMOTE="git@gitee.com:$v1_repo.git"
 
 # ============================================================
 # 一、闸门
@@ -58,34 +59,28 @@ name="ziminOS-v${version}-setup"
 # 二、核对第一版仓库
 # ============================================================
 
-# 写成函数而不是把 heredoc 直接塞进 $( )：macOS 自带的 bash 3.2 解析后者时会被正文里的括号与引号带偏
+# 走 publish-v1.sh 推送用的同一条 SSH 通道，不走 Gitee 开放接口：它对未登录请求限流（403），
+# 而打包恰恰紧跟在 publish-v1.sh 之后——v0.33.0 发版时这一步就是这样卡住的。
+# 只取提交与树、不取文件内容（--filter=blob:none）：比的是树对象哈希，一个 blob 都用不着，实测 5 秒、百来 KB
 v1_main_matching_head() {
-    python3 - "https://gitee.com/api/v5/repos/$v1_repo" \
-        "$(git rev-parse HEAD:vault)" "$(git rev-parse HEAD:fonts)" << 'CHECK'
-import json, sys, urllib.request
-
-api, local_vault, local_fonts = sys.argv[1:4]
-
-
-def get(path):
-    request = urllib.request.Request(api + path, headers={"User-Agent": "ziminos-release"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
-
-
-try:
-    commit = get("/branches/main")["commit"]["sha"]
-    remote = {entry["path"]: entry["sha"] for entry in get("/git/trees/" + commit)["tree"]}
-except Exception as error:
-    sys.exit("连不上 Gitee，确认不了第一版仓库与本地是否一致：%s" % error)
-
-# 只比包里装着的那两棵树：README、docs 两边本来就各说各的
-for folder, local in (("vault", local_vault), ("fonts", local_fonts)):
-    if remote.get(folder) != local:
-        sys.exit("第一版仓库 main 的 %s/ 与本地 HEAD 不一致。先跑 ./publish-v1.sh --push，再来打包。" % folder)
-
-print(commit)
-CHECK
+    local probe commit folder
+    probe="$(mktemp -d /tmp/ziminos-v1-probe.XXXXXX)"
+    if ! git init --quiet --bare "$probe" || ! git -C "$probe" fetch --quiet --depth 1 --filter=blob:none "$V1_REMOTE" main; then
+        rm -rf "$probe"
+        echo "连不上第一版仓库（$V1_REMOTE），确认不了它与本地是否一致" >&2
+        return 1
+    fi
+    commit="$(git -C "$probe" rev-parse FETCH_HEAD)"
+    # 只比包里装着的那两棵树：README、docs 两边本来就各说各的
+    for folder in vault fonts; do
+        if [ "$(git -C "$probe" rev-parse "FETCH_HEAD:$folder")" != "$(git rev-parse "HEAD:$folder")" ]; then
+            rm -rf "$probe"
+            echo "第一版仓库 main 的 $folder/ 与本地 HEAD 不一致。先跑 ./publish-v1.sh --push，再来打包。" >&2
+            return 1
+        fi
+    done
+    rm -rf "$probe"
+    echo "$commit"
 }
 
 echo "==> 核对第一版仓库"

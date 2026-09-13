@@ -170,7 +170,9 @@ test('手动安装包只从 HEAD 取交付物，并先与第一版仓库对账',
     // 被 .gitignore 挡住的开发库状态（可能含微信读书 Cookie 的 data.json）在 git status 里看不见，cp -R 会带它出门
     assert.match(script, /git archive --format=tar HEAD vault fonts/);
     assert.doesNotMatch(script, /cp -R "\$repo_root\/vault"/);
-    assert.match(script, /\/git\/trees\//);
+    // 对账走推送用的 SSH 通道、只取树不取文件；开放接口对未登录请求限流，而打包紧跟在发布之后
+    assert.match(script, /fetch --quiet --depth 1 --filter=blob:none "\$V1_REMOTE" main/);
+    assert.equal(script.includes('api/v5'), false, 'make-v1-package.sh 又去调被限流的开放接口了');
     assert.ok(script.includes('pack-zip.py'));
 });
 
