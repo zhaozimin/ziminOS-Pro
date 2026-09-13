@@ -254,24 +254,26 @@ sha="$(cut -d ' ' -f 1 < "$zip_path.sha256")"
 # 除以 1024² 是因为 Windows 与浏览器下载栏标的「MB」就是这么算的，学员看到的是这个数
 size="$(awk -v bytes="$(wc -c < "$zip_path")" 'BEGIN { printf "%.0f MB", bytes / 1048576 }')"
 
-cat << NOTES
-
-✅ $zip_path
-   ${size}  ·  SHA-256 $sha
-
-==> 发到 Gitee（这一步要你登录，脚本不代劳）
-   打开 https://gitee.com/$v1_repo/releases → 创建发行版
-   标签填 v$version，建在 main 上（此刻是 ${v1_head:0:7}）；附件拖入 $name.zip；描述贴下面这段：
-
-────────────────────────────────────────
+notes="$out_dir/$name.release.md"
+cat > "$notes" << NOTES
 **不用智能体、不用装 Git，下载就能装。** 需要 Obsidian 1.13.0 或更高版本。
 
 1. 下载附件 **$name.zip**（$size）。页面上如果还有 \`v$version.zip\`、\`v$version.tar.gz\`，那是 Gitee 自动附带的源代码，不是安装包。
 2. 解压，双击里面的「安装说明.html」，照着做：装字体 → 用 Obsidian 打开「ziminOS」文件夹 → 设置里点「初始化」。
 3. 已经装过的人：只看安装说明里的「以后怎么升级」，**不要**把新的「ziminOS」文件夹覆盖到你原来那本库上。
 
-用桌面智能体安装的人不用管这个页面：智能体会自己来取同一个包，不需要 Git。
+用桌面智能体安装的人不用管这个页面：智能体运行安装脚本时会自己来取同一个包，不需要 Git。
 
 SHA-256：\`$sha\`
-────────────────────────────────────────
 NOTES
+
+# 安装脚本按名字取 zip 与 .sha256：两个都得挂上去，文件名一个字都不许改
+cat << DONE
+
+✅ $zip_path
+   ${size}  ·  SHA-256 $sha
+
+==> 挂到发行版（令牌取自钥匙串，一次性设置见 upload-release.py 头部）：
+   python3 "$repo_root/upload-release.py" --repo "$v1_repo" --tag "v$version" --title "ziminOS v$version 安装包" \\
+       --notes "$notes" "$zip_path" "$zip_path.sha256"
+DONE

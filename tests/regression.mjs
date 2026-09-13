@@ -1049,9 +1049,9 @@ if (existsSync(proContractPath)) {
 
         // 开发环境的产物与工具目录不进任何一个仓库，不需要分类
         const ignored = new Set(['.git', 'node_modules', '.claude', '.DS_Store', '.impeccable', '.publish-staging']);
-        // 两个打包脚本默认把 zip 与 .sha256 留在仓库根（.gitignore 的 /ziminOS-*.zip 挡着不进库）。
+        // 两个打包脚本默认把 zip、.sha256 与发行说明留在仓库根（.gitignore 挡着不进库）。
         // 不跳过它们，打过一次包之后下一次 npm run check 就红——而打包脚本自己第一步就跑 check
-        const releaseArtifact = /^ziminOS-.+\.zip(\.sha256)?$/;
+        const releaseArtifact = /^ziminOS-.+\.(zip|zip\.sha256|release\.md)$/;
 
         for (const entry of readdirSync(ROOT)) {
             if (ignored.has(entry) || releaseArtifact.test(entry)) continue;

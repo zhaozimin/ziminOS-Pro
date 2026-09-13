@@ -2,6 +2,7 @@ node_modules/
 .DS_Store
 /ziminOS-*.zip
 /ziminOS-*.zip.sha256
+/ziminOS-*.release.md
 
 # 本地凭据与环境文件
 .env

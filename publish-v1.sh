@@ -33,6 +33,7 @@ SHARED=(
     eagle-companion
     fonts
     skill
+    installer
     tests
     package-eagle.sh
     package.json
@@ -52,6 +53,7 @@ PRO_ONLY=(
     make-pro-package.sh
     make-v1-package.sh
     pack-zip.py
+    upload-release.py
     publish-v1.sh
 )
 

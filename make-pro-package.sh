@@ -223,19 +223,20 @@ echo "✅ $zip_path"
 echo "   $(awk -v bytes="$(wc -c < "$zip_path")" 'BEGIN { printf "%.0f MB", bytes / 1048576 }')  ·  $(unzip -l "$zip_path" | tail -1 | awk '{print $2}') 个文件"
 echo "   $(cat "$zip_path.sha256")"
 
-# 附件名就是契约里取法一要找的那个名字，发行版不挂它，没有 Git 的机器就只剩克隆这条死路
-cat << NOTES
-
-==> 发到 Gitee（这一步要你登录，脚本不代劳）
-   打开 https://gitee.com/ziminzhao/ziminos-pro/releases → 创建发行版
-   标签填 v$version，建在 main 上；附件拖入 $name.zip，文件名不要改；描述贴下面这段：
-
-────────────────────────────────────────
+notes="$out_dir/$name.release.md"
+cat > "$notes" << NOTES
 **第二版三库系统的施工源，给桌面智能体用。** 你不需要手动下载它。
 
-把首页「第二版」那段指令发给桌面智能体，它会自己来这里取这个包——不需要 Git，Windows 新电脑上也能装。
+把首页「第二版」那段指令发给桌面智能体，它运行安装脚本时会自己来这里取这个包——不需要 Git，Windows 新电脑上也能装。
 页面上如果还有 \`v$version.zip\`、\`v$version.tar.gz\`，那是 Gitee 自动附带的源代码，智能体不会用它们。
 
 SHA-256：\`$(cut -d ' ' -f 1 < "$zip_path.sha256")\`
-────────────────────────────────────────
 NOTES
+
+# 安装脚本按名字取 zip 与 .sha256：两个都得挂上去，文件名一个字都不许改
+cat << DONE
+
+==> 挂到发行版（令牌取自钥匙串，一次性设置见 upload-release.py 头部）：
+   python3 "$repo_root/upload-release.py" --repo ziminzhao/ziminos-pro --tag "v$version" --title "ziminOS 第二版 v$version 施工源" \\
+       --notes "$notes" "$zip_path" "$zip_path.sha256"
+DONE

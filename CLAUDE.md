@@ -18,6 +18,8 @@ TypeScript 7.0 + esbuild 0.28 + Obsidian API 1.13（manifest minAppVersion 1.13.
 
 **两份契约的施工源随之改成先取发行版（v0.33.0 · 不改插件，规格 §56）。** 一份 Windows 新电脑上的真机复盘把事情说透了：二十多分钟里真正装库的几步一次没卡，时间全耗在「把施工源拿到手」——智能体自带的 bash 缺工具、git 藏在 `cmd\`、仓库「下载 ZIP」未登录只给 HTML、raw 拼仓库 403/451、`.git` 只读文件删不掉。四条取法里只有发行版附件同时不需要 Git、不需要登录、一次拿全，于是两份契约第二节都按「发行版 → （第二版：用户手里的包）→ git clone」的顺序试，并给出 Python 标准库与 PowerShell 两种写法；第一版的包是给人看的形态，改两次名就是仓库形态，其后步骤一字不改。包名只用 ASCII，因为 Python 的 `urllib` 遇到下载路径里的中文直接抛异常；找包不问 `api/v5` 开放接口（未登录限流，当天就撞上 403），版本号读 raw 上的 manifest、地址直接拼 `releases/download/v版本/包名`。同一份复盘还揪出第二版验收清单自相矛盾的两处（要三份版次标记而只分发两份、要三本库没有 data.json 而 Style Settings 配色本就随库分发）——**清单写错的代价不是一条假红灯，是智能体为了让清单通过而去改装库**。
 
+**全新安装随后从散文变成了代码（规格 §57）。** 取源码修好之后，剩下的慢在智能体本身：几十个步骤、每步一次来回，而一台缺工具的 Windows 上每一步都可能先试错。`installer/` 把全新安装收进一个 Python 标准库写的确定性程序，契约里只留一条一键命令与四种结果怎么处理；Windows 上总是用自己缓存的便携 Python（新系统里的 `python` 只是跳商店的空壳），没装开发者工具的 Mac 下载独立版，两者都钉死 SHA-256。装库在本机不到一秒，自检是逐字节比对，失败就把写进工作区的东西撤掉再交给契约的逐条做法。PowerShell 那一份全文 ASCII——5.1 读无 BOM 的 UTF-8 会把中文读成乱码——而且在 Mac 上无法实跑，第一次必须在真 Windows 上验证。
+
 两版的隔离不是配置开关而是**装配期开关**：第二版安装器写下一个第一版永远没有的版次标记 `edition.json`，`src/core/edition.ts` 在 onload 最前面读它，main 拿到 free 就根本不接第二版那条线——没有命令、没有视图、没有监听，免费库的行为与第二版出现之前逐字节相同。标记可删，删了就退回第一版。失败方向是刻意的：文件缺席、读不动、JSON 坏了、字段不认识，一律回落 free，因为坏标记把付费功能塞进免费库（用户看不见）比坏标记让付费库退化（用户会来问）严重得多。`skill/SKILL.md` 与 `vault/` 的既有内容一个字都不许**因为第二版**而改动——这条护的是第一版用户，不是把那两处冻成化石。v0.17.0 改过 `skill/SKILL.md` 里的克隆地址，理由与第二版无关：GitHub 的 `zhaozimin/ziminOS` 已经访问不到（账号封禁，403），那行指令对谁都不成立了；不改它，第一版的安装是断的。判据因此是**动机**而不是文件名：为第二版让路 = 违规，为「这行字已经不是事实了」= 必须改。
 
 <directory>
@@ -80,6 +82,7 @@ vault-pro/ - 第二版特有的笔记库成品 (3子目录: 兼收并蓄 进料�
 
 vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，Obsidian/Eagle 两份 manifest 都由构建链同步，main.js 是刻意入库的构建产物（三十八枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 服务二十四个笔记内视图、中国日历与最近文件两个 ItemView、Eagle 附件呈现、外观开关浮层、文件夹计数、状态栏当前路径、导出预览弹窗（连同会被拍进 PNG/PDF 的页眉页脚）、八张设置页与作者名片（手工维护，不经 esbuild），ziminOS-Eagle-Bridge.eagleplugin 是同版伴侣的可安装 ZIP 产物；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
 vault/.obsidian/snippets/ - 十三个 CSS 片段，外观包的可拆装部分；十一个默认启用，全部由右下角外观开关逐个开关。第十三个「突出废弃内容」把 Markdown 删除线收成系统语义：编辑/阅读两态同时弱化文字、铺淡警示色背景、画 2px 警示色线；段内双链另加风险底色、边界与下划线，已断双链升为红色双边界，不插标签打断原句。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源
+installer/ - 全新安装的可执行事实源（v0.33.0 · 不改插件，规格 §57）：Python 标准库写的核心 ziminos_install.py 负责判工作区、铺库、装字体、逐字节自检与失败回滚，install.ps1（纯 ASCII，Windows PowerShell 5.1）与 install.sh（macOS/Linux）只负责准备 Python 与从发行版下载包；两份契约的全新安装先交给它，智能体只剩「运行一条命令、读 .ziminos-install-result.json、告诉用户」。升级暂时仍走契约里的升级分支
 tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，并以专项测试钉住微信单一路由、客户答疑双闸、导出画布/PDF 尺寸、手动安装包与说明同构、版本同构与既有业务行为
 src/ - 插件源码 (2子目录: core 无业务基础设施与命令/视图/版次闸门；modules 含 setup、projects、books、inspiration、calendar、review、contacts、appearance、format、editing、eagle、export 当前笔记导出、explorer、legacy、ribbon、eternal、about)
 </directory>
@@ -119,6 +122,7 @@ package.json - 依赖与六条脚本：dev 常驻 watch，test 跑插件审计�
 package-eagle.sh - Eagle 伴侣唯一打包出口；核对两端版本后以固定白名单、权限与时间戳组装可复现的 `.eagleplugin` ZIP，产物原子落进 vault 的 ziminOS 插件目录，不安装、不读取 Eagle 用户数据
 publish-v1.sh - 两个 Gitee 仓库之间**唯一**的同步通道，方向只有 pro → v1 一条。它把两版共享的 src / vault / eagle-companion / fonts / skill / tests 与构建配置单向发布到第一版公开仓库；README / AGENTS / CLAUDE / docs 不在同步范围，两个仓库各自说给各自的读者听。方向不能反：pro 的 src/ 是 v1 的**严格超集**，从 v1 往回同步会删掉第二版。它存在的理由是一次事故——两个仓库曾各自能改同一份 src/，分叉出 editing/explorer/legacy 与 eternal/edition 两批改动，最后靠一次 23 个文件的三方合并才收回来。四道闸：工作区必须干净、`npm run check` 必须过、构建后 main.js 不许再变（防止推出去的产物与源码对不上）、**同步后的目标仓库必须自己跑得过回归**（那份测试是推过去的，不能只在这边跑过就算数）。防泄漏是硬断言而不是靠清单自觉：目标里出现 skill-pro / vault-pro / edition.json 一律中止
 make-pro-package.sh - 第二版的打包出口，也是第二版 Gitee 发行版上那个附件的来源：没有 Git 的机器上，智能体就靠它取施工源。工作区干净、`npm run check` 通过且构建后无改动才动手，交付物只从 HEAD 取（`git archive`）并断言私有状态不出门——它现在是谁都能下载的公开物；包名 `ziminOS-pro-v{版本}.zip` 只用 ASCII、不带日期，时间戳取提交时刻，同一个提交重打得到同一个 zip。第二版的**事实源仓库是 Gitee 的 `ziminzhao/ziminos-pro`**（GitHub 上的 `zhaozimin/ziminOS` 只有第一版，没有 vault-pro/ 与 skill-pro/），因此 skill-pro/SKILL.md 的两条来路——分发包与 clone——取的是同一个仓库的两种形态
+upload-release.py - 发行版的唯一上传出口：经 Gitee OpenAPI 建（或复用）发行版、上传附件，再从学员走的公开下载通道逐个核对字节数。令牌取自 macOS 钥匙串（service `ziminos-gitee-token`，用户在终端存一次），不进命令行参数、不进输出、不进文件；附件名必须是 ASCII。它存在是因为发版最后一步原本要人手拖文件，而发行版上没有包，没有 Git 的机器就只剩克隆那条慢路
 make-v1-package.sh - 第一版面向「人」的分发出口：不用智能体、不用装 Git，下载解压照《安装说明》自己装。三条判据：清单不另写（「装完该有什么」「升级换什么」从 skill/SKILL.md 解析，解析不出 main.js 或升级分支开始替换 data.json 就中止）；包是第一版仓库 main 的另一种形态（`git archive HEAD` 取料，被 .gitignore 挡住的开发库状态带不出门，再经 Gitee 公开 API 比对 vault/ 与 fonts/ 的树哈希，对不上就先 publish-v1.sh；不重复构建，因为 esbuild 会把 node_modules 的相对位置写进注释）；布局给人看（ziminOS 笔记库 / 只放字体的「字体」/ 只放程序、按 Obsidian 三枚「打开…文件夹」按钮分组的「升级文件」/ 许可证 / 安装说明.html）。产物 `ziminOS-v{版本}-setup.zip` 挂第一版仓库的 Gitee 发行版：匿名可下，单附件 ≤100MB、全仓附件 ≤1GB，旧版附件要定期删；它同时是 skill/SKILL.md 取法一的施工源，包名只用 ASCII 就是为了让智能体用 Python 拿得下来
 pack-zip.py - 两个分发包共用的唯一 zip 写出口；中文名一律置 UTF-8 标志位（macOS 自带 zip 不置，Windows 自带解压会解出乱码目录名），条目顺序与时间戳确定、写完逐条核 CRC。从 make-pro-package.sh 抽出来是因为第二个包出现了——同一段知识写两份，迟早只修一份，修漏的那份不在打包时报错
 tsconfig.json - 严格模式 + noEmit；类型检查与代码产出彻底分工，产出只由 esbuild 负责

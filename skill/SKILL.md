@@ -39,8 +39,37 @@ vault_root="$(pwd -P)"
 
 1. 若当前目录是 `/`、用户主目录、“文档/Documents”根目录、桌面根目录或其他宽泛目录，停止并让用户重新用 Agent 打开专门创建的文件夹 A。
 2. 若当前目录含 `src/`、`vault/`、`skill/` 和 `package.json` 等 ziminOS 源码仓库特征，说明 Agent 打开错了目录，停止；不要把源码仓库改造成笔记库。
-3. 若当前目录不存在 `.obsidian/plugins/ziminos/`，则除系统自动生成的 `.DS_Store` 外必须为空；非空就停止，不覆盖任何文件。
+3. 若当前目录不存在 `.obsidian/plugins/ziminos/`，则除系统自动生成的 `.DS_Store` 与智能体自己点开头的配置目录外必须为空；非空就停止，不覆盖任何文件。
 4. 若当前目录已经存在 `.obsidian/plugins/ziminos/`，进入升级模式。
+
+### 全新安装：先交给安装脚本
+
+上面第 3 条判定为全新安装时，**先运行下面这一条命令，不要逐条执行后面的步骤。** 安装脚本在一条命令里做完取包、校验、铺库、装字体、自检与清理——比逐条执行快得多，也不会因为某台电脑缺某个命令而卡住。一台新的 Windows 电脑上逐条执行曾经花掉二十多分钟，时间全耗在试工具上。
+
+Windows（在 PowerShell、cmd 或 Git Bash 里都原样运行；命令里没有 `$`，哪种命令行都不会改写它）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=3072; iwr -useb https://gitee.com/ziminzhao/zimin-os-v1/raw/main/installer/install.ps1 -OutFile ([IO.Path]::GetTempPath()+'ziminos-install.ps1'); & ([IO.Path]::GetTempPath()+'ziminos-install.ps1') -Edition free"
+```
+
+macOS：
+
+```bash
+curl -fsSL https://gitee.com/ziminzhao/zimin-os-v1/raw/main/installer/install.sh -o /tmp/ziminos-install.sh && bash /tmp/ziminos-install.sh free
+```
+
+第一次运行时，Windows 会先下载一个 11 MB 的便携 Python（没装开发者工具的 Mac 是 17 MB），以后复用。整个过程通常在一两分钟内，主要看网速；**等它自己结束，不要中途重跑。**
+
+结束后读当前文件夹里的 `.ziminos-install-result.json`（看不见命令输出时也读它），按 `status` 办：
+
+| `status` | 意思 | 你做什么 |
+| --- | --- | --- |
+| `ok` | 装好了，而且每个文件都与安装包逐字节核对过 | 删掉这个结果文件，直接按第六节交付给用户，并把结果里的 `version` 报给他 |
+| `upgrade` | 这里已经装过 ziminOS | 删掉结果文件，按第三节的「升级」分支执行（从第二节取得施工源开始） |
+| `refused` | 文件夹不安全或不是空的，`message` 写着原因 | 把 `message` 原话告诉用户，停下来，不要换办法绕过去 |
+| `failed` | 取包、校验或自检没过，`error` 或 `problems` 写着卡在哪 | 脚本已经撤掉了它写进文件夹的东西。删掉结果文件，从第二节起逐条执行；把 `error` 一并告诉用户 |
+
+命令本身报错、没有生成结果文件时，按 `failed` 处理。
 
 ## 二、在工作区外取得施工源
 
