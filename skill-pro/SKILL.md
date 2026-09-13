@@ -79,10 +79,13 @@ system_root="$(pwd -P)"
 Python 标准库写法，macOS、Linux、Windows 通用：
 
 ```python
-import json, os, shutil, tempfile, urllib.request, zipfile
+import json, os, shutil, tempfile, urllib.error, urllib.request, zipfile
 
 API = "https://gitee.com/api/v5/repos/ziminzhao/ziminos-pro/releases/latest"
-release = json.load(urllib.request.urlopen(API, timeout=60))
+try:
+    release = json.load(urllib.request.urlopen(API, timeout=60))
+except urllib.error.HTTPError as error:
+    raise SystemExit("发行版接口返回 %s（多半是还没有发行版），改走取法三" % error.code)
 asset = next((a for a in release["assets"]
               if a["name"].startswith("ziminOS-pro-v") and a["name"].endswith(".zip")), None)
 if asset is None:
