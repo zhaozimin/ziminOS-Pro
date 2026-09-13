@@ -2,14 +2,18 @@
 #
 # 打第二版（付费·三库）的分发包。
 #
-# [INPUT]: 依赖仓库里的 vault/、vault-pro/、skill-pro/、fonts/ 与 npm run build 的产物，
-#          依赖 pack-zip.py 写出带 UTF-8 标志位的 zip
-# [OUTPUT]: 一个自足的 zip + 同名 .sha256，解压出来的目录可直接充当 skill-pro/SKILL.md 的施工源
-# [POS]: 唯一的分发出口。手工拖拽打包迟早漏一个文件或带上一份陈旧的 main.js，
-#        而漏掉的那个文件不会在打包时报错——只会在测试者装到一半时报错。
-#        因此这里先跑插件回归与构建、再跑智能体脚本测试、再逐项校验交付物，
-#        任何一步失败就整体中止。
+# [INPUT]: 依赖 git（只从 HEAD 取交付物）、npm run check、python3 与 pack-zip.py；
+#          交付物是仓库里的 vault/、vault-pro/、skill-pro/、fonts/
+# [OUTPUT]: ziminOS-pro-v{版本}.zip + 同名 .sha256，解压出来的目录可直接充当 skill-pro/SKILL.md 的施工源
+# [POS]: 第二版唯一的分发出口，也是 Gitee 发行版上那个附件的来源——没有 Git 的 Windows 上，
+#        智能体就靠它取施工源。手工拖拽打包迟早漏一个文件或带上一份陈旧的 main.js，
+#        而漏掉的那个文件不会在打包时报错——只会在测试者装到一半时报错。因此：
+#        工作区必须干净、回归与构建必须过、构建后不许有改动，任何一步失败就整体中止。
+#        交付物**只从 HEAD 取**：被 .gitignore 挡住的开发库状态（可能含微信读书 Cookie 的 data.json）
+#        在工作区里看得见、在 git status 里看不见，cp -R 会把它打进一个谁都能下载的包；取完再断言它们一个都不在。
 #        包内**保持仓库的目录结构**，是为了让契约里的 $src/... 路径一个字都不用改。
+#        包名只用 ASCII、不带日期：它会出现在发行版的下载地址里，智能体用脚本拼这个地址，
+#        中文在那里只会多一道编码的坑；同一个提交无论哪天重打，都得到同一个 zip。
 # [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 #
 # 用法：./make-pro-package.sh [输出目录]
@@ -18,33 +22,37 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 out_dir="${1:-$repo_root}"
-version="$(node -p "require('$repo_root/package.json').version")"
-stamp="$(date +%Y-%m-%d)"
-name="ziminOS-第二版-v${version}-${stamp}"
+cd "$repo_root"
+version="$(node -p "require('./package.json').version")"
+name="ziminOS-pro-v${version}"
 work="$(mktemp -d /tmp/ziminos-package.XXXXXX)"
 stage="$work/$name"
 
 cleanup() { rm -rf "$work"; }
 trap cleanup EXIT
 
+if [ -n "$(git status --porcelain)" ]; then
+    echo "工作区不干净。先提交——包里装的必须是已经进过 git 的那一版。" >&2
+    exit 1
+fi
+
 echo "==> 插件回归 + 构建（类型检查 + 打包）"
-( cd "$repo_root" && npm run check >/dev/null )
+npm run check >/dev/null
+
+if [ -n "$(git status --porcelain)" ]; then
+    echo "构建后工作区出现改动，说明入库的产物是陈的。先提交重建结果再打包：" >&2
+    git status --short >&2
+    exit 1
+fi
 
 echo "==> 智能体脚本回归"
-python3 "$repo_root/skill-pro/scripts/test_notectl.py" 2>&1 | tail -1
+python3 skill-pro/scripts/test_notectl.py 2>&1 | tail -1
 
 echo "==> 组装 $name"
 mkdir -p "$stage"
 
 # 包内保持仓库结构：契约里的 $src/vault、$src/vault-pro、$src/skill-pro、$src/fonts 因此原样可用
-for item in vault vault-pro skill-pro fonts; do
-    cp -R "$repo_root/$item" "$stage/$item"
-done
-
-# 开发垃圾一律不进包
-find "$stage" -name '.DS_Store' -delete
-find "$stage" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
-find "$stage" -name '.impeccable' -type d -exec rm -rf {} + 2>/dev/null || true
+git archive --format=tar HEAD vault vault-pro skill-pro fonts | tar -x -C "$stage"
 
 echo "==> 写安装说明"
 cat > "$stage/安装说明.md" << 'GUIDE'
@@ -68,6 +76,9 @@ cat > "$stage/安装说明.md" << 'GUIDE'
 **第二步**：用桌面智能体（Claude Code 桌面版等）**打开这个空文件夹**。
 
 **第三步**：把下面整段复制给它，连同这个 zip 的位置一起告诉它。
+
+（手里没有这个 zip 也没关系：README 里第二版那段指令会让智能体自己去 Gitee 发行版下载它，不需要 Git。
+这一段是给已经拿到 zip 的人用的。）
 
 ```text
 我有一个 ziminOS 第二版的安装包（路径见下）。请把它解压到当前工作区之外的临时目录，
@@ -93,7 +104,7 @@ cat > "$stage/安装说明.md" << 'GUIDE'
 ```
 
 用 Obsidian **分别打开里面那三个文件夹**（不是外面那一层）。Obsidian 一次开一本，左下角切换。
-每本第一次打开都会问信不信任，点「信任作者并启用插件」。
+每本第一次打开都会问信不信任，点「信任仓库作者并启用插件」。
 
 **只有「以人为本」需要手动开荒**：设置 → 左边找到 ziminOS → 第一张标签「开荒」→ 点「初始化」。
 另外两本已经布置好了，打开就能用，不要去点初始化。
@@ -131,8 +142,8 @@ cat > "$stage/安装说明.md" << 'GUIDE'
 
 1. **安装本身**：三本库是否都建出来了，顶层有没有多余文件。
 2. **口述记录**：对智能体说「记一下：随便什么想法」，看是否进《兼收并蓄》的 `灵感集.md`。
-3. **口述日记**：说「记一下今天：……」，它应当问一次今天的主题，当天第二次记录不再问。
-4. **人名双链**：在《以人为本》里先建一个人脉档案，再口述一句提到他，看名字有没有变成双链。
+3. **「记一下今天」**：说「记一下今天：……」，它同样只进《兼收并蓄》的 `灵感集.md`，不写日记、不追问主题。
+4. **原话不改**：灵感集里那一条必须与你说的一字不差——没有被润色、加标签、加双链。
 5. **归档出库**：完成并归档一个项目，看 `90-system/赛博永生出库单.md` 有没有多出一行。
 6. **提炼**：跟智能体说「提炼一下」，看项目有没有搬进《赛博永生》的 `10-原料/` 并长出知识页；再把那篇 MOC 的路径单独粘给它一次，走通路径驱动那个入口。
 7. **第一版没被弄坏**：如果你是从第一版升级的，确认笔记、设置与边栏摆放一个都没变。
@@ -168,7 +179,7 @@ for path in "${required[@]}"; do
 done
 
 snippets="$(find "$stage/vault/.obsidian/snippets" -name '*.css' | wc -l | tr -d ' ')"
-[ "$snippets" -ge 12 ] || { echo "CSS 片段只有 $snippets 个，应当至少 12 个" >&2; exit 1; }
+[ "$snippets" -ge 13 ] || { echo "CSS 片段只有 $snippets 个，应当至少 13 个" >&2; exit 1; }
 
 font_files="$(find "$stage/fonts" \( -name '*.ttf' -o -name '*.otf' \) | wc -l | tr -d ' ')"
 [ "$font_files" -eq 5 ] || { echo "字体文件有 $font_files 个，应当是 5 个" >&2; exit 1; }
@@ -186,6 +197,13 @@ if (new Set(seen).size !== 1) { console.error("edition.json 的 vaults 不一致
 [ ! -e "$stage/vault/.obsidian/plugins/ziminos/edition.json" ] || {
     echo "vault/ 里混进了 edition.json —— 那会让第一版的库被当成第二版" >&2; exit 1; }
 
+# 私有状态一个都不许出门：这个包挂在公开的发行版上，谁都能下载。
+# 唯一允许的 data.json 是 Style Settings 的默认配色——契约要求它随库分发
+leaks="$(cd "$stage" && find . -type f \( -name 'workspace*.json' -o -name holiday-cache.json \
+    -o -name recent-files.json -o -name cursor-positions.json -o -name data.json \) \
+    ! -path './vault/.obsidian/plugins/obsidian-style-settings/data.json')"
+[ -z "$leaks" ] || { printf '包里混进了私有状态，拒绝出包：\n%s\n' "$leaks" >&2; exit 1; }
+
 echo "==> 打包"
 mkdir -p "$out_dir"
 zip_path="$out_dir/$name.zip"
@@ -194,11 +212,30 @@ rm -f "$zip_path" "$zip_path.sha256"
 # 这个包里几乎每个条目都含中文文件名（三本库名、带【】的 CSS 片段、安装说明），
 # 而 macOS 自带的 zip 命令不给它们置 UTF-8 标志位——Windows 自带解压会解出乱码目录名，
 # 安装契约按名字找目录，于是第一步就失败。怎么写才安全只在 pack-zip.py 里写一份。
-python3 "$repo_root/pack-zip.py" "$stage" "$zip_path"
+# 时间戳取这次提交的时刻：同一个提交无论何时重打，都得到同一个 zip
+python3 "$repo_root/pack-zip.py" "$stage" "$zip_path" --date "$(git log -1 --format=%cI HEAD)"
 
 ( cd "$out_dir" && shasum -a 256 "$name.zip" > "$name.zip.sha256" )
 
 echo ""
 echo "✅ $zip_path"
-echo "   $(du -h "$zip_path" | cut -f1)  ·  $(unzip -l "$zip_path" | tail -1 | awk '{print $2}') 个文件"
+# 按字节数算，不用 du：du 报的是磁盘占用，簇大的卷上能比文件本身大出几 MB
+echo "   $(awk -v bytes="$(wc -c < "$zip_path")" 'BEGIN { printf "%.0f MB", bytes / 1048576 }')  ·  $(unzip -l "$zip_path" | tail -1 | awk '{print $2}') 个文件"
 echo "   $(cat "$zip_path.sha256")"
+
+# 附件名就是契约里取法一要找的那个名字，发行版不挂它，没有 Git 的机器就只剩克隆这条死路
+cat << NOTES
+
+==> 发到 Gitee（这一步要你登录，脚本不代劳）
+   打开 https://gitee.com/ziminzhao/ziminos-pro/releases → 创建发行版
+   标签填 v$version，建在 main 上；附件拖入 $name.zip，文件名不要改；描述贴下面这段：
+
+────────────────────────────────────────
+**第二版三库系统的施工源，给桌面智能体用。** 你不需要手动下载它。
+
+把首页「第二版」那段指令发给桌面智能体，它会自己来这里取这个包——不需要 Git，Windows 新电脑上也能装。
+页面上如果还有 \`v$version.zip\`、\`v$version.tar.gz\`，那是 Gitee 自动附带的源代码，智能体不会用它们。
+
+SHA-256：\`$(cut -d ' ' -f 1 < "$zip_path.sha256")\`
+────────────────────────────────────────
+NOTES

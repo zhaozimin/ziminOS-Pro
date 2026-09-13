@@ -44,14 +44,84 @@ vault_root="$(pwd -P)"
 
 ## 二、在工作区外取得施工源
 
-官方施工源固定为 `https://gitee.com/ziminzhao/zimin-os-v1.git`。无论用户给出仓库网页、文件链接还是没有给出克隆地址，都把该仓库浅克隆到系统临时目录；临时目录必须位于当前工作区之外：
+官方施工源是 Gitee 上的 `ziminzhao/zimin-os-v1`。无论用户给出仓库网页、文件链接还是什么都没给，都从这个仓库取；取法有两种，**先走取法一，走不通再走取法二**。两种取法最后都得到同一个 `$install_staging_dir/repo`（含 `vault/` 与 `fonts/`），把它记为施工源，下文每一步只认它。
+
+一律在当前工作区之外的系统临时目录里做（macOS / Linux 的 `/tmp`，Windows 的 `%TEMP%`），临时目录名以 `ziminos-install.` 开头，第五节清理时只认这个名字。禁止在 `$vault_root` 内下载、解压或克隆，禁止把仓库根目录复制进 `$vault_root`。
+
+### 在 Windows 上，动手前先读这四条
+
+1. **下文命令用 bash 书写只为好读；Windows 上请用 Python 标准库（`urllib` / `zipfile` / `shutil` / `json`）或 PowerShell 完成同样的事，不要去修 bash。** 智能体自带的 bash 常常是精简版：只有 bash 本体，没有 `ls`、`cp`、`tail`、`unzip`，也找不到 `git`。为它补 PATH、找工具，是这类安装最大的时间黑洞。
+2. **PowerShell 的输出看不见时**（有些智能体的沙箱会吞掉它），把结果写进临时目录里的日志文件再读，不要反复重跑同一条命令。
+3. **不要在命令后面接 `| tail`、`| head`。** 缺一个小工具，整条管道会被连带杀掉，只留下一半的文件。
+4. **不走取法二就不需要 Git。** 取法一只要能发一次 HTTPS 请求、能解开一个 zip，Python 与 PowerShell 都自带这两样。
+
+### 取法一：下载 Gitee 发行版上的安装包（首选，不需要 Git，也不需要登录）
+
+1. 读公开接口 `https://gitee.com/api/v5/repos/ziminzhao/zimin-os-v1/releases/latest`，在返回的 `assets` 里找名字形如 `ziminOS-v版本号-setup.zip` 的那一项，下载它的 `browser_download_url`。
+2. 核对下载结果：几十 MB，开头两个字节是 `PK`。拿到的若是几十 KB 的 HTML，说明取错了地址——回到第 1 步。
+3. 解到临时目录里，得到 `ziminOS-v版本号-setup/`。这是给人手动安装的形态，**改两次名就是下文要的仓库形态**：`ziminOS-v版本号-setup/ziminOS` → `$install_staging_dir/repo/vault`，`ziminOS-v版本号-setup/字体` → `$install_staging_dir/repo/fonts`。包里另外的 `升级文件/`、`许可证/`、`安装说明.html` 不参与安装。
+
+Python 标准库写法，macOS、Linux、Windows 通用：
+
+```python
+import json, os, shutil, tempfile, urllib.request, zipfile
+
+API = "https://gitee.com/api/v5/repos/ziminzhao/zimin-os-v1/releases/latest"
+release = json.load(urllib.request.urlopen(API, timeout=60))
+asset = next((a for a in release["assets"] if a["name"].endswith("-setup.zip")), None)
+if asset is None:
+    raise SystemExit("最新发行版上没有 ziminOS-v*-setup.zip，改走取法二")
+
+install_staging_dir = tempfile.mkdtemp(prefix="ziminos-install.")
+archive = os.path.join(install_staging_dir, asset["name"])
+with urllib.request.urlopen(asset["browser_download_url"], timeout=120) as response, open(archive, "wb") as out:
+    shutil.copyfileobj(response, out)
+
+with open(archive, "rb") as handle:
+    if handle.read(2) != b"PK":
+        raise SystemExit("下载到的不是 zip，停下来")
+with zipfile.ZipFile(archive) as z:
+    z.extractall(install_staging_dir)
+
+package = os.path.join(install_staging_dir, asset["name"][: -len(".zip")])
+os.makedirs(os.path.join(install_staging_dir, "repo"))
+os.rename(os.path.join(package, "ziminOS"), os.path.join(install_staging_dir, "repo", "vault"))
+os.rename(os.path.join(package, "字体"), os.path.join(install_staging_dir, "repo", "fonts"))
+print(release["tag_name"], os.path.join(install_staging_dir, "repo"))
+```
+
+没有 Python 时用 PowerShell（Windows 自带）。前两行不能省：旧系统默认的 TLS 版本连不上 Gitee，而下载进度条会把几十 MB 的下载拖慢十倍以上：
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = 'SilentlyContinue'
+$release = Invoke-RestMethod 'https://gitee.com/api/v5/repos/ziminzhao/zimin-os-v1/releases/latest'
+$asset = $release.assets | Where-Object { $_.name -like '*-setup.zip' } | Select-Object -First 1
+$install_staging_dir = Join-Path $env:TEMP ('ziminos-install.' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+New-Item (Join-Path $install_staging_dir 'repo') -ItemType Directory | Out-Null
+$archive = Join-Path $install_staging_dir $asset.name
+Invoke-WebRequest $asset.browser_download_url -OutFile $archive -UseBasicParsing
+Expand-Archive $archive -DestinationPath $install_staging_dir
+$package = Join-Path $install_staging_dir ($asset.name -replace '\.zip$', '')
+Move-Item (Join-Path $package 'ziminOS') (Join-Path $install_staging_dir 'repo\vault')
+# 字体文件夹按内容认（里面只有它装着 .ttf），不在命令里写中文：PowerShell 5.1 读无 BOM 的 UTF-8 脚本会读成乱码
+$fonts = Get-ChildItem $package -Directory | Where-Object { Get-ChildItem $_.FullName -Filter *.ttf } | Select-Object -First 1
+Move-Item $fonts.FullName (Join-Path $install_staging_dir 'repo\fonts')
+```
+
+**这两件事都有人试过，每一件都白白花掉十分钟，不要做：**
+
+- 不要下载仓库的「下载 ZIP」地址（`…/repository/archive/…zip`）：未登录拿到的是一张几十 KB 的 HTML 跳转页，带什么请求头都一样。
+- 不要用 raw 地址或文件树接口逐个文件拼仓库：大字体文件返回 403，个别文件返回 451，永远拼不全。
+
+### 取法二：git clone（取法一走不通时）
 
 ```bash
 install_staging_dir="$(mktemp -d /tmp/ziminos-install.XXXXXX)"
 git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_staging_dir/repo"
 ```
 
-把 `$install_staging_dir/repo` 记为施工源。禁止在 `$vault_root` 内执行 `git clone`，禁止把仓库根目录复制进 `$vault_root`。
+Windows 上找不到 `git` 时，先看智能体自带的 PortableGit：`git.exe` 常常在它的 `cmd\` 目录里，而不在只放了 bash 的 `bin\` 里，用绝对路径调用即可。克隆也走不通就说明情况、停下来，不要去找别的镜像。
 
 确认下面的系统交付文件都存在：
 
@@ -118,6 +188,8 @@ git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_stag
 这十三个片段的文件名带【】与中文，复制时一律用引号包住路径；扩展名必须是小写 `.css`，大写的 `.CSS` Obsidian 的片段加载器认不出来。
 
 `.obsidian/.gitignore` 是随库落地的隐私护栏：即使学员以后在笔记库里初始化 Git，也不会把微信读书 Cookie、工作区状态和本机运行缓存提交出去。最后四份则是笔记库的开箱设置，别当成可有可无的杂项：`app.json` 定下附件落在 `./附件`、粘链接用 wiki 语法并自动跟着改名；`templates.json` 把模板目录指向 `90-system/Template`，缺了它学员打开核心「模板」插件后得自己去翻路径；`community-plugins.json` 决定三个系统插件是否启用；`appearance.json` 决定主题与十一个默认启用的片段。
+
+取法一的安装包在打包时已经按这份清单逐项核对过；改完名之后 `repo/fonts/` 下是平铺的五个字体文件，许可证留在包里的 `许可证/`，不参与安装。因此取法一核对 `repo/vault/` 下的每一项与五个字体文件名即可，取法二逐项核对全部条目。
 
 任一缺失就停止并说明仓库不完整。ziminOS（含左侧边栏命令坞、三十六枚命令图标与三枚设置页专用图标，图标 SVG 已编进 `main.js`）、Dataview、Outliner、Quiet Outline、Minimal 与 Style Settings 的运行产物已全部在 `vault/` 中，四款正文字体已全部锁定在 `fonts/` 中；可选的第一方 Eagle 伴侣包也已经随 ziminOS 插件交付，安装器只复制它，**不得替用户静默安装或启动 Eagle 插件**。不要运行 `npm install` / `npm run build`，不要安装 Node.js，也不要去 Obsidian 商店或网络另行下载主题/插件、图标包或字体。禁止额外安装 QuickAdd、Linter 等非系统组件。
 
@@ -227,7 +299,8 @@ macOS：
 
 ```bash
 mkdir -p ~/Library/Fonts
-for f in "$install_staging_dir"/repo/fonts/*/*.ttf "$install_staging_dir"/repo/fonts/*/*.otf; do
+# 取法二的 fonts/ 按字体分子目录，取法一改名过来的是平铺的五个文件；find 两种都认
+find "$install_staging_dir/repo/fonts" -type f \( -name '*.ttf' -o -name '*.otf' \) | while IFS= read -r f; do
     target=~/Library/Fonts/"$(basename "$f")"
     [ -e "$target" ] || cp "$f" "$target"
 done
@@ -292,7 +365,7 @@ README.md
 
 ## 五、清理临时施工源
 
-无论成功或失败，都清理本次创建的临时目录。删除前必须验证它匹配 `/tmp/ziminos-install.*`，只删除这个精确目录：
+无论成功或失败，都清理本次创建的临时目录。删除前必须确认它就是本次创建的那一个：在系统临时目录下、名字以 `ziminos-install.` 开头，只删除这个精确目录：
 
 ```bash
 case "$install_staging_dir" in
@@ -300,6 +373,21 @@ case "$install_staging_dir" in
     *) echo "拒绝清理非 ziminOS 临时目录：$install_staging_dir" >&2; exit 1 ;;
 esac
 ```
+
+Windows 上用 Python 或 PowerShell 删。取法二克隆出的 `.git` 里有只读文件，直接删会报 `WinError 5` / 拒绝访问——先去掉只读属性再删，而不是换别的办法重试：
+
+```python
+import os, shutil, stat
+
+def _clear_readonly(func, path, _):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+assert os.path.basename(install_staging_dir).startswith("ziminos-install.")
+shutil.rmtree(install_staging_dir, onerror=_clear_readonly)
+```
+
+PowerShell 的 `Remove-Item -LiteralPath $install_staging_dir -Recurse -Force` 同样能删掉只读文件（`-Force` 不能省）。
 
 不得删除 `$vault_root`，不得删除用户提供的任何目录，不在当前工作区旁留下源码仓库、压缩包或安装脚本。
 
@@ -310,7 +398,7 @@ esac
 > 已经把当前文件夹搭建成你的个人知识管理系统。
 >
 > 现在直接用 Obsidian 打开这个文件夹，然后：
-> 1. Obsidian 询问信任时，点「信任作者并启用插件」。Dataview、Minimal 主题、Style Settings 和默认配色已就位。
+> 1. Obsidian 询问信任时，点「信任仓库作者并启用插件」。Dataview、Minimal 主题、Style Settings 和默认配色已就位。
 > 2. 打开设置，在左边找到 ziminOS，顶上第一张标签「开荒」里点「初始化」。设置按系统模块分成八张标签页，「记录灵感」那一套在「灵感」页。
 > 3. 看到「开荒完成 ✅」后，跟着笔记库里的 README 使用。
 > 4. 看**最左边一条竖栏**，七个常用命令已经摆好了：新建项目、记录灵感、今天的日记、写复盘主题、新建人脉、记人情、外观开关。点一下就走，不用背快捷键。还有二十六条命令在设置 → ziminOS → 左侧边栏里勾一下就能摆出来，摆出来之后顺序可以直接拖。

@@ -5,7 +5,7 @@
 # [INPUT]: 依赖 git（只从 HEAD 取交付物）、npm test、python3 与 pack-zip.py；
 #          依赖 skill/SKILL.md 的两份清单——「装完必须存在的交付物」与「升级时整份替换的程序文件」；
 #          依赖 docs/第一版手动安装指南.html；联网读 Gitee 公开 API 核对第一版仓库
-# [OUTPUT]: ziminOS-v{版本}-安装包.zip 与同名 .sha256，并打印一段可直接贴进 Gitee 发行版的说明
+# [OUTPUT]: ziminOS-v{版本}-setup.zip 与同名 .sha256，并打印一段可直接贴进 Gitee 发行版的说明
 # [POS]: 第一版面向「人」的唯一分发出口，与面向智能体的 make-pro-package.sh 并列。
 #        三条判据决定了它的形状：
 #        一、清单不另写。装完该有哪些文件、升级该换哪些文件，只在安装契约里有一份——
@@ -18,6 +18,8 @@
 #        三、布局给人看，不给机器看。字体文件夹里只放字体（混进一个许可证，Windows 全选后右键就没有「安装」）；
 #           升级文件里只放程序、并按 Obsidian 设置里那三枚「打开…文件夹」按钮分组——
 #           学员照着按钮名找得到落点，照着拖也盖不掉任何一份设置。
+#        附件名只用 ASCII：skill/SKILL.md 的取法一让智能体按这个名字去发行版取包，
+#        Python 的 urllib 遇到路径里的中文直接抛异常——而那正是没有 Git 的 Windows 上最常见的下载工具。
 # [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 #
 # 用法：./make-v1-package.sh [输出目录]
@@ -50,7 +52,7 @@ if ! test_log="$(npm test 2>&1)"; then
 fi
 
 version="$(node -p "require('./package.json').version")"
-name="ziminOS-v${version}-安装包"
+name="ziminOS-v${version}-setup"
 
 # ============================================================
 # 二、核对第一版仓库
@@ -267,6 +269,8 @@ cat << NOTES
 1. 下载附件 **$name.zip**（$size）。页面上如果还有 \`v$version.zip\`、\`v$version.tar.gz\`，那是 Gitee 自动附带的源代码，不是安装包。
 2. 解压，双击里面的「安装说明.html」，照着做：装字体 → 用 Obsidian 打开「ziminOS」文件夹 → 设置里点「初始化」。
 3. 已经装过的人：只看安装说明里的「以后怎么升级」，**不要**把新的「ziminOS」文件夹覆盖到你原来那本库上。
+
+用桌面智能体安装的人不用管这个页面：智能体会自己来取同一个包，不需要 Git。
 
 SHA-256：\`$sha\`
 ────────────────────────────────────────

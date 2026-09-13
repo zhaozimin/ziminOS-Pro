@@ -55,13 +55,77 @@ system_root="$(pwd -P)"
 
 ## 二、在工作区外取得施工源
 
-施工源有两种来路，**先看用户手里有没有分发包**。多数用户拿到的是一个压缩包而不是仓库地址。
+施工源只有一份内容，取法有三种。**按顺序试，前一种走通就不看后面。** 三种取法最后都得到同一个 `$src`——同时含 `vault/`、`vault-pro/`、`skill-pro/`、`fonts/` 的那个目录，下文每一步只认它。
 
-两条来路取的是**同一个仓库**，只是形态不同：第二版的事实源是 Gitee 上的 `ziminzhao/ziminos-pro`。**第一版住在另一个仓库 `ziminzhao/zimin-os-v1`，那里没有 `vault-pro/` 与 `skill-pro/`**，拿它装第二版会卡在下面那张交付物清单上——这是最容易走错的一步，因为第一版的契约里写的正是那个地址。（GitHub 上的 `zhaozimin/ziminOS` 已 403，两个版次都不要用它。）
+三种取的是**同一个仓库**的不同形态：第二版的事实源是 Gitee 上的 `ziminzhao/ziminos-pro`。**第一版住在另一个仓库 `ziminzhao/zimin-os-v1`，那里没有 `vault-pro/` 与 `skill-pro/`**，拿它装第二版会卡在下面那张交付物清单上——这是最容易走错的一步，因为第一版的契约里写的正是那个地址。（GitHub 上的 `zhaozimin/ziminOS` 已 403，两个版次都不要用它。）
 
-### 来路一：用户给了分发包（最常见）
+一律在**工作区之外**的系统临时目录里做（macOS / Linux 的 `/tmp`，Windows 的 `%TEMP%`），临时目录名以 `ziminos-install.` 开头，第五节清理时只认这个名字。禁止在 `$system_root` 内下载、解压或克隆。
 
-把压缩包解压到**工作区之外**的临时目录，解压出来的那个目录就是施工源：
+### 在 Windows 上，动手前先读这四条
+
+一台新的 Windows 电脑上，这一节曾经花掉二十分钟，而真正装库只用了几分钟。时间全耗在同一组环境问题反复撞墙上：
+
+1. **下文命令用 bash 书写只为好读；Windows 上请用 Python 标准库（`urllib` / `zipfile` / `shutil` / `json`）或 PowerShell 完成同样的事，不要去修 bash。** 智能体自带的 bash 常常是精简版：只有 bash 本体，没有 `ls`、`cp`、`tail`、`unzip`，也找不到 `git`。为它补 PATH、找工具，是这类安装最大的时间黑洞。
+2. **PowerShell 的输出看不见时**（有些智能体的沙箱会吞掉它），把结果写进临时目录里的日志文件再读，不要反复重跑同一条命令。
+3. **不要在命令后面接 `| tail`、`| head`。** 缺一个小工具，整条管道会被连带杀掉，只留下一半的文件，而你看到的只是「被终止」。
+4. **不走取法三就不需要 Git。** 取法一只要能发一次 HTTPS 请求、能解开一个 zip，Python 与 PowerShell 都自带这两样。
+
+### 取法一：下载 Gitee 发行版上的分发包（首选，不需要 Git，也不需要登录）
+
+1. 读公开接口 `https://gitee.com/api/v5/repos/ziminzhao/ziminos-pro/releases/latest`，在返回的 `assets` 里找名字形如 `ziminOS-pro-v版本号.zip` 的那一项，下载它的 `browser_download_url`。
+2. 核对下载结果：几十 MB，开头两个字节是 `PK`。拿到的若是几十 KB 的 HTML，说明取错了地址——回到第 1 步，不要换别的下载办法去试。
+3. 解到临时目录里，`$src` 就是解压出来的 `ziminOS-pro-v版本号/`。
+
+Python 标准库写法，macOS、Linux、Windows 通用：
+
+```python
+import json, os, shutil, tempfile, urllib.request, zipfile
+
+API = "https://gitee.com/api/v5/repos/ziminzhao/ziminos-pro/releases/latest"
+release = json.load(urllib.request.urlopen(API, timeout=60))
+asset = next((a for a in release["assets"]
+              if a["name"].startswith("ziminOS-pro-v") and a["name"].endswith(".zip")), None)
+if asset is None:
+    raise SystemExit("最新发行版上没有 ziminOS-pro-v*.zip，改走取法三")
+
+install_staging_dir = tempfile.mkdtemp(prefix="ziminos-install.")
+archive = os.path.join(install_staging_dir, asset["name"])
+with urllib.request.urlopen(asset["browser_download_url"], timeout=120) as response, open(archive, "wb") as out:
+    shutil.copyfileobj(response, out)
+
+with open(archive, "rb") as handle:
+    if handle.read(2) != b"PK":
+        raise SystemExit("下载到的不是 zip，停下来")
+with zipfile.ZipFile(archive) as z:
+    z.extractall(install_staging_dir)
+
+src = os.path.join(install_staging_dir, asset["name"][: -len(".zip")])
+print(release["tag_name"], src)
+```
+
+没有 Python 时用 PowerShell（Windows 自带）。前两行不能省：旧系统默认的 TLS 版本连不上 Gitee，而下载进度条会把几十 MB 的下载拖慢十倍以上：
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = 'SilentlyContinue'
+$release = Invoke-RestMethod 'https://gitee.com/api/v5/repos/ziminzhao/ziminos-pro/releases/latest'
+$asset = $release.assets | Where-Object { $_.name -like 'ziminOS-pro-v*.zip' } | Select-Object -First 1
+$install_staging_dir = Join-Path $env:TEMP ('ziminos-install.' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+New-Item $install_staging_dir -ItemType Directory | Out-Null
+$archive = Join-Path $install_staging_dir $asset.name
+Invoke-WebRequest $asset.browser_download_url -OutFile $archive -UseBasicParsing
+Expand-Archive $archive -DestinationPath $install_staging_dir
+$src = Join-Path $install_staging_dir ($asset.name -replace '\.zip$', '')
+```
+
+**这两件事都有人试过，每一件都白白花掉十分钟，不要做：**
+
+- 不要下载仓库的「下载 ZIP」地址（`…/repository/archive/…zip`）：未登录拿到的是一张几十 KB 的 HTML 跳转页，带什么请求头都一样。
+- 不要用 raw 地址或文件树接口逐个文件拼仓库：大字体文件返回 403，个别文件返回 451，永远拼不全。
+
+### 取法二：用户手里已经有分发包
+
+把压缩包解到工作区之外的临时目录（Python 的 `zipfile`、PowerShell 的 `Expand-Archive`、macOS 的 `unzip` 都行），`$src` 是解压出来那个同时含四个目录的目录：
 
 ```bash
 install_staging_dir="$(mktemp -d /tmp/ziminos-install.XXXXXX)"
@@ -69,9 +133,9 @@ unzip -q "<用户给的 zip 路径>" -d "$install_staging_dir"
 src="$(find "$install_staging_dir" -maxdepth 2 -type d -name vault-pro | head -1 | xargs dirname)"
 ```
 
-`$src` 应当是那个同时含 `vault/`、`vault-pro/`、`skill-pro/`、`fonts/` 的目录。找不到就停止并说明包不完整，**不要**试图去 GitHub 补那几个缺的目录——那个仓库里根本没有它们。要补只能走来路二，从 Gitee 的第二版仓库重新取一份完整的。
+找不到四个目录就停止并说明包不完整，**不要**试图去 GitHub 补那几个缺的目录——那个仓库里根本没有它们。要补就走取法一，从发行版重新取一份完整的。
 
-### 来路二：用户给了仓库地址
+### 取法三：git clone（前两种都走不通时）
 
 ```bash
 install_staging_dir="$(mktemp -d /tmp/ziminos-install.XXXXXX)"
@@ -81,11 +145,9 @@ src="$install_staging_dir/repo"
 
 **地址是 `ziminzhao/ziminos-pro`，不是第一版那个 `ziminzhao/zimin-os-v1`。** 后者 clone 下来是能成功的——失败要等到交付物清单那一步才发作，报的还是「仓库不完整」这种听上去像网络出错的话。用户如果给的是第一版地址或已经 403 的 GitHub 地址，直接告诉他那不是第二版的，换成上面这个。
 
-clone 需要认证或直接失败时，**不要让用户去创建账号、也不要去找别的镜像**：说明情况，请他改用来路一的分发包。仓库的可见性是作者随时可能调整的东西，而一条装不上的指令好过一条把人引去别处的指令。
+Windows 上找不到 `git` 时，先看智能体自带的 PortableGit：`git.exe` 常常在它的 `cmd\` 目录里，而不在只放了 bash 的 `bin\` 里，用绝对路径调用即可。clone 需要认证或直接失败时，**不要让用户去创建账号、也不要去找别的镜像**：说明情况，停下来。一条装不上的指令好过一条把人引去别处的指令。
 
-两种来路之后的每一步完全相同，因为**分发包内部就是仓库的目录结构**——这么打包正是为了让契约里的路径一个字都不用改。
-
-禁止在 `$system_root` 内解压或 `git clone`。
+三种取法之后的每一步完全相同，因为**分发包内部就是仓库的目录结构**——这么打包正是为了让契约里的路径一个字都不用改。
 
 确认第二版交付物齐全，任一缺失就停止并说明仓库不完整：
 
@@ -182,7 +244,7 @@ macOS：
 
 ```bash
 mkdir -p ~/Library/Fonts
-for f in "$src"/fonts/*/*.ttf "$src"/fonts/*/*.otf; do
+find "$src/fonts" -type f \( -name '*.ttf' -o -name '*.otf' \) | while IFS= read -r f; do
     target=~/Library/Fonts/"$(basename "$f")"
     [ -e "$target" ] || cp "$f" "$target"
 done
@@ -283,7 +345,7 @@ mkdir -p "$human/.obsidian/plugins/ziminos"
 }
 ```
 
-同样要改 `$eternal/.obsidian/plugins/ziminos/edition.json` 里的 `vaults.human`。**三份标记里的 `vaults` 必须完全一致**，它是系统布局的唯一事实源，不一致会让出库单指向一个不存在的地方。
+同样要改 `$eternal/.obsidian/plugins/ziminos/edition.json` 里的 `vaults.human`。**两份标记里的 `vaults` 必须完全一致**，它是系统布局的唯一事实源，不一致会让出库单指向一个不存在的地方。
 
 5. 现有库的 `main.js` / `manifest.json` / `styles.css` / `ziminOS-Eagle-Bridge.eagleplugin`、Minimal 主题与十三个实名片段更新到施工源的版本。片段复制前先记下目标中不存在的文件名，复制后按 C 模式第 2 步的规则，只把这批「本次新增」里默认启用的片段追加进 `appearance.json`；已有片段的开关一个都不动。
 6. 按 A 的第 4、5、6 步装字体、留说明书、铺系统根的认路文件。
@@ -430,11 +492,11 @@ AGENTS.md
 - `以人为本/.obsidian/plugins/ziminos/{main.js,manifest.json,styles.css,ziminOS-Eagle-Bridge.eagleplugin,edition.json}` 齐全，伴侣包 `unzip -t` 校验通过；`edition.json` 是合法 JSON 且 `role` 为 `human`。
 - `赛博永生/.obsidian/plugins/ziminos/edition.json` 的 `role` 为 `eternal`；`10-原料/`、`20-知识/索引.md`、`90-系统/账本.md`、`CLAUDE.md`、`README.md` 齐全（这本库的三层目录名是中文的，不是 `10-raw` / `20-wiki` / `90-system`）。
 - `兼收并蓄/灵感集.md` 与 `兼收并蓄/剪藏/` 存在；`.obsidian/plugins/dataview/main.js` 存在。
-- **三份 `edition.json` 里的 `vaults` 三个值两两一致**，且每个值都是 `$system_root` 下真实存在的目录名。
+- **两份 `edition.json`（`以人为本` 与 `赛博永生`）的 `vaults` 完全一致**，且三个值都是 `$system_root` 下真实存在的目录名。只有装了 ziminOS 插件的库才有版次标记；《兼收并蓄》没有这个插件，**也不该有 `edition.json`，不要为了凑数给它补一份**。
 - `.ziminos/skills/capture/SKILL.md`、`.ziminos/skills/distill/SKILL.md`、`.ziminos/skills/scripts/notectl.py` 存在。
 - 系统根的 `CLAUDE.md` 与 `AGENTS.md` 存在，且**除它们之外系统根没有第三个 `.md`**。自检方式：换一个全新会话打开系统根，只说一句「记一下：测试」，它应当不再反问「你的笔记库在哪」。
 - 用户字体目录里五个字体文件齐全。
-- **三本库里都不存在 `data.json`。** 全新安装不该生成它——它由插件在用户第一次改设置时自己写出来。
+- **三本库里都不存在 `.obsidian/plugins/ziminos/data.json`。** 全新安装不该生成它——它由插件在用户第一次改设置时自己写出来。`.obsidian/plugins/obsidian-style-settings/data.json` 不在此列：它是随库分发的默认配色，三本库都**必须有**，不要删。
 - `$system_root` 内不存在 `.git/`、`src/`、`docs/`、`skill/`、`skill-pro/`、`vault/`、`vault-pro/`、`fonts/`、`node_modules/`、`package.json`。
 
 升级模式（B / C）**先确认程序真的前进了**：`以人为本` 与 `赛博永生` 的 `manifest.json` 版本号等于施工源的版本号；两本库的 `main.js` 与施工源的 `main.js` SHA-256 相同；两本库的 `ziminOS-Eagle-Bridge.eagleplugin` 与施工源 SHA-256 相同且 `unzip -t` 校验通过；`.ziminos/skills/` 下三个目录齐全；系统根的 `CLAUDE.md` 与 `AGENTS.md` 存在。**这些条目缺一条，这次升级就是没做成**——而它不会自己报错，用户只会在重启 Obsidian 后发现插件还是旧的。
@@ -445,7 +507,7 @@ AGENTS.md
 
 ## 五、清理
 
-无论成功失败都清理，删除前必须验证路径：
+无论成功失败都清理。删除前必须确认它是本次创建的临时目录：在系统临时目录下、名字以 `ziminos-install.` 开头。
 
 ```bash
 case "$install_staging_dir" in
@@ -453,6 +515,21 @@ case "$install_staging_dir" in
     *) echo "拒绝清理非 ziminOS 临时目录：$install_staging_dir" >&2; exit 1 ;;
 esac
 ```
+
+Windows 上用 Python 或 PowerShell 删。取法三克隆出的 `.git` 里有只读文件，直接删会报 `WinError 5` / 拒绝访问——先去掉只读属性再删，而不是换别的办法重试：
+
+```python
+import os, shutil, stat
+
+def _clear_readonly(func, path, _):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+assert os.path.basename(install_staging_dir).startswith("ziminos-install.")
+shutil.rmtree(install_staging_dir, onerror=_clear_readonly)
+```
+
+PowerShell 的 `Remove-Item -LiteralPath $install_staging_dir -Recurse -Force` 同样能删掉只读文件（`-Force` 不能省）。
 
 不得删除 `$system_root` 或其中任何一本库。
 
@@ -470,7 +547,7 @@ esac
 >
 > 接下来三步：
 >
-> 1. 用 Obsidian **分别打开这三个文件夹**（不是它们外面那一层）。Obsidian 一次开一本，左下角切换。每本第一次打开时都会问信不信任，点「信任作者并启用插件」。
+> 1. 用 Obsidian **分别打开这三个文件夹**（不是它们外面那一层）。Obsidian 一次开一本，左下角切换。每本第一次打开时都会问信不信任，点「信任仓库作者并启用插件」。
 > 2. **只有「以人为本」需要你手动开荒**：打开设置 → 左边找到 ziminOS → 第一张标签「开荒」→ 点「初始化」。另外两本已经布置好了，打开就能用。
 > 3. 开完荒，跟我说句话试试：「记一下：随便什么想法」或「记一下今天：下午和谁聊了什么」——两句都会进《兼收并蓄》的 `灵感集.md`；`剪藏/` 只归浏览器插件。
 >
@@ -502,5 +579,5 @@ esac
 - 只交付仓库已锁定的资产，不临时下载任何软件、插件、主题、图标或字体。
 - 字体只装用户级目录，绝不提权，同名不覆盖。
 - 升级绝不覆盖 `edition.json`、任何 `data.json`、用户主题/字体/片段选择、`app.json`、`templates.json`、用户笔记。
-- 三份 `edition.json` 的 `vaults` 必须完全一致。
+- 两份 `edition.json`（`以人为本` 与 `赛博永生`）的 `vaults` 必须完全一致；不给《兼收并蓄》补版次标记。
 - 判断不了当前目录是否安全时停止，不要猜。
