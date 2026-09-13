@@ -125,7 +125,7 @@ docs/插件代码审计修复报告-2026-08-18.html - 对外交付的单文件�
 </config>
 
 <delivery>
-esbuild.config.mjs - Obsidian 构建出口；打包前把 package.json 版本同步到 Obsidian 与 Eagle 两份 manifest，主产物直接写入 vault 插件目录，再由 package-eagle.sh 生成伴侣包
+esbuild.config.mjs - Obsidian 构建出口；打包前把 package.json 版本同步到 Obsidian 与 Eagle 两份 manifest，主产物直接写入 vault 插件目录，再由 package-eagle.sh 生成伴侣包。产物里的依赖路径一律归一成 `node_modules/` 开头：esbuild 写的是相对工作目录的路径，在 git worktree 里构建会得到 `../../../node_modules/`，代码一字不差、main.js 却差出几百行，publish-v1.sh 的「构建后 main.js 不许再变」就随构建地点时红时绿
 .gitignore - 忽略依赖、系统杂项、历史发布压缩包、常见凭据、开发库私有状态与发布/Eagle 打包暂存；main.js、`.eagleplugin` 与公共 vault 资产不忽略，学员浅克隆即可用
 .gitattributes - 锁定 Dataview、Minimal、Style Settings、fonts/ 字体及 Eagle 图标/安装包等二进制发布资产的原始字节，防止 Git 换行/格式化破坏 SHA-256
 docs/第三方组件.md - 运行依赖、独立交付资产与外部设计参照的版本/上游/许可真源；v0.23.0 增加 dom-to-image-more、jsPDF 及两款导出参考插件边界

@@ -4,7 +4,9 @@
  * [OUTPUT]: 以 package.json 版本为唯一事实源，同步 Obsidian/Eagle 两份 manifest 后把 src/main.ts
  *           打包为 CommonJS 单文件，直接落位到 vault 内的插件目录
  * [POS]: 构建链的唯一出口。产物路径即 vault 模板区的插件目录，构建完成即就位，
- *        因此不需要任何同步脚本；dev 模式常驻 watch，production 模式一次性构建并退出
+ *        因此不需要任何同步脚本；dev 模式常驻 watch，production 模式一次性构建并退出。
+ *        产物与「在哪个目录构建」无关：依赖路径一律归一成 node_modules/ 开头，
+ *        否则在 git worktree 里（依赖从上三层解析）与在主仓库里各打出一份不同的 main.js
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -77,7 +79,32 @@ async function syncManifestVersion() {
 
 await syncManifestVersion();
 
+/*
+ * 依赖路径归一。
+ *
+ * esbuild 在非压缩产物里给每个依赖留一行来源注释（外加 __commonJS 的模块键），
+ * 写的是它相对工作目录的路径。依赖在本地 node_modules 时是 `node_modules/…`；
+ * 在 git worktree 里依赖从上三层的主仓库解析，就成了 `../../../node_modules/…`。
+ * 代码一字不差，产物却差出几百行——publish-v1.sh 的「构建后 main.js 不许再变」
+ * 于是随构建地点时红时绿，而那道闸存在的意义正是「红了就说明产物与源码对不上」。
+ * 归一成前者：它就是依赖在任何一次正常安装里的样子，也不带任何本机信息。
+ */
+const LOCATION_INDEPENDENT = {
+    name: 'location-independent-output',
+    setup(build) {
+        build.onEnd(async (result) => {
+            if (result.errors.length > 0) return;
+
+            const output = await readFile(OUT_FILE, 'utf8');
+            const normalized = output.replace(/(?:\.\.\/)+node_modules\//g, 'node_modules/');
+
+            if (normalized !== output) await writeFile(OUT_FILE, normalized, 'utf8');
+        });
+    },
+};
+
 const context = await esbuild.context({
+    plugins: [LOCATION_INDEPENDENT],
     banner: { js: banner },
     entryPoints: ['src/main.ts'],
     bundle: true,
