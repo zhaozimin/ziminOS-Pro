@@ -2,17 +2,25 @@
 来源：guangtou.me
 作者：光头obsidian教程
 功能：为代码块增加行号显示。
+ziminOS 调整：原片段靠 text-indent: 2em 把代码推到行号右边，可 text-indent 只缩进
+              一段的第一行——代码一折行，第二行起就退回行首、钻到行号底下。
+              它本该靠 padding-left: 3.5em 让出行号栏，但顶层代码块里 Obsidian
+              自己那条 padding-inline-start: var(--size-4-4) 更具体，这一句从没
+              生效，一行不折时 text-indent 替它顶班才没露馅；列表里的代码行没有
+              那条原生规则，它反倒生效，代码又被 3.5em 加 2em 推出老远。
+              行号栏因此只由内边距让出，不再碰 text-indent：宽度取原生 16px 留白
+              加 2em，顶层代码块的首行停在原位，折出来的每一行与它左对齐，列表
+              里的代码行也收成同一个宽度。选择器开头的 .markdown-source-view
+              .mod-cm6 不能省——少了它就压不住原生那条，每一行都会压到行号上。
 ==================== */
 
 .HyperMD-codeblock-begin {
   counter-reset: line-numbers;
-  text-indent: 0 !important; 
 }
 
-.HyperMD-codeblock.cm-line:not(.HyperMD-codeblock-begin):not(.HyperMD-codeblock-end) {
-  padding-left: 3.5em; 
+.markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock:not(.HyperMD-codeblock-begin):not(.HyperMD-codeblock-end) {
+  padding-inline-start: calc(var(--size-4-4) + 2em);
   position: relative;
-  text-indent: 2em; 
 }
 
 .HyperMD-codeblock.cm-line:not(.HyperMD-codeblock-begin):not(.HyperMD-codeblock-end)::after {
@@ -36,10 +44,6 @@
 
 .HyperMD-codeblock.cm-line.cm-active:not(.HyperMD-codeblock-begin):not(.HyperMD-codeblock-end)::after {
   color: var(--color-accent);
-}
-
-.HyperMD-codeblock.cm-line.HyperMD-codeblock-end {
-  text-indent: 0 !important; 
 }
 
 .HyperMD-codeblock .cm-foldPlaceholder::before {
