@@ -16,7 +16,8 @@
  *        遍历本机可用的划线来源 → 按书名认出这本书 → 划线直接落进「全部划线」小节。
  *        中间不产生任何需要学员再搬一次的中转文件，这正是「一步」的全部含义。
  *        三条异步命令共用异常边界，取数进度提示由 finally 收口；底层异常不会变成未处理拒绝，
- *        同步也只在合并真正改变文本时标记自写，幂等同步不伪造文件变更事实
+ *        同步只在合并真正改变文本时才写盘，幂等同步不伪造文件变更事实；
+ *        写进去的是用户自己的划线，所以不登记自写，书的 updated 照记
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -229,8 +230,7 @@ export async function pullHighlights(
 
         if (mergeRun.outcome.content === content) return content;
 
-        ctx.guard.mark(moc.path);
-
+        // 替人落笔，不登记自写：写进去的是用户自己的划线，书的 updated 应当照记（见 core/guard）
         return mergeRun.outcome.content;
     });
 

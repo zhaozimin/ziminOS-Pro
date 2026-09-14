@@ -202,8 +202,7 @@ async function runImport(ctx: ZiminosContext): Promise<void> {
 
             if (merged.content === content) return content;
 
-            ctx.guard.mark(target.path);
-
+            // 替人落笔，不登记自写：写进去的是用户自己的划线，书的 updated 应当照记（见 core/guard）
             return merged.content;
         });
 

@@ -293,7 +293,7 @@ async function addPayment(ctx: ZiminosContext): Promise<void> {
             `- [ ] [${PAYMENT_FIELDS.product}::${product}] ` +
             `[${PAYMENT_FIELDS.amount}::${amount}] [${PAYMENT_FIELDS.date}::${today()}]`;
 
-        ctx.guard.mark(client.path);
+        // 替人落笔，不登记自写：这笔付费是用户记的，客户档案的 updated 应当照记（见 core/guard）
         await ctx.app.vault.process(client, (content) =>
             insertIntoSection(content, CLIENT_PAYMENT_HEADING, line),
         );
@@ -333,7 +333,7 @@ async function recordReceipt(ctx: ZiminosContext): Promise<void> {
 
         const line = `- [ ] [${PAYMENT_FIELDS.amount}::${amount}] [${PAYMENT_FIELDS.date}::${today()}]`;
 
-        ctx.guard.mark(project.path);
+        // 替人落笔，不登记自写：这笔收款是用户记的，项目 MOC 的 updated 应当照记（见 core/guard）
         await ctx.app.vault.process(project, (content) =>
             insertIntoSection(content, PROJECT_PAYMENT_HEADING, line),
         );

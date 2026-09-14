@@ -140,7 +140,7 @@ async function recordFavor(ctx: ZiminosContext, openDaily: DailyNoteProvider): P
 
         const line = ledgerLine(personLink(person), kind, item, status);
 
-        ctx.guard.mark(diary.path);
+        // 替人落笔，不登记自写：这一行是用户记的，那篇日记的 updated 应当照记（见 core/guard）
         await ctx.app.vault.process(diary, (content) =>
             insertIntoSection(content, DIARY_LOG_HEADING, line),
         );

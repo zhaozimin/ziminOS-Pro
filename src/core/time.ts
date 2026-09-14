@@ -1,7 +1,8 @@
 /**
  * [INPUT]: 依赖 obsidian 导出的 moment，依赖 ./constants 的 UID_FORMAT、DEFAULT_DATETIME_FORMAT、
  *          DAY_FORMAT、五级周期表 PERIODS 与 PeriodDefinition 类型
- * [OUTPUT]: 对外提供 nowStamp（按设置格式取当前时间）、nowUid（14 位本地时间数字 UID）、
+ * [OUTPUT]: 对外提供 nowStamp（按设置格式取当前时间）、stampOfMillis（按设置格式写出过去某一刻）、
+ *           nowUid（14 位本地时间数字 UID）、
  *           nowStampAndUid（同一时刻派生时间戳与 UID）、nowLocalDateTimeParts（同一时刻派生
  *           日期/分钟/自定义时间）；日粒度口径 today/dayText/dayOfMillis/dayOfTitle/shiftDay/daysBetween；
  *           五级复盘周期算术 currentPeriodTitle/periodOfTitle/periodStartOf/periodEndOf/
@@ -78,6 +79,15 @@ function normalizeDateTimeFormat(value: string | undefined): string {
  */
 export function nowStamp(format: string): string {
     return momentFactory().format(normalizeDateTimeFormat(format));
+}
+
+/**
+ * 把过去的某个时刻按设置的时间格式写出来。
+ * updated 记的是「最后一次改完的那一刻」而不是「落笔的这一刻」——两者可以隔着一小时（改完接着读），
+ * 也可以隔着一夜（退出之后下次启动才补），所以落笔处必须能把一个过去的时刻写成与 nowStamp 同一种格式。
+ */
+export function stampOfMillis(millis: number, format: string): string {
+    return momentFactory(millis).format(normalizeDateTimeFormat(format));
 }
 
 /**

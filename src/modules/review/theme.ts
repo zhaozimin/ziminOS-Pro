@@ -99,7 +99,7 @@ async function promptAndWriteTheme(
         return;
     }
 
-    ctx.guard.mark(file.path);
+    // 替人落笔，不登记自写：主题是用户写的结论，这篇周期笔记的 updated 应当照记（见 core/guard）
     await ctx.app.fileManager.processFrontMatter(file, (frontmatter: Frontmatter) => {
         frontmatter[FIELDS.theme] = theme;
     });

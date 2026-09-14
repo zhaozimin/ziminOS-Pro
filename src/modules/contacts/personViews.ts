@@ -12,7 +12,8 @@
  *        而是这段关系上发生过的一件事，带着确定的日期。
  *        「关键事件」刻意排除档案之间的互链：两份档案互相提到对方是常事，
  *        算成事件会在两个人的时间线上凭空多出一条谁也没做过的记录。
- *        待办勾选先校验原行，只有真实改变文本才标记自写，行号漂移时宁可不勾也不误伤别的任务
+ *        待办勾选先校验原行，行号漂移时宁可不勾也不误伤别的任务；
+ *        勾掉一条待办是用户在改那篇日记，所以不登记自写——那篇日记的 updated 照记
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -319,18 +320,12 @@ const openTasks: ViewDefinition = {
 
 /**
  * 把一条待办勾掉，写回它所在的那一行。
- * 确定行内容对得上才 mark，让真实写入被认作插件自己所为；行内容对不上就什么都不做——
- * 视图渲染之后用户可能改过那篇日记，行号会漂，勾错一条别人的待办比没勾上难发现得多。
+ * 行内容对不上就什么都不做——视图渲染之后用户可能改过那篇日记，行号会漂，勾错一条别人的待办比没勾上难发现得多。
+ * 这一笔不登记自写：勾的是用户，改的是他的日记，updated 应当照记（守卫只登记机器的反应，见 core/guard）。
  */
 async function toggleTask(view: ViewContext, task: TaskLine): Promise<void> {
     await view.ctx.app.vault.process(task.file, (content) => {
-        const changed = toggleTaskLine(content, task.line, task.checked);
-
-        if (changed === null || changed === content) return content;
-
-        view.ctx.guard.mark(task.file.path);
-
-        return changed;
+        return toggleTaskLine(content, task.line, task.checked) ?? content;
     });
 }
 

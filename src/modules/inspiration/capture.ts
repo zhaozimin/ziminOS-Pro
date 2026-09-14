@@ -5,7 +5,7 @@
  * [OUTPUT]: 对外提供 registerInspirationCaptureCommand，经注册台登记「记录灵感」
  * [POS]: inspiration 模块的唯一副作用编排器：向人提问、解析目标路径、按需创建目录/笔记并原子写入；
  *        不持有第二份设置、不依赖 QuickAdd；Dataview 作为独立运行组件消费它生成的查询块，
- *        所有写入都先通过全局 SelfWriteGuard 登记
+ *        灵感集第一次出生时登记全局 SelfWriteGuard；往已有灵感集里插入的那一条是用户记的，不登记，updated 照记
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -85,8 +85,7 @@ async function captureInspiration(ctx: ZiminosContext): Promise<void> {
                     target.path,
                 );
 
-                // 纯文本校验全部成功后、process 真正写盘前再登记，失败流程不制造虚假的自写窗口
-                ctx.guard.mark(target.path);
+                // 替人落笔，不登记自写：这一条是用户记的，灵感集的 updated 应当照记（见 core/guard）
                 return updatedContent;
             });
         }

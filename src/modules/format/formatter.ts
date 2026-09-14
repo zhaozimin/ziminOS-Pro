@@ -1,21 +1,23 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Notice 与 TFile/TAbstractFile 类型；依赖 core/commands 的 FORMAT_COMMAND、
- *          core/markdownStyle 的 formatMarkdown、core/markdownViewState 的分栏滚动保护、
- *          core/types 的 ZiminosContext
+ *          core/editDebts 的编辑欠账与 isNoteInFront、core/markdownStyle 的 formatMarkdown、
+ *          core/markdownViewState 的分栏滚动保护、core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 registerFormatter（注册整理命令与自动整理）
  * [POS]: 排版模块的全部。规则本体住在 core/markdownStyle——那是一趟纯字符串变换，
- *        本文件只回答「什么时候对哪一篇跑它」，且自动写盘前以实时活动文件作最后闸门；
- *        两件事分开是因为前者可测、后者只能真机验。
+ *        本文件只回答「这次变化该不该排一次整理」与「到点之后怎么整理」，两件事分开是因为前者可测、后者只能真机验。
+ *        「什么时候整理才不伤人」整件交给 core/editDebts，与 updatedMaintainer 同一份实现：
+ *        正开着的那一篇等走开、走开包含关掉、账跟着改名走——这件事原本两边各写一份，
+ *        v0.33.0 只修好了那一边的「关标签页」，这一边一直在拿「最近活动过」当「开着」。
  *        它替代的是学员原本要自己装的 Linter 插件，但刻意只做那一件最基础的事：
  *        标准 Markdown 的写法，而不是一百条可配置的重排。
- *        全插件第二个常驻编辑监听（第一个是 updatedMaintainer），
- *        两者共处一室的规矩写在下面 shouldSkip 那一段
+ *        全插件第二个常驻编辑监听（第一个是 updatedMaintainer），两者共处一室的规矩写在下面 shouldSkip 那一段
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import { Notice, TFile } from 'obsidian';
 import type { TAbstractFile } from 'obsidian';
 import { FORMAT_COMMAND } from '../../core/commands';
+import { isNoteInFront, registerEditDebts } from '../../core/editDebts';
 import { formatMarkdown } from '../../core/markdownStyle';
 import { withPreservedMarkdownScroll } from '../../core/markdownViewState';
 import type { ZiminosContext } from '../../core/types';
@@ -55,21 +57,8 @@ const TEXTS = {
  * 命令是用户当场按下的，自动是他停手或走开时替他按的。
  */
 export function registerFormatter(ctx: ZiminosContext): void {
-    /** 路径 → 在途的防抖 timeout id */
-    const pendingTimeouts = new Map<string, number>();
-
-    /**
-     * 用户改过、但当时正开在他眼前的笔记。
-     *
-     * 它们不当场整理，等他切走再说——这是本模块最要紧的一条纪律，理由见 scheduleFormat。
-     */
-    const dirtyWhileOpen = new Set<string>();
-
     /** 路径 → 最近一次真正整理的时刻，配合 RE_ENTRY_MS 使用 */
     const lastRun = new Map<string, number>();
-
-    /** 当前停在哪一篇。用户切走时要回头整理的正是它 */
-    let openPath: string | null = null;
 
     // ============================================================
     // 落盘
@@ -97,7 +86,7 @@ export function registerFormatter(ctx: ZiminosContext): void {
 
         await withPreservedMarkdownScroll(ctx.app, file, () =>
             ctx.app.vault.process(file, (content) => {
-                // 排队期间用户可能重新打开这篇；真正写盘的这一刻再问一次，人的编辑权优先
+                // 读盘之后用户可能把这篇点回眼前；真正写盘的这一刻再问一次，人的编辑权优先
                 if (!mayWrite()) return content;
 
                 const next = formatMarkdown(content, rules);
@@ -116,60 +105,22 @@ export function registerFormatter(ctx: ZiminosContext): void {
         return changed;
     };
 
-    /** 按路径取回文件并整理，文件已不在则安静放弃 */
-    const formatPath = async (path: string): Promise<void> => {
-        if (!ctx.settings.autoFormat) return;
+    /**
+     * 结算一笔：把已经不在眼前的那一篇整理掉。
+     *
+     * 欠账保证调用时它不在眼前；可 cachedRead 之后隔着一次读盘，用户完全可能把它点回来，
+     * 于是闸门在读盘后与写盘时各问一次。返回 false 只有这一种情况——这笔账留着，等他下一次走开。
+     */
+    const settle = async (file: TFile): Promise<boolean> => {
+        if (!ctx.settings.autoFormat || file.extension !== 'md') return true;
 
-        const file = ctx.app.vault.getAbstractFileByPath(path);
+        const stillAway = (): boolean => !isNoteInFront(ctx.app, file.path);
+        const changed = await formatFile(file, stillAway);
 
-        if (!(file instanceof TFile) || file.extension !== 'md') return;
-
-        const mayWrite = (): boolean => ctx.app.workspace.getActiveFile()?.path !== path;
-
-        if (!mayWrite()) {
-            dirtyWhileOpen.add(path);
-            return;
-        }
-
-        const changed = await formatFile(file, mayWrite);
-
-        // 若最后一道闸关上了，这篇仍然是脏的；等用户下一次离开再整理
-        if (!changed && !mayWrite()) dirtyWhileOpen.add(path);
+        return changed || stillAway();
     };
 
-    // ============================================================
-    // 防抖与在途计划
-    // ============================================================
-
-    const cancel = (path: string): void => {
-        const pending = pendingTimeouts.get(path);
-
-        if (pending === undefined) return;
-
-        window.clearTimeout(pending);
-        pendingTimeouts.delete(path);
-    };
-
-    const schedule = (path: string): void => {
-        cancel(path);
-
-        const timeoutId = window.setTimeout(() => {
-            pendingTimeouts.delete(path);
-
-            void formatPath(path).catch(() => {
-                // 自动整理是背景动作：文件在等待期间被删被改而写入失败属于常态，
-                // 弹 Notice 只会变成噪音。用户随时可以用命令再整理一次
-            });
-        }, FORMAT_DEBOUNCE_MS);
-
-        pendingTimeouts.set(path, timeoutId);
-    };
-
-    ctx.plugin.register(() => {
-        for (const timeoutId of pendingTimeouts.values()) window.clearTimeout(timeoutId);
-
-        pendingTimeouts.clear();
-    });
+    const debts = registerEditDebts(ctx, { debounceMs: FORMAT_DEBOUNCE_MS, settle });
 
     // ============================================================
     // 什么时候不该动手
@@ -179,7 +130,7 @@ export function registerFormatter(ctx: ZiminosContext): void {
      * 这次变化该不该排一次整理。
      *
      * 它与 updatedMaintainer 的同名判断有一处**故意的不同**：那边看见「插件刚写过」就直接跳过，
-     * 这边不看守卫。理由是插件自己插进去的那一行（记人情、增加付费、记收款、记灵感）
+     * 这边不看守卫。理由是插件替人插进去的那一行（记人情、增加付费、记收款、记灵感）
      * 恰恰最需要被整理——里面有用户现敲的字。不看守卫的底气是幂等：
      * 整理写盘后再来一趟，算出来一模一样，于是自己停下，不需要守卫替它刹车。
      * 真正的刹车是上面那把再入锁，它只挡住一秒内的第二次。
@@ -195,13 +146,10 @@ export function registerFormatter(ctx: ZiminosContext): void {
     // ============================================================
 
     ctx.app.workspace.onLayoutReady(() => {
-        openPath = ctx.app.workspace.getActiveFile()?.path ?? null;
-
         ctx.plugin.registerEvent(
             ctx.app.vault.on('modify', (file: TAbstractFile): void => {
                 if (!ctx.settings.autoFormat) {
-                    cancel(file.path);
-                    dirtyWhileOpen.delete(file.path);
+                    debts.forget(file.path);
                     return;
                 }
 
@@ -209,50 +157,16 @@ export function registerFormatter(ctx: ZiminosContext): void {
                 if (shouldSkip(file.path)) return;
 
                 /*
-                 * 分岔就在这一句：正开在眼前的那一篇，只记下「它脏了」，绝不当场整理。
+                 * 记一笔，由欠账决定什么时候整理：正开在眼前的那一篇绝不当场整理。
                  *
                  * 中文输入法在合成期间被外部改写会吞字，而两秒的停顿在斟酌一句话时太常见；
                  * 就算不吞字，整篇重写也会让光标从他正打字的位置上移开。
-                 *
-                 * 这条纪律曾被当成本模块独有的，理由是「整篇重写才这么危险」。v0.33.0 由真机改正：
-                 * updatedMaintainer 只改一个 YAML 字段，症状一模一样——代价与写多少字节无关，
-                 * 只与「写盘的那一刻编辑器手里有没有未保存的改动」有关。于是它也搬来了同一套
-                 * dirtyWhileOpen + 走开再补，两个常驻监听现在守的是同一条边界。
+                 * 这条纪律曾被当成本模块独有的（「整篇重写才这么危险」），v0.33.0 由真机改正：
+                 * 代价与写多少字节无关，只与「写盘的那一刻编辑器手里有没有未保存的改动」有关。
                  */
-                if (file.path === openPath) {
-                    dirtyWhileOpen.add(file.path);
-                    return;
-                }
-
-                schedule(file.path);
+                debts.record(file);
             }),
         );
-
-        /**
-         * 用户换了笔记：回头把刚离开的那一篇整理掉。
-         *
-         * active-leaf-change 与 file-open 都订，是因为它们各管一半——
-         * 换面板走前者，同一个面板里换文件走后者，漏掉任何一个都会留下一篇永远等不到整理的笔记。
-         * 处理器本身可重入：整理完就从 dirty 里摘掉，两个事件先后到达也只跑一次。
-         */
-        const leaveCurrent = (): void => {
-            const nextPath = ctx.app.workspace.getActiveFile()?.path ?? null;
-
-            if (nextPath === openPath) return;
-
-            const leaving = openPath;
-
-            openPath = nextPath;
-
-            if (leaving === null || !dirtyWhileOpen.delete(leaving)) return;
-
-            void formatPath(leaving).catch(() => {
-                // 同上：走开时的顺手整理失败不该拦住用户下一步
-            });
-        };
-
-        ctx.plugin.registerEvent(ctx.app.workspace.on('active-leaf-change', leaveCurrent));
-        ctx.plugin.registerEvent(ctx.app.workspace.on('file-open', leaveCurrent));
     });
 
     // ============================================================
@@ -284,7 +198,7 @@ export function registerFormatter(ctx: ZiminosContext): void {
 
         void formatFile(file)
             .then((changed) => {
-                dirtyWhileOpen.delete(file.path);
+                debts.forget(file.path);
                 new Notice(changed ? TEXTS.formatted : TEXTS.unchanged);
             })
             .catch(() => {
