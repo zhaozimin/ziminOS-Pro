@@ -9,7 +9,8 @@
  *        项目、领域、书籍与手动 MOC 因此共用同一块数据库代码，整个容器搬移后零改写自适应。
  *        它把直属笔记、up 归属笔记、递归附件与全部内容分成三个视图，
  *        并在全局排除当前 MOC 与 90-system 整棵系统目录树。
- *        书籍只在 YAML 与正文小节上增量，不再分叉 base 视图；
+ *        书籍只在 YAML 与正文小节上增量，不再分叉 MOC 内的 base 视图；
+ *        导航的书籍视图保持封面卡片，并用可点击公式显示首个 aliases，旧书缺席时回落文件名，
  *        新建、手动插入与状态流转于是都没有第二份查询协议可以漂移
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -37,29 +38,62 @@ const MOC_FIELDS: readonly string[] = [
 ];
 
 /** 导航页开头的一行说明。面向零基础学员，不出现术语 */
-const NAV_INTRO = '这里是你的家。下面四张表会自动列出库里所有项目、领域和书籍，新建之后自动出现，不用手动维护。';
+const NAV_INTRO = '这里是你的家。下面四个视图会自动列出库里所有项目、领域和书籍，新建之后自动出现，不用手动维护。';
 
-/** 导航页的四个表格视图：显示名、筛选表达式与列顺序 */
-const NAV_VIEWS: readonly {
+/** 表格与卡片共用的导航视图契约；卡片参数只可能属于 cards 分支 */
+type NavigationView = {
+    readonly type: 'table';
     readonly name: string;
     readonly filter: string;
     readonly columns: readonly string[];
-}[] = [
+    readonly sort?: readonly NavigationSort[];
+} | {
+    readonly type: 'cards';
+    readonly name: string;
+    readonly filter: string;
+    readonly columns: readonly string[];
+    readonly sort?: readonly NavigationSort[];
+    readonly image: string;
+    readonly imageAspectRatio: number;
+    readonly imageFit: 'contain' | 'cover';
+    readonly cardSize: number;
+};
+
+interface NavigationSort {
+    readonly property: string;
+    readonly direction: 'ASC' | 'DESC';
+}
+
+/** 导航页的四个视图：前三个是表格，书籍按封面显示卡片 */
+const NAV_VIEWS: readonly NavigationView[] = [
     {
+        type: 'table',
         name: '正在进行中',
         filter: 'status == "active"',
         columns: ['file.name', 'description', 'formula.status_icon'],
     },
     {
+        type: 'table',
         name: '项目',
         filter: 'type == "project"',
         columns: ['file.name', 'description', 'formula.status_icon'],
+        sort: [{ property: 'formula.status_icon', direction: 'DESC' }],
     },
-    { name: '领域', filter: 'type == "area"', columns: ['file.name', 'description'] },
     {
+        type: 'table',
+        name: '领域',
+        filter: 'type == "area"',
+        columns: ['file.name', 'description'],
+    },
+    {
+        type: 'cards',
         name: '书籍',
         filter: 'type == "book"',
-        columns: ['file.name', 'description', 'formula.status_icon'],
+        columns: ['formula.book_title', 'description', 'formula.status_icon'],
+        image: 'note.cover',
+        imageAspectRatio: 1.35,
+        imageFit: 'contain',
+        cardSize: 200,
     },
 ];
 
@@ -100,8 +134,8 @@ export interface MocFrontmatterOptions {
      */
     readonly author?: string;
     /**
-     * 别名。书籍容器用它装带副标题的全名——文件名只能用主书名（副标题太长做不了文件名），
-     * 而搜索与双链要认得出全名，别名正是 Obsidian 为这件事准备的字段。
+     * 别名。书籍容器至少写入真实书名：文件名还要承担 `MOC-`、书名号与定位职责，
+     * 导航、搜索与双链应当看见书本自己的名字。豆瓣有副标题时，这个值是带副标题的全名。
      */
     readonly aliases?: readonly string[];
     /**
@@ -185,7 +219,7 @@ function toYamlString(value: string): string {
 
 /**
  * 生成 MOC 的 YAML frontmatter。
- * aliases 与 updated 刻意留空：前者由用户自取，后者交给自动维护。
+ * updated 刻意留空；aliases 对项目/领域留空，书籍则由建书入口写入真实书名。
  * tags 从前也在这一列（分类是个人习惯），v0.14.0 起书籍是例外——
  * 书的分类不是个人习惯，是豆瓣几万人投出来的公共坐标，机器查得到就不该让人填；
  * 项目与领域仍留空，那两类的分类确实只有本人知道。
@@ -380,6 +414,7 @@ export function navContent(): string {
         `    - '!file.inFolder("90-system")'`,
         'formulas:',
         '  status_icon: if(status == "active", "🟢 进行中", if(status == "paused", "🟡 搁置", if(status == "done", "✅ 完成", if(status == "dropped", "⚫️ 弃", if(status.isEmpty(), "", "⚠️ " + status)))))',
+        '  book_title: file.asLink(if(aliases.isEmpty(), file.name, list(aliases)[0]))',
         'properties:',
         '  note.description:',
         '    displayName: 概述',
@@ -387,12 +422,14 @@ export function navContent(): string {
         '    displayName: 状态',
         '  formula.status_icon:',
         '    displayName: 状态',
+        '  formula.book_title:',
+        '    displayName: 书名',
         'views:',
     ];
 
     for (const view of NAV_VIEWS) {
         lines.push(
-            '  - type: table',
+            `  - type: ${view.type}`,
             `    name: ${view.name}`,
             '    filters:',
             '      and:',
@@ -400,6 +437,25 @@ export function navContent(): string {
             '    order:',
             ...view.columns.map((column) => `      - ${column}`),
         );
+
+        if (view.sort?.length) {
+            lines.push(
+                '    sort:',
+                ...view.sort.flatMap((item) => [
+                    `      - property: ${item.property}`,
+                    `        direction: ${item.direction}`,
+                ]),
+            );
+        }
+
+        if (view.type === 'cards') {
+            lines.push(
+                `    image: ${view.image}`,
+                `    imageAspectRatio: ${view.imageAspectRatio}`,
+                `    imageFit: ${view.imageFit}`,
+                `    cardSize: ${view.cardSize}`,
+            );
+        }
     }
 
     lines.push('', '```', '');

@@ -7,7 +7,8 @@
  *        projects 的 createContainer 里——本模块不 import 它，只声明一个
  *        「建一个书籍容器」的洞（BookContainerCreator），由 main 用 createContainer
  *        与 BOOK_KIND 填上，与 PersonPicker/DailyNoteProvider 同一手法。
- *        本文件只管书特有的三问：书名（必答，自动包上《》）、作者、为什么想读——
+ *        本文件只管书特有的三问：书名（必答，文件名自动包上《》，真实书名写入 aliases）、
+ *        作者、为什么想读——
  *        后两问 Esc 或留空都直接放行，与开荒问名字同一姿态：宁可跳过也不打断。
  *        防覆盖、光标落点与全部错误文案由容器流程统一给出，这里一句都不重写
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -28,8 +29,8 @@ export interface BookContainerPreset {
     description: string;
     /** 作者；缺省即学员跳过了这一问 */
     author?: string;
-    /** 带副标题的全名，落成别名。只有走豆瓣那条路才有 */
-    aliases?: readonly string[];
+    /** 真实书名，落成至少一个别名，供导航展示与书名匹配使用 */
+    aliases: readonly [string, ...string[]];
     /** 已经拼成 `书籍/xxx` 的标签，落成 tags。只有走豆瓣那条路才有 */
     tags?: readonly string[];
     /**
@@ -79,7 +80,16 @@ export async function createBook(
         return null;
     }
 
-    const name = wrapBookTitle(nameInput.trim());
+    const trueName = unwrapBookTitle(nameInput.trim());
+
+    // 「《 》」外层看起来非空，去掉书名号后却没有真实书名，不能用空 alias 建档
+    if (!trueName) {
+        new Notice(MESSAGES.nameMissing);
+
+        return null;
+    }
+
+    const name = wrapBookTitle(trueName);
 
     // 后两问 Esc 与留空同义：书名之后的一切都不该拦住建书这件事
     const authorInput = await new TextInputModal(ctx.app, {
@@ -92,7 +102,7 @@ export async function createBook(
     }).openAndGetValue();
     const description = (descriptionInput ?? '').trim();
 
-    return create({ name, description, ...(author ? { author } : {}) });
+    return create({ name, aliases: [trueName], description, ...(author ? { author } : {}) });
 }
 
 /** 注册「新建读书笔记」命令 */
@@ -110,7 +120,12 @@ export function registerCreateBookCommand(
  * 《》让书在文件树、导航表与边栏的任何清单里一眼认出来是书，不与项目混行。
  */
 function wrapBookTitle(input: string): string {
+    return `《${input}》`;
+}
+
+/** 去掉用户可能已经输入的一层书名号，aliases 只保留书本自己的名字 */
+function unwrapBookTitle(input: string): string {
     const inner = /^《(.+)》$/.exec(input);
 
-    return `《${(inner ? inner[1] : input).trim()}》`;
+    return (inner ? inner[1] : input).trim();
 }

@@ -1,7 +1,8 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 projects/templates/baseMigration 事实源
- * [OUTPUT]: 验证导航 Emoji 状态、MOC 三视图、系统目录递归排除、手动模板同源、流转零 Base 改写，
- *           以及存量 Base 的旧版识别、CRLF 保真、冲突拒写与批次失败回滚
+ * [OUTPUT]: 验证导航 Emoji 状态、书籍 aliases 封面卡片、MOC 三视图、系统目录递归排除、
+ *           手动模板同源、两条建书路径与初始化种子、流转零 Base 改写，以及存量 Base 的
+ *           旧版识别、CRLF 保真、冲突拒写与批次失败回滚
  * [POS]: tests 的 Obsidian Bases 专项契约；高层钉用户可见的 YAML 与迁移事务，不复制生成器实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -33,6 +34,7 @@ async function loadModule(relativePath) {
 const { mocBaseBlock, mocContent, mocTemplateFile, navContent } = await loadModule(
     'src/modules/projects/templates.ts',
 );
+const { projectsSeed } = await loadModule('src/modules/projects/seed.ts');
 const {
     applyMigrationBatch,
     isContainerMocIdentity,
@@ -117,7 +119,7 @@ test('自动建容器与手动 MOC 模板共用同一个 Base 事实源', () => 
     assert.equal((mocTemplateFile().match(/\`\`\`base/g) ?? []).length, 1);
 });
 
-test('导航用 Emoji 翻译状态，并排除整棵系统目录树', () => {
+test('导航用 Emoji 翻译状态，书籍以 aliases 封面卡片展示', () => {
     const navigation = navContent();
 
     assert.match(navigation, /- '!file\.inFolder\("90-system"\)'/);
@@ -125,10 +127,55 @@ test('导航用 Emoji 翻译状态，并排除整棵系统目录树', () => {
     assert.match(navigation, /status == "paused", "🟡 搁置"/);
     assert.match(navigation, /status == "done", "✅ 完成"/);
     assert.match(navigation, /status == "dropped", "⚫️ 弃"/);
-    assert.equal((navigation.match(/formula\.status_icon/g) ?? []).length, 4);
+    assert.equal((navigation.match(/formula\.status_icon/g) ?? []).length, 5);
+    assert.match(
+        navigation,
+        /book_title: file\.asLink\(if\(aliases\.isEmpty\(\), file\.name, list\(aliases\)\[0\]\)\)/,
+    );
+    assert.match(navigation, /formula\.book_title:\n    displayName: 书名/);
+
+    const bookView = navigation.slice(navigation.indexOf('  - type: cards\n    name: 书籍'));
+
+    assert.match(bookView, /^    name: 书籍/m);
+    assert.match(bookView, /  - type: cards/);
+    assert.match(bookView, /      - formula\.book_title/);
+    assert.doesNotMatch(bookView, /      - file\.name/);
+    assert.match(bookView, /    image: note\.cover/);
+    assert.match(bookView, /    imageAspectRatio: 1\.35/);
+    assert.match(bookView, /    imageFit: contain/);
+    assert.match(bookView, /    cardSize: 200/);
+
+    const projectView = navigation.slice(
+        navigation.indexOf('    name: 项目'),
+        navigation.indexOf('    name: 领域'),
+    );
+
+    assert.match(projectView, /    sort:\n      - property: formula\.status_icon\n        direction: DESC/);
 
     const areaView = navigation.slice(navigation.indexOf('    name: 领域'), navigation.indexOf('    name: 书籍'));
     assert.doesNotMatch(areaView, /formula\.status_icon/);
+});
+
+test('两条建书路径都写入真实书名，初始化导航与运行时同源', () => {
+    const manual = readFileSync(path.join(ROOT, 'src/modules/books/createBook.ts'), 'utf8');
+    const automatic = readFileSync(path.join(ROOT, 'src/modules/books/readBook.ts'), 'utf8');
+    const seededNavigation = projectsSeed().notes.find((note) => note.path.endsWith('/导航.md'));
+    const bookMoc = mocContent({
+        description: '测试书籍',
+        created: '2026-09-15 12:00',
+        uid: 9787115564672,
+        type: 'book',
+        status: 'active',
+        aliases: ['卡片笔记写作法'],
+    });
+
+    assert.match(manual, /const trueName = unwrapBookTitle\(nameInput\.trim\(\)\)/);
+    assert.match(manual, /if \(!trueName\)/);
+    assert.match(manual, /create\(\{ name, aliases: \[trueName\], description/);
+    assert.match(automatic, /const trueTitle = fullTitle \|\| detail\.title/);
+    assert.match(automatic, /aliases: \[trueTitle\]/);
+    assert.match(bookMoc, /aliases:\n  - "卡片笔记写作法"/);
+    assert.equal(seededNavigation?.content, navContent());
 });
 
 test('项目流转只移动容器与更新状态，不改写 MOC Base 代码', () => {
@@ -247,11 +294,83 @@ views:
 
 \`\`\``;
     const migrated = planNavigationBaseUpgrade(`自定义导语\n\n${legacyNavBase}\n`);
+    const fileNameTableNavigation = navContent()
+        .replace('  book_title: file.asLink(if(aliases.isEmpty(), file.name, list(aliases)[0]))\n', '')
+        .replace('  formula.book_title:\n    displayName: 书名\n', '')
+        .replace('  - type: cards\n    name: 书籍', '  - type: table\n    name: 书籍')
+        .replace('      - formula.book_title\n', '      - file.name\n')
+        .replace('    sort:\n      - property: formula.status_icon\n        direction: DESC\n', '')
+        .replace('    image: note.cover\n    imageAspectRatio: 1.35\n    imageFit: contain\n    cardSize: 200\n', '');
+    const userCardNavigation = `\`\`\`base
+filters:
+  and:
+    - file.folder != "90-system"
+formulas:
+  status_icon: if(status == "active", "🟢 进行中", if(status == "paused", "🟡 搁置", if(status == "done", "✅ 完成", if(status == "dropped", "⚫️ 弃", if(status.isEmpty(), "", "⚠️ " + status)))))
+properties:
+  note.description:
+    displayName: 概述
+  note.status:
+    displayName: 状态
+  formula.status_icon:
+    displayName: 状态
+views:
+  - type: table
+    name: 正在进行中
+    filters:
+      and:
+        - status == "active"
+    order:
+      - file.name
+      - description
+      - formula.status_icon
+  - type: table
+    name: 项目
+    filters:
+      and:
+        - type == "project"
+    order:
+      - file.name
+      - description
+      - formula.status_icon
+    sort:
+      - property: formula.status_icon
+        direction: DESC
+  - type: table
+    name: 领域
+    filters:
+      and:
+        - type == "area"
+    order:
+      - file.name
+      - description
+  - type: cards
+    name: 书籍
+    filters:
+      and:
+        - type == "book"
+    order:
+      - file.name
+      - description
+      - formula.status_icon
+    image: note.cover
+    imageAspectRatio: 1.35
+    imageFit: contain
+    cardSize: 200
+
+\`\`\``;
+    const tableMigration = planNavigationBaseUpgrade(fileNameTableNavigation);
+    const cardMigration = planNavigationBaseUpgrade(userCardNavigation);
 
     assert.equal(migrated.status, 'change');
     assert.equal(migrated.action, '升级导航 Base');
     assert.ok(migrated.content.startsWith('自定义导语\n\n'));
     assert.ok(migrated.content.includes('formula.status_icon'));
+    assert.equal(tableMigration.status, 'change');
+    assert.equal(cardMigration.status, 'change');
+    assert.ok(cardMigration.content.includes('formula.book_title'));
+    assert.ok(cardMigration.content.includes('  - type: cards\n    name: 书籍'));
+    assert.ok(cardMigration.content.includes('    imageAspectRatio: 1.35'));
     assert.deepEqual(planNavigationBaseUpgrade(navContent()), { status: 'unchanged' });
 
     const custom = planNavigationBaseUpgrade(legacyNavBase.replace('      - status', '      - file.mtime'));

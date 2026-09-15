@@ -6,7 +6,8 @@
  * [POS]: projects 的纯文本迁移内核；只判断一段 Markdown 能否被确定性升级并产出新全文，
  *        不认识 Obsidian、文件路径、弹窗或磁盘。旧模板、当前模板与冲突三种身份在此唯一判定，
  *        编排层因此没有机会用模糊替换覆盖用户自定义的 Base；两张内建领域总控台即使
- *        名称与 type 符合普通容器，也在身份层明确排除
+ *        名称与 type 符合普通容器，也在身份层明确排除。导航历史模板按版本白名单递进，
+ *        因此旧书可显式升级为 aliases 书名卡片，自定义视图仍原封不动
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -128,6 +129,129 @@ const LEGACY_NAV_BASE = [
     '',
     '```',
 ].join('\n');
+
+/** 状态图标已上线、但导航仍把书籍做成普通表格的上一版 Base */
+const LEGACY_FILE_NAME_TABLE_NAV_BASE = [
+    '```base',
+    'filters:',
+    '  and:',
+    '    - \'!file.inFolder("90-system")\'',
+    'formulas:',
+    '  status_icon: if(status == "active", "🟢 进行中", if(status == "paused", "🟡 搁置", if(status == "done", "✅ 完成", if(status == "dropped", "⚫️ 弃", if(status.isEmpty(), "", "⚠️ " + status)))))',
+    'properties:',
+    '  note.description:',
+    '    displayName: 概述',
+    '  note.status:',
+    '    displayName: 状态',
+    '  formula.status_icon:',
+    '    displayName: 状态',
+    'views:',
+    '  - type: table',
+    '    name: 正在进行中',
+    '    filters:',
+    '      and:',
+    '        - status == "active"',
+    '    order:',
+    '      - file.name',
+    '      - description',
+    '      - formula.status_icon',
+    '  - type: table',
+    '    name: 项目',
+    '    filters:',
+    '      and:',
+    '        - type == "project"',
+    '    order:',
+    '      - file.name',
+    '      - description',
+    '      - formula.status_icon',
+    '  - type: table',
+    '    name: 领域',
+    '    filters:',
+    '      and:',
+    '        - type == "area"',
+    '    order:',
+    '      - file.name',
+    '      - description',
+    '  - type: table',
+    '    name: 书籍',
+    '    filters:',
+    '      and:',
+    '        - type == "book"',
+    '    order:',
+    '      - file.name',
+    '      - description',
+    '      - formula.status_icon',
+    '',
+    '```',
+].join('\n');
+
+/** 用户提供的封面卡片版导航；升级时只换书名列，并顺带采用递归系统目录排除 */
+const LEGACY_FILE_NAME_CARD_NAV_BASE = [
+    '```base',
+    'filters:',
+    '  and:',
+    '    - file.folder != "90-system"',
+    'formulas:',
+    '  status_icon: if(status == "active", "🟢 进行中", if(status == "paused", "🟡 搁置", if(status == "done", "✅ 完成", if(status == "dropped", "⚫️ 弃", if(status.isEmpty(), "", "⚠️ " + status)))))',
+    'properties:',
+    '  note.description:',
+    '    displayName: 概述',
+    '  note.status:',
+    '    displayName: 状态',
+    '  formula.status_icon:',
+    '    displayName: 状态',
+    'views:',
+    '  - type: table',
+    '    name: 正在进行中',
+    '    filters:',
+    '      and:',
+    '        - status == "active"',
+    '    order:',
+    '      - file.name',
+    '      - description',
+    '      - formula.status_icon',
+    '  - type: table',
+    '    name: 项目',
+    '    filters:',
+    '      and:',
+    '        - type == "project"',
+    '    order:',
+    '      - file.name',
+    '      - description',
+    '      - formula.status_icon',
+    '    sort:',
+    '      - property: formula.status_icon',
+    '        direction: DESC',
+    '  - type: table',
+    '    name: 领域',
+    '    filters:',
+    '      and:',
+    '        - type == "area"',
+    '    order:',
+    '      - file.name',
+    '      - description',
+    '  - type: cards',
+    '    name: 书籍',
+    '    filters:',
+    '      and:',
+    '        - type == "book"',
+    '    order:',
+    '      - file.name',
+    '      - description',
+    '      - formula.status_icon',
+    '    image: note.cover',
+    '    imageAspectRatio: 1.35',
+    '    imageFit: contain',
+    '    cardSize: 200',
+    '',
+    '```',
+].join('\n');
+
+const LEGACY_NAV_BASES = new Set<string>([
+    LEGACY_NAV_BASE,
+    LEGACY_FILE_NAME_TABLE_NAV_BASE,
+    LEGACY_FILE_NAME_CARD_NAV_BASE,
+]);
 
 /** 用户确认 v0.22.7 方案前使用过的“相对上下文但只有一张表”形态 */
 const LEGACY_RELATIVE_MOC_BASE = [
@@ -284,7 +408,7 @@ export function planNavigationBaseUpgrade(content: string): BaseContentUpgrade {
 
     if (normalized === CURRENT_NAV_BASE) return { status: 'unchanged' };
 
-    if (normalized !== LEGACY_NAV_BASE) {
+    if (!LEGACY_NAV_BASES.has(normalized)) {
         return { status: 'conflict', reason: '导航 Base 含有自定义内容，不会自动覆盖' };
     }
 

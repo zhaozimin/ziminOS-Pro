@@ -11,7 +11,7 @@
  *        那三步里有两步是机器该干的活儿：书目字段（出版社、ISBN、页数、评分）机器查得到，
  *        划线在哪台设备上机器也查得到；只有「是不是这一本」必须人来指认。
  *        因此这条命令只问两件事——书名叫什么、候选里哪一本——其余全自动：
- *        抓详情 → 建《书名》文件夹与 MOC（YAML 与书籍信息小节都已填好，
+ *        抓详情 → 建《书名》文件夹与 MOC（YAML 已填好真实书名别名与书目字段，
  *        UID 直接取这本书的 ISBN、标签直接取豆瓣的分类词）→
  *        遍历本机可用的划线来源 → 按书名认出这本书 → 划线直接落进「全部划线」小节。
  *        中间不产生任何需要学员再搬一次的中转文件，这正是「一步」的全部含义。
@@ -141,12 +141,14 @@ async function readBook(ctx: ZiminosContext, create: BookContainerCreator): Prom
     // 标签数量设成 0 时同理——两处都不该由这里去判断「那就写个什么吧」
     const uid = isbnUid(detail.isbn);
     const tags = bookTags(detail.tags, ctx.settings.bookTagPrefix, ctx.settings.bookTagCount);
+    const fullTitle = fullTitleOf(detail);
+    const trueTitle = fullTitle || detail.title;
 
     const moc = await create({
         name: `《${detail.title}》`,
         description: detail.summary.slice(0, 120),
         ...(detail.authors.length ? { author: detail.authors[0] } : {}),
-        ...(fullTitleOf(detail) ? { aliases: [fullTitleOf(detail)] } : {}),
+        aliases: [trueTitle],
         ...(uid === null ? {} : { uid }),
         ...(tags.length ? { tags } : {}),
         source: detail.url,
@@ -171,7 +173,12 @@ async function readBook(ctx: ZiminosContext, create: BookContainerCreator): Prom
 
     // 两个名字都递过去：主书名是文件名，带副标题的全名才是设备与云端那头写的那个。
     // 只递主书名的话，《思维 : 关于决策、问题解决与预测的新科学》这类书永远匹配不上
-    await pullHighlights(ctx, moc, [detail.title, fullTitleOf(detail)], detail.authors[0] ?? '');
+    await pullHighlights(
+        ctx,
+        moc,
+        fullTitle ? [detail.title, fullTitle] : [detail.title],
+        detail.authors[0] ?? '',
+    );
 }
 
 /**
@@ -263,7 +270,7 @@ export async function pullHighlights(
 // 文本
 // ============================================================
 
-/** 带副标题的全名，用作别名；没有副标题就返回空串 */
+/** 带副标题的全名；没有副标题时由调用方回落主书名 */
 function fullTitleOf(book: DoubanBook): string {
     return book.subtitle ? `${book.title}：${book.subtitle}` : '';
 }
