@@ -3,7 +3,7 @@
  *          workspace.openLinkText，不依赖任何渲染插件；样式由插件自带的 styles.css 承担
  * [OUTPUT]: 对外提供单元格类型 Cell/NoteLink/RichText 与 noteLink/richText 构造器，
  *           渲染原语 renderTable / renderTaskList / renderEmpty / renderNote / renderHeading /
- *           renderSummary / renderRichText，以及任务行类型 TaskLine
+ *           renderSummary / renderRichText，以及携带写回身份快照的 TaskLine；双链保留原有锚点
  * [POS]: 视图引擎的呈现层，二十四个视图的唯一出口。它不认识任何业务概念，只认识
  *        「表头 + 行 + 单元格」与「一组任务」。三条纪律都来自真机对比：
  *        其一，文本里的 `[[双链]]` 必须渲染成可点的链接。视图检索出来的是日记原文，
@@ -45,6 +45,7 @@ export interface TaskLine {
     readonly day: string;
     readonly text: string;
     readonly line: number;
+    readonly rawLine: string;
     readonly checked: boolean;
 }
 
@@ -166,7 +167,7 @@ function renderNoteLink(app: App, parent: HTMLElement, sourcePath: string, link:
 }
 
 /** 匹配一段文本里的 `[[目标]]` 或 `[[目标|别名]]` */
-const WIKILINK = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\\?\|([^\]]*))?\]\]/g;
+const WIKILINK = /\[\[([^\]|]+?)(?:\\?\|([^\]]*))?\]\]/g;
 
 /**
  * 把一段原文画出来，其中的 `[[双链]]` 渲染成可点的链接。

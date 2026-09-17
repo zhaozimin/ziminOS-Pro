@@ -1,8 +1,8 @@
 /**
  * [INPUT]: 依赖 obsidian 公开 editor-paste/editor-drop 事件与 Notice，依赖 main 注入的容器/日记路由解析器，依赖本模块 platform 的桌面闸门、EagleBridgeClient 导入与 protocol 图片识别/链接生成
- * [OUTPUT]: 对外提供 EagleRouteResolver/registerEagleTransfers，可将纯图片事件放行给图床，其他附件按宿主笔记路由到 Eagle 的项目容器或日记文件夹并以稳定链接替换占位符
+ * [OUTPUT]: 对外提供 EagleRouteResolver/registerEagleTransfers，可将纯图片事件放行给图床，其他附件按宿主笔记路由导入并以稳定链接替换占位符；全部失败时还原被占位符替换的原文
  * [POS]: Eagle 模块的写入边界。图片排除判定先于 preventDefault；事件一经接管就 fail closed，导入失败只撤掉占位并报错，
- *        绝不回退到 Obsidian 本地附件。Electron/Node 仅在桌面守卫通过后按需取得，移动端加载不解析它们
+ *        绝不回退到 Obsidian 本地附件。原路径逐字传递，保留合法文件名中的空白；Electron/Node 仅在桌面守卫通过后按需取得
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -79,6 +79,8 @@ async function takeTransfer(
     // 已选中的非图片附件必须在第一个 await 前接管，否则 Obsidian 会先落一份本地副本
     event.preventDefault();
 
+    const route = info.file ? resolveRoute(info.file.path) : null;
+    const originalSelection = editor.getSelection();
     const marker = `<!-- ziminos:eagle-upload:${uniqueId()} -->`;
 
     editor.replaceSelection(marker);
@@ -86,7 +88,6 @@ async function takeTransfer(
     const links: string[] = [];
     const failures: string[] = [];
     const folderPaths = new Set<string>();
-    const route = info.file ? resolveRoute(info.file.path) : null;
 
     for (const file of files) {
         let materialized: MaterializedFile | null = null;
@@ -112,7 +113,7 @@ async function takeTransfer(
     }
 
     const replacement = links.join('\n');
-    const replaced = replaceMarker(editor, marker, replacement);
+    const replaced = replaceMarker(editor, marker, replacement || originalSelection);
 
     if (!replaced && replacement) {
         const copied = await copyToClipboard(replacement);
@@ -179,7 +180,7 @@ function pathForFile(file: File): string {
             webUtils?: { getPathForFile?: (candidate: File) => string };
         };
 
-        return electron.webUtils?.getPathForFile?.(file)?.trim() ?? '';
+        return electron.webUtils?.getPathForFile?.(file) ?? '';
     } catch {
         return '';
     }

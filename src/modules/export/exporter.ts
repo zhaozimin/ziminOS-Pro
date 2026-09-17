@@ -8,6 +8,7 @@
  *        一次性截图 → 按格式交付。内容渲染、装饰与界面各有其主，这里一件都不自己做。
  *        截图前**再施加一次风格**不是保险起见：用户拖完滑块立刻点导出时，
  *        预览排队中的那一帧可能还没轮到，而 applyDecorations 幂等，重放一次的代价是零。
+ *        同一插件同时只允许一条导出流程持有纸张，防止并发预览互相覆盖全局主题的恢复快照。
  *        任何失败都只落 Notice，不影响原笔记与活动视图
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -52,8 +53,25 @@ interface SaveDialog {
 
 /** 注册唯一入口 */
 export function registerExportCommand(ctx: ZiminosContext): void {
-    ctx.commands.register(EXPORT_COMMAND, () => {
-        void exportCurrentNote(ctx);
+    let exporting = false;
+
+    ctx.commands.register(EXPORT_COMMAND, async () => {
+        if (exporting) {
+            new Notice('已有导出正在进行，请先完成或关闭当前预览。');
+
+            return;
+        }
+
+        exporting = true;
+
+        try {
+            await exportCurrentNote(ctx);
+        } catch (error) {
+            // 渲染与写盘错误在流程内呈现；这里还要接住 finally 中第三方组件卸载的异常。
+            new Notice(`导出清理失败：${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            exporting = false;
+        }
     });
 }
 

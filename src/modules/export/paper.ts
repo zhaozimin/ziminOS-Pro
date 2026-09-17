@@ -14,7 +14,8 @@
  *        （解析 Markdown、内联远端图、等字体与版面稳定），装饰廉价却要在每一次拖动滑块时重来。
  *        两者原本焊在一个函数里，于是「实时」只能靠整篇重渲染，而那是卡顿的另一个名字。
  *        纸默认停在离屏舞台上；预览借走时只是把舞台挪进弹窗并缩放，被截图的始终是同一个元素——
- *        预览因此不是导出的仿真，而就是导出物本身，两者不可能各说各话
+ *        预览因此不是导出的仿真，而就是导出物本身，两者不可能各说各话。
+ *        渲染成功前由本层负责失败清理，成功后把同一个幂等 release 交给调用方；组件卸载失败仍移除舞台
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -125,13 +126,13 @@ const LAYOUT_TIMEOUT_MS = 3_000;
  * 或视图容器启用了虚拟滚动时，导出仍然必须从标题到最后一行完整一致。
  */
 export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<ExportPaper> {
+    const metrics = measureSource(ctx, file);
     const component = new Component();
     const stage = document.body.createDiv({ cls: 'ziminos-export-stage' });
     const article = stage.createDiv({
         cls: 'markdown-preview-view markdown-rendered ziminos-export-article',
     });
     const content = article.createDiv({ cls: 'markdown-preview-sizer' });
-    const metrics = measureSource(ctx, file);
     /**
      * 把界面的明暗放回用户原来那一套。
      *
@@ -140,26 +141,51 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
      * 三条路最后都汇进 exporter 那个 finally，而那里只调 release。
      */
     let restoreTheme: (() => void) | null = null;
+    let released = false;
 
-    component.load();
-    parkStage(stage);
-    styleArticle(article, content, metrics);
+    function release(): void {
+        // 先归还全局主题；组件卸载可以失败，舞台移除却必须完成。
+        restoreTheme?.();
+        restoreTheme = null;
+        if (released) return;
+        released = true;
 
-    content.createDiv({ cls: 'inline-title', text: file.basename });
+        try {
+            component.unload();
+        } finally {
+            stage.remove();
+        }
+    }
 
-    const markdown = content.createDiv({ cls: 'ziminos-export-markdown' });
+    try {
+        component.load();
+        parkStage(stage);
+        styleArticle(article, content, metrics);
 
-    await MarkdownRenderer.render(
-        ctx.app,
-        await ctx.app.vault.cachedRead(file),
-        markdown,
-        file.path,
-        component,
-    );
+        content.createDiv({ cls: 'inline-title', text: file.basename });
 
-    await inlineImages(markdown);
-    await document.fonts?.ready;
-    await waitForStableLayout(article);
+        const markdown = content.createDiv({ cls: 'ziminos-export-markdown' });
+
+        await MarkdownRenderer.render(
+            ctx.app,
+            await ctx.app.vault.cachedRead(file),
+            markdown,
+            file.path,
+            component,
+        );
+
+        await inlineImages(markdown);
+        await document.fonts?.ready;
+        await waitForStableLayout(article);
+    } catch (error) {
+        // 此时 ExportPaper 还没交出去，exporter 的 finally 无法替我们清理。
+        // 清理中即使另有异常，也保留最初让渲染失败的原因。
+        try {
+            release();
+        } finally {
+            throw error;
+        }
+    }
 
     // 这里**刻意不再**按 scrollWidth 把纸加宽。
     // 旧版遇到宽表格或长代码行时会把整张纸撑开，好处是一个字都不丢，
@@ -224,13 +250,7 @@ export async function renderPaper(ctx: ZiminosContext, file: TFile): Promise<Exp
             width: Math.ceil(Math.max(1, article.offsetWidth)),
             height: Math.ceil(Math.max(1, article.scrollHeight)),
         }),
-        release: () => {
-            // 第一件事，不是最后一件：下面两行就算抛了，用户的界面也已经回到他自己那套明暗。
-            restoreTheme?.();
-            restoreTheme = null;
-            component.unload();
-            stage.remove();
-        },
+        release,
     };
 }
 

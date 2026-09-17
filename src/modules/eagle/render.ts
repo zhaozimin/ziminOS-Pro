@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 obsidian 公开 Markdown 后处理器、CodeMirror 扩展注册、弹出窗口事件与 Menu/Notice，依赖本模块 platform 的桌面闸门、editor 的编辑器适配与 EagleBridgeClient 取内容/打开项目
  * [OUTPUT]: 对外提供 registerEagleRenderer，返回可在重新配对后重试渲染的 refresh 函数
  * [POS]: Eagle 模块的呈现边界。Markdown 始终保留稳定语义链接，阅读视图/实时预览只在 DOM 层换成临时 blob URL；
- *        blob 随插件卸载统一撤销，绝不把 Eagle 真实路径或认证令牌泄漏进笔记与 DOM 属性
+ *        只管理带 Eagle 身份的图片；移除/复用节点先释放再水合，blob 随插件卸载统一撤销，不触碰普通图片
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -87,6 +87,8 @@ export function registerEagleRenderer(
     };
 
     const releaseImage = (image: HTMLImageElement): void => {
+        if (!image.dataset.ziminosEagleUri) return;
+
         const url = imageUrls.get(image);
 
         if (url) {
@@ -115,6 +117,9 @@ export function registerEagleRenderer(
                 for (const node of record.removedNodes) {
                     if (node.nodeType === 1) release(node as Element);
                 }
+            }
+            // 同一批变更可能先报告插入、再报告旧父节点移除；统一先释放，避免复用图片最后被清空。
+            for (const record of records) {
                 for (const node of record.addedNodes) {
                     if (node.nodeType !== 1) continue;
                     const element = node as Element;

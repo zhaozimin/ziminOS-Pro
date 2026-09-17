@@ -13,6 +13,8 @@
  *        同输入同结果，无网络、无模板引擎。
  *        「不存在就按模板创建，存在但是空文件就补齐内容」是它的幂等姿态——
  *        学员用别的方式建过一个空日记，命令不会拒绝也不会覆盖，只把该有的骨架填进去。
+ *        空态在 vault.process 的最新正文内复核；自动归位也在目录准备后复核文件身份与空态，
+ *        异步等待期间已经写下内容或改变归属的笔记不再由旧计划接管。
  *        v0.22.13 之前这份幂等只在命令与日历两个入口上成立，于是同一篇日记
  *        会因为诞生方式不同变成两种东西；registerPeriodAutoInit 把它挂回
  *        「一篇复盘笔记诞生」这个事件本身——**入口不决定结果，名字与位置才决定身份**。
@@ -176,10 +178,14 @@ async function fillSkeletonIfEmpty(
 ): Promise<void> {
     if (file.stat.size !== 0) return;
 
-    ctx.guard.mark(file.path);
-    await ctx.app.vault.process(file, () =>
-        periodNoteContent(period, title, ctx.settings.dateTimeFormat),
-    );
+    await ctx.app.vault.process(file, (content) => {
+        if (
+            content !== '' || file.path !== `${periodFolderOf(ctx, period)}/${title}.md` ||
+            ctx.app.vault.getAbstractFileByPath(file.path) !== file
+        ) return content;
+        ctx.guard.mark(file.path);
+        return periodNoteContent(period, title, ctx.settings.dateTimeFormat);
+    });
 }
 
 export async function openPeriodNote(
@@ -211,10 +217,18 @@ export async function openPeriodNote(
         if (!file) {
             await ensureFolderPath(ctx.app, folder);
             ctx.guard.mark(path);
-            file = await ctx.app.vault.create(
-                path,
-                periodNoteContent(period, title, ctx.settings.dateTimeFormat),
-            );
+            try {
+                file = await ctx.app.vault.create(
+                    path,
+                    periodNoteContent(period, title, ctx.settings.dateTimeFormat),
+                );
+            } catch (error) {
+                // 两个入口同时打开今天时，后到者复用先到者创建的笔记。
+                const created = ctx.app.vault.getAbstractFileByPath(path);
+                if (!(created instanceof TFile)) throw error;
+                file = created;
+                await fillSkeletonIfEmpty(ctx, file, period, title);
+            }
         } else {
             await fillSkeletonIfEmpty(ctx, file, period, title);
         }
@@ -301,6 +315,7 @@ async function adoptPeriodNote(ctx: ZiminosContext, file: TFile): Promise<void> 
     if (!adoption) return;
 
     const { period, title, path } = adoption;
+    const originalPath = file.path;
 
     if (file.path !== path) {
         const occupant = ctx.app.vault.getAbstractFileByPath(path);
@@ -314,6 +329,12 @@ async function adoptPeriodNote(ctx: ZiminosContext, file: TFile): Promise<void> 
         }
 
         await ensureFolderPath(ctx.app, path.slice(0, path.lastIndexOf('/')));
+        // 创建目录期间用户可能已经写字、改名或移动文件；事件到达时的空态不再是授权。
+        if (
+            file.stat.size !== 0 || file.path !== originalPath ||
+            ctx.app.vault.getAbstractFileByPath(originalPath) !== file ||
+            adoptionOf(ctx, file)?.path !== path
+        ) return;
         // 搬动前后两个路径都要登记：重命名事件报的是新路径，登记漏一个就会自己触发自己
         ctx.guard.mark(file.path);
         ctx.guard.mark(path);

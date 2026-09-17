@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 ./constants 的 VIEW_BLOCK_LANG，依赖 ./lineEndings 保留原文换行约定
- * [OUTPUT]: 对外提供 toggleTaskLine（安全翻转指定任务行）与
+ * [OUTPUT]: 对外提供 toggleTaskLine（核对原行快照后翻转任务）与
  *           insertIntoSection（把一行插进指定标题的小节内）
  * [POS]: core 的 Markdown 文本操作层，纯函数，不碰磁盘也不认识业务。
  *        它服务于同一类动作：命令要往一篇既有笔记的某个小节里追加一行记录
@@ -39,11 +39,12 @@ export function toggleTaskLine(
     content: string,
     line: number,
     expectedChecked: boolean,
+    expectedLine: string,
 ): string | null {
     const { lines, lineEnding } = splitTextLines(content);
     const current = lines[line];
 
-    if (typeof current !== 'string') return null;
+    if (typeof current !== 'string' || current !== expectedLine) return null;
 
     const match = TASK_BOX.exec(current);
 

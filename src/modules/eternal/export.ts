@@ -15,6 +15,8 @@
  *        插件负责记住「欠了这一笔」，智能体负责还。
  *        它对失败的姿态也由此决定：出库单写不成绝不打断归档。
  *        归档已经落地了，用户的项目已经搬走了，这时候抛一个错只会让他以为归档失败。
+ *        首次创建遇到并发时复用已经落地的清单；去重与追加在同一次 vault.process 内完成，
+ *        不用读取时的正文快照覆盖同时归档的其他项目或用户刚写的备注。
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -73,13 +75,7 @@ async function recordExport(ctx: ZiminosContext, container: ArchivedContainer): 
             return;
         }
 
-        const content = await readOrCreateManifest(ctx, layout.eternal);
-
-        // 同一个项目可以被重新开始、再次完成，于是同一个 UID 会第二次走到这里。
-        // 已经在单子上（无论勾没勾）就不再追加：勾过的说明智能体已经提炼过，
-        // 它下次会按 UID 认出这是同一件事的新版本；没勾的本来就还欠着，重复记一笔只是噪音
-        if (alreadyListed(content, container.uid)) return;
-
+        const file = await readOrCreateManifest(ctx, layout.eternal);
         const line = manifestLine({
             done: false,
             stamp: nowStamp(STAMP_FORMAT),
@@ -89,9 +85,15 @@ async function recordExport(ctx: ZiminosContext, container: ArchivedContainer): 
             uid: container.uid,
         });
 
-        const next = insertIntoSection(content, EXPORT_MANIFEST_HEADING, line);
+        let added = false;
+        await ctx.app.vault.process(file, (content) => {
+            // UID 判重与追加必须消费同一份最新正文，避免两个归档彼此覆盖。
+            added = !alreadyListed(content, container.uid);
+            if (!added) return content;
+            return insertIntoSection(content, EXPORT_MANIFEST_HEADING, line);
+        });
 
-        await writeManifest(ctx, next);
+        if (!added) return;
 
         new Notice(`已记进出库单：下次和智能体说话时，《${container.name}》会搬进《${layout.eternal}》。`);
     } catch (error) {
@@ -101,39 +103,28 @@ async function recordExport(ctx: ZiminosContext, container: ArchivedContainer): 
     }
 }
 
-/** 读出库单；不存在就现建一篇，连同它的说明正文 */
-async function readOrCreateManifest(ctx: ZiminosContext, eternalVaultName: string): Promise<string> {
+/** 定位出库单；首次并发创建只复用已存在的笔记，绝不覆盖文件夹或丢弃原始错误 */
+async function readOrCreateManifest(ctx: ZiminosContext, eternalVaultName: string): Promise<TFile> {
     const file = ctx.app.vault.getAbstractFileByPath(EXPORT_MANIFEST_FILE);
 
-    if (file instanceof TFile) return ctx.app.vault.read(file);
+    if (file instanceof TFile) return file;
+    if (file) throw new Error(`出库单路径已被文件夹占用：${EXPORT_MANIFEST_FILE}`);
 
     await ensureFolderPath(ctx.app, FOLDERS.system);
-
-    return manifestSkeleton(eternalVaultName);
-}
-
-/**
- * 落盘。
- * 写之前登记自写：这是插件的动作，不该被 updatedMaintainer 记成用户的编辑，
- * 也不该让视图引擎把它当成一次值得重画的人为改动。
- */
-async function writeManifest(ctx: ZiminosContext, content: string): Promise<void> {
-    const file = ctx.app.vault.getAbstractFileByPath(EXPORT_MANIFEST_FILE);
-
     ctx.guard.mark(EXPORT_MANIFEST_FILE);
 
-    if (file instanceof TFile) {
-        await ctx.app.vault.modify(file, content);
-
-        return;
+    try {
+        return await ctx.app.vault.create(EXPORT_MANIFEST_FILE, manifestSkeleton(eternalVaultName));
+    } catch (error) {
+        const created = ctx.app.vault.getAbstractFileByPath(EXPORT_MANIFEST_FILE);
+        if (created instanceof TFile) return created;
+        throw error;
     }
-
-    await ctx.app.vault.create(EXPORT_MANIFEST_FILE, content);
 }
 
 /** 这个 UID 是不是已经在单子上了。勾没勾都算在 */
 function alreadyListed(content: string, uid: string): boolean {
-    return content.split('\n').some((line) => parseManifestLine(line)?.uid === uid);
+    return content.split(/\r\n|\r|\n/).some((line) => parseManifestLine(line)?.uid === uid);
 }
 
 /** 异常转中文一句话。与全库其余写路径同一种姿态：用户看到的永远是话，不是堆栈 */

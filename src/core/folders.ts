@@ -4,7 +4,7 @@
  *           isInFolder（路径归属判定）与 isSystemPath（功能目录判定，一切检索的统一排除口）
  * [POS]: core 的目录安全层，是所有会创建目录的模块（开荒、建项目、项目搬移）的共同入口。
  *        它的存在只为守住一条底线：绝不覆盖用户已有的同名文件——遇到就抛错中止，
- *        由调用方转成 Notice 呈现，插件本身永远不做破坏性写入
+ *        由调用方转成 Notice 呈现；并发创建只在现场已是目录时复用，不吞掉真正的 I/O 错误
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -39,7 +39,12 @@ export async function ensureFolderPath(app: App, folderPath: string): Promise<vo
         const existingEntry = app.vault.getAbstractFileByPath(currentPath);
 
         if (!existingEntry) {
-            await app.vault.createFolder(currentPath);
+            try {
+                await app.vault.createFolder(currentPath);
+            } catch (error) {
+                // 另一条命令可能在 await 期间建好了同一层；只有目录事实能证明本步已经完成。
+                if (!(app.vault.getAbstractFileByPath(currentPath) instanceof TFolder)) throw error;
+            }
             continue;
         }
 

@@ -528,7 +528,7 @@ test('先问去处再做图：保存框立刻弹出，选完路径弹窗才关',
     assert.ok(asked > 0 && drawn > asked, '必须先 chooseTarget 再栅格化');
 
     // 取消保存框＝这次没导出成，弹窗留着：他刚调了十分钟的那套风格不该因此消失
-    assert.match(modal, /if \(!await this\.confirm\(this\.value\)\) return;/);
+    assert.match(modal, /if \(!await this\.confirm\(candidate\) \|\| !this\.active\) return;/);
     assert.match(exporter, /return picked\.target !== null;/);
 
     // 真的要等的那一段有一块进度条，而不是一条不会动的角落提示
@@ -658,11 +658,7 @@ test('导出明暗与 Obsidian 当前主题分开，默认仍是跟随', () => {
 
     // 换了就必须还得回来，而且是无条件的：导出失败、取消、Esc 关窗都走 release 那条路
     assert.match(paper, /restoreTheme\?\.\(\)/);
-    assert.ok(
-        paper.indexOf('release: () => {') > 0
-        && /release: \(\) => \{\s*restoreTheme\?\.\(\);/.test(paper),
-        'release 的第一件事就该是把界面的明暗还回去',
-    );
+    assert.match(paper, /function release\(\): void \{\s*restoreTheme\?\.\(\);/);
 
     // 记的是「原来有没有这个类」而不是「原来是哪一套」：
     // 两个类都不在（跟随系统配色）时，后者会凭空加出一个

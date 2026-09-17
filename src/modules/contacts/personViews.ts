@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 obsidian 的 TFile 类型；依赖 core/codeblock 的 ViewContext/ViewDefinition，
+ * [INPUT]: 依赖 obsidian 的 Notice 与 TFile 类型；依赖 core/codeblock 的 ViewContext/ViewDefinition，
  *          core/constants 的 FIELDS/NOTE_TYPES，core/markdown 的 toggleTaskLine，
  *          core/table 的渲染原语与 TaskLine 类型，core/time 的 dayOfTitle/dayText/dayOfMillis，
  *          core/vaultIndex 的 extractLinks/toText；依赖 ./ledger 的 collectLedger/mentions/isLedgerLine
@@ -12,11 +12,12 @@
  *        而是这段关系上发生过的一件事，带着确定的日期。
  *        「关键事件」刻意排除档案之间的互链：两份档案互相提到对方是常事，
  *        算成事件会在两个人的时间线上凭空多出一条谁也没做过的记录。
- *        待办勾选先校验原行，行号漂移时宁可不勾也不误伤别的任务；
+ *        待办勾选核对原行快照与勾选状态，漂移或写入失败用 Notice 交代；
  *        勾掉一条待办是用户在改那篇日记，所以不登记自写——那篇日记的 updated 照记
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
+import { Notice } from 'obsidian';
 import type { TFile } from 'obsidian';
 import type { ViewContext, ViewDefinition } from '../../core/codeblock';
 import { FIELDS, NOTE_TYPES } from '../../core/constants';
@@ -294,6 +295,7 @@ const openTasks: ViewDefinition = {
                         day: source.day,
                         text: line.text,
                         line: line.line,
+                        rawLine: line.rawLine,
                         checked: false,
                     });
                 }
@@ -324,9 +326,26 @@ const openTasks: ViewDefinition = {
  * 这一笔不登记自写：勾的是用户，改的是他的日记，updated 应当照记（守卫只登记机器的反应，见 core/guard）。
  */
 async function toggleTask(view: ViewContext, task: TaskLine): Promise<void> {
-    await view.ctx.app.vault.process(task.file, (content) => {
-        return toggleTaskLine(content, task.line, task.checked) ?? content;
-    });
+    let stale = false;
+
+    try {
+        await view.ctx.app.vault.process(task.file, (content) => {
+            const changed = toggleTaskLine(content, task.line, task.checked, task.rawLine);
+
+            if (changed === null) {
+                stale = true;
+                return content;
+            }
+            if (changed === content) return content;
+
+            return changed;
+        });
+
+        if (stale) new Notice('待办原文已经变化，请等列表刷新后再勾选。');
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        new Notice(`待办更新失败：${message}`);
+    }
 }
 
 // ============================================================

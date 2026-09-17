@@ -1,8 +1,8 @@
 /**
  * [INPUT]: 依赖 obsidian 的 App/TFile 与其公开索引 metadataCache.resolvedLinks、
- *          metadataCache.getFileCache、metadataCache.getFirstLinkpathDest、vault.cachedRead
+ *          metadataCache.getFileCache、metadataCache.getFirstLinkpathDest、vault.cachedRead，及 ./lineEndings 的拆行能力
  * [OUTPUT]: 对外提供 VaultIndex 类（backlinksOf / frontmatterLinksTo / resolve / frontmatterOf /
- *           notesOfType / listLinesOf / invalidate）与 ListLine 类型
+ *           notesOfType / listLinesOf / invalidate）与携带原行快照的 ListLine 类型
  * [POS]: 视图引擎的事实层，二十四个笔记内视图的唯一数据来源（关于作者除外）。
  *        它只回答关于文件的客观问题——
  *        谁链到了我、这个链接指向哪个文件、这篇笔记有哪些列表行——不认识「人脉」「复盘」
@@ -18,6 +18,7 @@
 import { TFile } from 'obsidian';
 import type { App, ListItemCache } from 'obsidian';
 import { isSystemPath } from './folders';
+import { splitTextLines } from './lineEndings';
 
 /**
  * 一条列表行的解析结果。
@@ -26,6 +27,8 @@ import { isSystemPath } from './folders';
 export interface ListLine {
     /** 剥掉列表标记与复选框后的整行文本 */
     readonly text: string;
+    /** 含缩进与标记的首行原文；写回时用于确认任务身份，不用压平后的显示文本代替 */
+    readonly rawLine: string;
     /** 是否是任务行（写了方括号复选框） */
     readonly isTask: boolean;
     /** 任务是否已勾选；非任务行恒为 false */
@@ -42,9 +45,10 @@ const LIST_MARKER = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[(.)\]\s*)?/;
 /** 行内 wikilink；只取内层文本，别名与锚点在解析时再剥 */
 const WIKILINK = /\[\[([^\]]+)\]\]/g;
 
-/** 列表行缓存的一条记录：靠文件 mtime 自校验，文件没变就不重读磁盘 */
+/** 列表行缓存同时认文件时间与元数据快照，索引迟到不能沿用旧位置解析的结果 */
 interface CachedLines {
     readonly mtime: number;
+    readonly items: readonly ListItemCache[] | undefined;
     readonly lines: readonly ListLine[];
 }
 
@@ -69,7 +73,7 @@ export class VaultIndex {
     private types: Map<string, TFile[]> | null = null;
 
     /**
-     * 列表行缓存。它刻意不随修订号整体作废——每条记录自带 mtime，
+     * 列表行缓存。它刻意不随修订号整体作废——每条记录自带 mtime 与 listItems 快照，
      * 改一篇日记不该让另外九十七篇重新读盘。
      */
     private readonly listCache = new Map<string, CachedLines>();
@@ -203,14 +207,20 @@ export class VaultIndex {
      * 一份人情账本要读的通常是几十篇日记，不是几千篇笔记。
      */
     async listLinesOf(file: TFile): Promise<readonly ListLine[]> {
-        const cached = this.listCache.get(file.path);
+        const path = file.path;
+        const mtime = file.stat.mtime;
+        const items = this.app.metadataCache.getFileCache(file)?.listItems;
+        const cached = this.listCache.get(path);
 
-        if (cached && cached.mtime === file.stat.mtime) return cached.lines;
+        if (cached && cached.mtime === mtime && cached.items === items) return cached.lines;
 
-        const items = this.app.metadataCache.getFileCache(file)?.listItems ?? [];
-        const lines = items.length ? parseListLines(await this.app.vault.cachedRead(file), items) : [];
+        const lines = items?.length ? parseListLines(await this.app.vault.cachedRead(file), items) : [];
 
-        this.listCache.set(file.path, { mtime: file.stat.mtime, lines });
+        // await 后文件或元数据可能已经改变；旧读盘结果不能冒充新快照，也不能覆盖它的缓存。
+        if (file.path === path && file.stat.mtime === mtime
+            && this.app.metadataCache.getFileCache(file)?.listItems === items) {
+            this.listCache.set(path, { mtime, items, lines });
+        }
 
         return lines;
     }
@@ -223,6 +233,7 @@ export class VaultIndex {
 /** 按 listItems 给出的位置切出每一条列表行并剥掉标记 */
 function parseListLines(content: string, items: readonly ListItemCache[]): ListLine[] {
     const parsed: ListLine[] = [];
+    const physicalLines = splitTextLines(content).lines;
 
     for (const item of items) {
         const raw = content.slice(item.position.start.offset, item.position.end.offset);
@@ -233,6 +244,7 @@ function parseListLines(content: string, items: readonly ListItemCache[]): ListL
 
         parsed.push({
             text,
+            rawLine: physicalLines[item.position.start.line] ?? '',
             isTask: typeof box === 'string',
             checked: typeof box === 'string' && box.trim().toLowerCase() === 'x',
             links: extractLinks(text),

@@ -25,6 +25,8 @@
  *        本文件只改变项目事实（位置、status、archived），查询如何解释事实归 templates 负责。
  *        回滚不相信 await 前后维护的内存旗标，而是在异常后重新读取源/目标路径与 MOC；
  *        文件系统已经提交、Promise 随后拒绝的模糊状态也因此能够按磁盘事实恢复。
+ *        同一目录从确认到收尾只允许一条流转在途；落盘前复核原目录与 MOC 对象身份，
+ *        确认期间已被用户搬动或替换的对象不再执行旧计划，回滚也不接管无关目录。
  *        v0.16.0 起它多了一个出口而非多了一段流程：归档成功之后，若上游递进来了
  *        ArchivedHook，就把刚归档的容器身份交出去。本文件不知道接住它的是谁、
  *        更不知道《赛博永生》是什么——第二版把它接到出库单上，第一版根本不递这个参数，
@@ -67,12 +69,17 @@ const CONFIRM_MODAL_CLASS = 'qa-project-transition-confirm';
  */
 const ARCHIVE_HANDOVER_STATUS = TRANSITIONS.done.status;
 
+/** 对象身份不随改名变化，同一容器的确认与回滚因此共享一把锁。 */
+const pendingTransitions = new WeakSet<TFolder>();
+
 // ============================================================
 // 流转计划：守卫全部通过后才生成，是执行阶段唯一的输入
 // ============================================================
 
 /** 一次已经通过全部前置校验的流转，携带执行与回滚所需的全部路径 */
 interface TransitionPlan {
+    /** 确认前的 MOC 对象，防止同路径替换后错误认领另一篇笔记 */
+    readonly mocFile: TFile;
     /** 本次要执行的流转规则 */
     readonly transition: ProjectTransition;
     /** 当前项目的文件夹对象，搬移的直接对象 */
@@ -130,6 +137,7 @@ export async function runProjectTransition(
     action: TransitionAction,
     onArchived?: ArchivedHook,
 ): Promise<void> {
+    let lockedFolder: TFolder | undefined;
     try {
         // 动作由命令表固化，理论上必然命中；保留原脚本守卫作为最后一道防线
         const transition: ProjectTransition | undefined = TRANSITIONS[action];
@@ -143,6 +151,13 @@ export async function runProjectTransition(
 
         // 守卫未通过：resolveTransitionPlan 已经给出对应的 Notice
         if (!plan) return;
+
+        if (pendingTransitions.has(plan.projectFolder)) {
+            new Notice('这个项目已有状态流转正在进行，请先完成当前操作。');
+            return;
+        }
+        lockedFolder = plan.projectFolder;
+        pendingTransitions.add(lockedFolder);
 
         const confirmed = await showProjectTransitionConfirm(ctx.app, plan);
 
@@ -173,6 +188,8 @@ export async function runProjectTransition(
         }
     } catch (error) {
         new Notice(`项目状态流转失败：${getErrorMessage(error)}`);
+    } finally {
+        if (lockedFolder) pendingTransitions.delete(lockedFolder);
     }
 }
 
@@ -252,6 +269,7 @@ function resolveTransitionPlan(
     }
 
     return {
+        mocFile,
         transition,
         projectFolder,
         projectName,
@@ -282,6 +300,16 @@ async function applyTransition(ctx: ZiminosContext, plan: TransitionPlan): Promi
 
     await ensureFolderPath(app, plan.targetRoot);
 
+    // 旧计划在首次写入前作废即可；此时不能进入回滚，否则会把用户刚搬走的目录搬回来。
+    if (
+        plan.projectFolder.path !== plan.sourceProjectPath ||
+        app.vault.getAbstractFileByPath(plan.sourceProjectPath) !== plan.projectFolder ||
+        app.vault.getAbstractFileByPath(plan.expectedMocPath) !== plan.mocFile
+    ) throw new Error('确认期间项目位置或 MOC 已改变，本次流转已停止。');
+    if (app.vault.getAbstractFileByPath(plan.targetProjectPath)) {
+        throw new Error(`目标位置已经存在同名项目，操作已停止：${plan.targetProjectPath}`);
+    }
+
     try {
         // 使用 FileManager 移动整个 TFolder，让 Obsidian 按设置维护内部链接。
         // 登记必须覆盖整棵子树：Obsidian 维护链接时会逐个改写卡片，那些也是本次搬移的一部分。
@@ -293,6 +321,7 @@ async function applyTransition(ctx: ZiminosContext, plan: TransitionPlan): Promi
         if (!(movedMoc instanceof TFile)) {
             throw new Error(`移动后没有找到项目 MOC：${plan.targetMocPath}`);
         }
+        if (movedMoc !== plan.mocFile) throw new Error('移动后的 MOC 身份已改变，已停止写入。');
 
         // 通过 Obsidian Frontmatter API 修改唯一 YAML，不直接拼接文本。
         guard.mark(movedMoc.path);
@@ -413,6 +442,10 @@ async function rollbackTransition(
             throw new Error('回滚时原位置与目标位置都不存在，无法定位项目目录');
         }
 
+        if ((sourceEntry ?? targetEntry) !== plan.projectFolder) {
+            throw new Error('回滚位置已被其他目录占用，已停止以免移动无关内容');
+        }
+
         if (sourceEntry && !(sourceEntry instanceof TFolder)) {
             throw new Error(`回滚时原位置不是项目目录：${plan.sourceProjectPath}`);
         }
@@ -444,6 +477,7 @@ async function rollbackTransition(
         if (!(restoredMoc instanceof TFile)) {
             throw new Error(`回滚后没有找到项目 MOC：${plan.expectedMocPath}`);
         }
+        if (restoredMoc !== plan.mocFile) throw new Error('回滚位置的 MOC 已被替换，已停止写入。');
 
         // 标记在正向回调内部落下：即使写盘已提交后 Promise 才拒绝，这里也会恢复
         guard.mark(restoredMoc.path);

@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 Eagle 官方 plugin API 的 app/library/item/folder/shell 与生命周期事件，依赖 Node 16 内建 http/fs/path/crypto
  * [OUTPUT]: 在 127.0.0.1 提供配对、按 Obsidian 容器建“项目/容器名”或单层“日记”目录并导入、内容读取与附件当前文件夹打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
  * [POS]: 两端架构的 Eagle 执行边界。它只调官方 item/folder API，不修改 metadata.json；服务只绑定回环，
- *        变更/读取端点全部验令牌与已配对资源库，令牌不写入响应以外的 DOM、URL 或日志
+ *        变更/读取端点验令牌与已配对资源库；队列及异步 API 返回后重验库身份，防止处理中切库让后续操作越界
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -228,7 +228,8 @@ class BridgeService {
     async importItem(request, response, client, routing) {
         const body = await readJson(request);
         const libraryKey = stringField(body, 'libraryKey');
-        const filePath = stringField(body, 'filePath');
+        // 文件路径是身份，尾部空格在 macOS 上合法；trim 会让两个不同文件变成同一个导入源。
+        const filePath = typeof body.filePath === 'string' ? body.filePath : '';
         const name = stringField(body, 'name').slice(0, 255) || path.basename(filePath);
         const folderId = stringField(body, 'folderId');
         const projectRouting = routing === 'project';
@@ -253,17 +254,20 @@ class BridgeService {
             return;
         }
 
+        const assertLibrary = () => this.assertLibrary(client, libraryKey);
         const options = { name };
         const routedFolderId = projectRouting
-            ? await this.ensureRoutedFolder(PROJECT_ROOT_NAME, projectName)
+            ? await this.ensureRoutedFolder(PROJECT_ROOT_NAME, projectName, assertLibrary)
             : diaryRouting
-                ? await this.ensureRoutedFolder(DIARY_ROOT_NAME)
+                ? await this.ensureRoutedFolder(DIARY_ROOT_NAME, '', assertLibrary)
                 : '';
         const targetFolderId = routedFolderId || folderId;
 
         if (targetFolderId) options.folders = [targetFolderId];
 
+        assertLibrary();
         const itemId = await eagle.item.addFromPath(filePath, options);
+        assertLibrary();
         if (typeof itemId !== 'string' || !IDENTITY.test(itemId)) throw new Error('Eagle 没有返回有效项目 ID');
 
         this.json(response, 200, {
@@ -280,8 +284,8 @@ class BridgeService {
      * 分类文件夹是导入事务的一部分：只有准确取得“项目/容器名”或“日记”的 folderId 后才允许写附件。
      * 队列在成功与失败后都会恢复，单次 Eagle API 错误不能毒死后续导入。
      */
-    ensureRoutedFolder(rootName, childName = '') {
-        const operation = this.folderOperation.then(() => createOrFindRoutedFolder(rootName, childName));
+    ensureRoutedFolder(rootName, childName, assertLibrary) {
+        const operation = this.folderOperation.then(() => createOrFindRoutedFolder(rootName, childName, assertLibrary));
 
         this.folderOperation = operation.then(() => undefined, () => undefined);
 
@@ -292,6 +296,7 @@ class BridgeService {
         if (!this.ensureLibrary(response, client, libraryKey)) return;
 
         const item = await eagle.item.getById(itemId);
+        this.assertLibrary(client, libraryKey);
         if (!item || item.isDeleted || !item.filePath || !isRegularFile(item.filePath)) {
             this.json(response, 404, { ok: false, error: 'Eagle 中找不到这个附件' });
             return;
@@ -325,6 +330,7 @@ class BridgeService {
         if (!this.ensureLibrary(response, client, libraryKey)) return;
 
         const item = await eagle.item.getById(itemId);
+        this.assertLibrary(client, libraryKey);
         if (!item || item.isDeleted) {
             this.json(response, 404, { ok: false, error: 'Eagle 中找不到这个附件' });
             return;
@@ -333,7 +339,8 @@ class BridgeService {
         const folderId = firstItemFolderId(item);
 
         // 先恢复窗口，再切目录；原生 item 深链若作为旧版唤起兜底，也不会最后把界面改回“全部”。
-        await showMainWindow(itemId);
+        await showMainWindow(itemId, () => this.assertLibrary(client, libraryKey));
+        this.assertLibrary(client, libraryKey);
 
         if (folderId) {
             if (typeof eagle.folder?.open !== 'function') {
@@ -341,16 +348,19 @@ class BridgeService {
             }
 
             await eagle.folder.open(folderId);
+            this.assertLibrary(client, libraryKey);
 
             if (typeof eagle.item?.select !== 'function') {
                 throw new Error('当前 Eagle 版本不支持选中附件，请升级到 4.0 Build 18 或更高');
             }
 
             const selected = await eagle.item.select([itemId]);
+            this.assertLibrary(client, libraryKey);
             if (selected === false) throw new Error('Eagle 已打开附件文件夹，但无法选中这个附件');
         } else {
             // 未归类附件没有可打开的文件夹，只能沿用 Eagle 官方的“在全部中显示”。
             const result = await eagle.item.open(itemId);
+            this.assertLibrary(client, libraryKey);
             if (result === false) throw new Error('Eagle 无法打开这个附件');
         }
 
@@ -362,6 +372,12 @@ class BridgeService {
 
         this.json(response, 409, { ok: false, error: 'Eagle 当前资源库与配对时不同，请重新配对' });
         return false;
+    }
+
+    assertLibrary(client, libraryKey) {
+        if (libraryKey !== client.libraryKey || !samePath(client.libraryPath, libraryPath())) {
+            throw new BridgeConflictError('Eagle 当前资源库与配对时不同，请重新配对');
+        }
     }
 
     authorize(request) {
@@ -560,7 +576,8 @@ function contentType(filePath) {
  * 用官方 Folder API 创建或复用严格的一/两级目录。重名不是“随便挑一个”的理由：
  * 同级出现多个同名文件夹时中止导入，避免附件被无声分到错误容器。
  */
-async function createOrFindRoutedFolder(rootName, childName = '') {
+async function createOrFindRoutedFolder(rootName, childName, assertLibrary) {
+    assertLibrary();
     if (typeof eagle.folder?.getAll !== 'function' ||
         typeof eagle.folder?.create !== 'function' ||
         typeof eagle.folder?.createSubfolder !== 'function') {
@@ -568,6 +585,7 @@ async function createOrFindRoutedFolder(rootName, childName = '') {
     }
 
     const all = flattenFolders(await eagle.folder.getAll());
+    assertLibrary();
     const roots = all.filter((folder) => folder.name === rootName && !parentId(folder));
 
     if (roots.length > 1) {
@@ -578,6 +596,7 @@ async function createOrFindRoutedFolder(rootName, childName = '') {
         name: rootName,
         description: `由 ziminOS 自动归档 Obsidian ${rootName}附件`,
     });
+    assertLibrary();
 
     assertFolder(root, `Eagle 没有返回有效的“${rootName}”根文件夹`);
 
@@ -594,6 +613,7 @@ async function createOrFindRoutedFolder(rootName, childName = '') {
         name: childName,
         description: `Obsidian 容器：${childName}`,
     });
+    assertLibrary();
 
     assertFolder(project, 'Eagle 没有返回有效的容器文件夹');
 
@@ -684,16 +704,19 @@ function stringField(value, key) { return typeof value[key] === 'string' ? value
 function isRecord(value) { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function safeMessage(error) { return error instanceof Error ? error.message : String(error); }
 
-async function showMainWindow(itemId) {
+async function showMainWindow(itemId, assertLibrary) {
     if (typeof eagle.app?.show === 'function') {
         try {
             const shown = await eagle.app.show();
+            assertLibrary();
 
             if (shown !== false) return;
         } catch {
             // 新 API 存在但宿主拒绝唤起时，仍可用操作系统已注册的原生深链激活主窗口。
         }
     }
+
+    assertLibrary();
 
     // Eagle 4.0 Build 12–17 还没有 app.show；原生项目深链同样会激活已运行的主窗口。
     if (typeof eagle.shell?.openExternal !== 'function') throw new Error('当前 Eagle 版本无法恢复主窗口，请升级到 4.0 Build 18 或更高');

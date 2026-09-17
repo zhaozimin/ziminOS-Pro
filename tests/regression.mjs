@@ -213,7 +213,7 @@ test('传统 CR 笔记整理后不被混成 LF', () => {
 
 test('小节写入与任务翻转都保留 CRLF', () => {
     const inserted = insertIntoSection('## 记录\r\n-\r\n', '## 记录', '- [ ] 跟进');
-    const toggled = toggleTaskLine(inserted, 1, false);
+    const toggled = toggleTaskLine(inserted, 1, false, '- [ ] 跟进');
 
     assert.equal(inserted.replaceAll('\r\n', '').includes('\n'), false);
     assert.equal(toggled, '## 记录\r\n- [x] 跟进\r\n');
@@ -1114,4 +1114,3 @@ test('ItemView 子类不占用宿主自己的成员名', () => {
 
     assert.equal(classesChecked, files.length);
 });
-

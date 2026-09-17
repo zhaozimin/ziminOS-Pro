@@ -3,7 +3,7 @@
  * [OUTPUT]: 对外提供 ExportFormat/ExportAlign/WatermarkMode/WatermarkAnchor 四个枚举与它们的中文标签，
  *           ExportStyle 契约（含品牌标志路径与三处各自的尺寸）、DEFAULT_EXPORT_STYLE 默认值、
  *           滑块规格表 EXPORT_SLIDERS、九宫格排布 WATERMARK_ANCHOR_GRID、纸张预设 PAPER_PRESET_SIZES，
- *           以及读取侧兜底 normalizeExportStyle（含三个开关「键不存在时从内容推导」的升级语义）
+ *           以及读取侧兜底 normalizeExportStyle（开关键缺席时从文字、标志与页眉页脚链接推导可见性）
  * [POS]: core 的导出口径层，与 markdownStyle/device 同列：模块自己的设置形状必须住在 core，
  *        否则 normalizeSettings 就得反向 import 一个功能模块，依赖图从树变成网。
  *        本文件最要紧的设计是 EXPORT_SLIDERS——它同时是界面的滑块范围与持久化的验形区间，
@@ -495,8 +495,8 @@ export function normalizeExportStyle(input: unknown): ExportStyle {
         footerColor: color(stored.footerColor),
         footerLink: text(stored.footerLink, DEFAULT_EXPORT_STYLE.footerLink),
         watermarkColor: color(stored.watermarkColor),
-        headerEnabled: enabled(stored.headerEnabled, stored.header, stored.headerLogoSize),
-        footerEnabled: enabled(stored.footerEnabled, stored.footer, stored.footerLogoSize),
+        headerEnabled: enabled(stored.headerEnabled, stored.header, stored.headerLogoSize, stored.headerLink),
+        footerEnabled: enabled(stored.footerEnabled, stored.footer, stored.footerLogoSize, stored.footerLink),
         watermarkEnabled: enabled(stored.watermarkEnabled, stored.watermark, stored.watermarkLogoSize),
         logo: text(stored.logo, DEFAULT_EXPORT_STYLE.logo),
         headerLogoSize: numbers.headerLogoSize,
@@ -546,15 +546,16 @@ function isExportTheme(value: unknown): value is ExportTheme {
  *
  * 键**不存在**时不能取 false，那会让所有升级上来的用户的页眉页脚水印一夜消失；
  * 也不能取 true，那会让空内容的段落平白展开。唯一对的默认是从内容推导：
- * 那行字或那枚标志还在，说明它本来就在显示——升级前后所见相同，正是这条要保的东西。
+ * 文字、标志或页眉页脚的链接还在，说明它本来就在显示；只填链接时原本也会印出网址。
  */
-function enabled(flag: unknown, text: unknown, logoSize: unknown): boolean {
+function enabled(flag: unknown, text: unknown, logoSize: unknown, link?: unknown): boolean {
     if (typeof flag === 'boolean') return flag;
 
     const hasText = typeof text === 'string' && text.trim() !== '';
     const hasLogo = typeof logoSize === 'number' && logoSize > 0;
+    const hasLink = typeof link === 'string' && link.trim() !== '';
 
-    return hasText || hasLogo;
+    return hasText || hasLogo || hasLink;
 }
 
 function isPaperPreset(value: unknown): value is PaperPreset {

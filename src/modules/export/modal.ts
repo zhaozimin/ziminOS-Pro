@@ -9,7 +9,8 @@
  *
  *        每一次改动只重放装饰、不碰内容，因此「实时」不是靠节流硬撑出来的；
  *        三步的先后不能换——明暗 → 尺寸 → 装饰，否则水印会用上一套主题的颜色、
- *        量着上一张纸的高度。Esc、遮罩与取消全部收敛为 null，使「没导出」在调用侧只有一种语义
+ *        量着上一张纸的高度。Esc、遮罩与取消全部收敛为 null，使「没导出」在调用侧只有一种语义。
+ *        关窗即撤销异步回调的写回权；保存框与最终交付共用点击当时的风格快照
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -57,6 +58,8 @@ export class ExportPreviewModal extends Modal {
     private logoToken = 0;
     /** 正在问去处。挡住第二次点击——两个保存框叠在一起谁都说不清是哪一次导出 */
     private asking = false;
+    /** 生命周期闸门：系统选图与保存框都可能晚于预览关闭才返回 */
+    private active = false;
 
     constructor(
         app: App,
@@ -75,14 +78,14 @@ export class ExportPreviewModal extends Modal {
     }
 
     openAndGetValue(): Promise<ExportStyle | null> {
-        this.open();
-
         return new Promise((resolve) => {
             this.resolver = resolve;
+            this.open();
         });
     }
 
     onOpen(): void {
+        this.active = true;
         this.value = this.initial;
         this.logo = null;
         this.modalEl.addClass('ziminos-export-modal');
@@ -109,6 +112,7 @@ export class ExportPreviewModal extends Modal {
     }
 
     onClose(): void {
+        this.active = false;
         if (this.frame !== null) cancelAnimationFrame(this.frame);
         this.frame = null;
         this.logoToken += 1;
@@ -154,7 +158,7 @@ export class ExportPreviewModal extends Modal {
     }
 
     private schedule(): void {
-        if (this.frame !== null) return;
+        if (!this.active || this.frame !== null) return;
 
         this.frame = requestAnimationFrame(() => {
             this.frame = null;
@@ -211,7 +215,7 @@ export class ExportPreviewModal extends Modal {
             try {
                 const path = await importLogoFromDisk(this.app);
 
-                if (!path) return;
+                if (!this.active || !path) return;
 
                 this.update({ logo: path });
                 new Notice(`标志已放进笔记库：${path}`);
@@ -277,15 +281,16 @@ export class ExportPreviewModal extends Modal {
      * 「这次没导出成」，而他刚调了十分钟的那套风格不该因此消失。
      */
     private async finish(button: HTMLButtonElement): Promise<void> {
-        if (this.asking) return;
+        if (!this.active || this.asking) return;
 
         this.asking = true;
         button.disabled = true;
+        const candidate = this.value;
 
         try {
-            if (!await this.confirm(this.value)) return;
+            if (!await this.confirm(candidate) || !this.active) return;
 
-            this.settle(this.value);
+            this.settle(candidate);
             this.close();
         } catch (error) {
             new Notice(`导出失败：${error instanceof Error ? error.message : String(error)}`);
@@ -296,6 +301,8 @@ export class ExportPreviewModal extends Modal {
     }
 
     private update(patch: Partial<ExportStyle>): void {
+        if (!this.active) return;
+
         const previous = this.value.logo;
 
         this.value = { ...this.value, ...patch };

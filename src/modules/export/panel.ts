@@ -12,7 +12,8 @@
  *        默认（三段全关、纸张自适应）只有六行，打开哪一段才长出哪一段。
  *
  *        它刻意不用 obsidian 的 Setting 原语：Setting 是「名字在左、控件在右、说明在名字下面」的
- *        固定三件套，而这一列要的正是把第三件拿掉。用它就得一路和它的默认版式打架
+ *        固定三件套，而这一列要的正是把第三件拿掉。用它就得一路和它的默认版式打架。
+ *        纸张预设的 width/height 在控件边界映射为风格的 pageWidth/pageHeight，交付尺寸只读后者
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -95,7 +96,9 @@ export function buildExportPanel(host: HTMLElement, panel: PanelHost): () => voi
         (preset: PaperPreset) => {
             const size = PAPER_PRESET_SIZES[preset];
 
-            panel.update(size ? { paperPreset: preset, ...size } : { paperPreset: preset });
+            panel.update(size
+                ? { paperPreset: preset, pageWidth: size.width, pageHeight: size.height }
+                : { paperPreset: preset });
         },
         refreshers,
     );
