@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # [INPUT]: 依赖本仓库为第二版事实源（含 vault-pro/ 与 skill-pro/），依赖 npm run check 通过，
-#          依赖 git 与 rsync；目标仓库 gitee.com/ziminzhao/zimin-os-v1 需可写
+#          依赖 git 与 rsync；第一版的 GitHub / Gitee 两个目标仓库均需可写
 # [OUTPUT]: 把两版共享的那部分（src / vault / eagle-companion / fonts / skill / tests / 构建与依赖配置）
-#           单向发布到第一版公开仓库，并在 --push 时推上去
-# [POS]: 两个 Gitee 仓库之间**唯一**的同步通道，方向只有 pro → v1 一条。
+#           单向发布到第一版公开仓库，并在 --push 时把同一提交推到 GitHub 与 Gitee
+# [POS]: Pro 事实源到第一版两个公开镜像之间**唯一**的同步通道，方向只有 pro → v1 一条。
 #        它存在的理由是一次事故：两个仓库曾各自能改同一份 src/，于是分叉出
 #        editing/explorer/legacy 与 eternal/edition 两批互不相容的改动，
 #        最后要靠一次 23 个文件的三方合并才收得回来。收敛成单向通道之后，
@@ -18,10 +18,10 @@
 #
 set -euo pipefail
 
-# SSH 而不是 HTTPS：这条通道要**推**，而 Gitee 的 HTTPS 推送要用户名密码，
-# 非交互环境下它读不到输入，报的是「could not read Username」——
-# 看上去像没权限，其实只是没人能回答那个提示。克隆两种都行，取能推的那种。
-V1_REMOTE="git@gitee.com:ziminzhao/zimin-os-v1.git"
+# SSH 而不是 HTTPS：这条通道要**推**，非交互环境不能回答平台的用户名/密码提示。
+# 两个平台都在真正写入前 dry-run；任何一边分叉都中止，不以 force 假装镜像一致。
+V1_GITEE_REMOTE="git@gitee.com:ziminzhao/zimin-os-v1.git"
+V1_GITHUB_REMOTE="git@github.com:zhaozimin/ziminOS.git"
 
 # ============================================================
 # 两份清单：搬什么、绝不搬什么
@@ -112,7 +112,9 @@ trap 'rm -rf "$repo_root/.publish-staging"' EXIT
 rm -rf "$staging"
 
 echo "==> 取第一版仓库"
-git clone --quiet --depth 1 "$V1_REMOTE" "$staging/v1"
+# 不能浅克隆：若 GitHub 落后多个提交，推送端必须持有中间历史才能把它快进到 Gitee。
+# blob 仍按需取，避免为了提交血缘重复下载全部历史字体与二进制产物。
+git clone --quiet --filter=blob:none --no-tags "$V1_GITEE_REMOTE" "$staging/v1"
 target="$staging/v1"
 
 # ============================================================
@@ -176,8 +178,26 @@ echo "==> 在第一版仓库里跑回归"
 
 cd "$target"
 
+push_mirrors() {
+    # 两边没有跨主机事务，先用 dry-run 同时验证快进与权限，再真正推送。
+    # 任何一边出现分叉都中止，绝不用 force 把一个公开仓库盖过去。
+    echo "==> 预检第一版 GitHub / Gitee 两个镜像"
+    git push --dry-run "$V1_GITHUB_REMOTE" HEAD:main >/dev/null
+    git push --dry-run "$V1_GITEE_REMOTE" HEAD:main >/dev/null
+
+    echo "==> 推送到 $V1_GITHUB_REMOTE"
+    git push "$V1_GITHUB_REMOTE" HEAD:main
+    echo "==> 推送到 $V1_GITEE_REMOTE"
+    git push "$V1_GITEE_REMOTE" HEAD:main
+}
+
 if [ -z "$(git status --porcelain)" ]; then
-    echo "==> 第一版仓库已经是最新的，无需发布。"
+    if [ "${1:-}" = "--push" ]; then
+        push_mirrors
+        echo "==> 第一版内容未变化；两个镜像已核对到同一提交。"
+    else
+        echo "==> 第一版仓库已经是最新的，无需发布。"
+    fi
     exit 0
 fi
 
@@ -199,9 +219,8 @@ main.js 是刻意的：分成两个插件产物就等于分成两套代码，迟
 README.md / AGENTS.md / CLAUDE.md / docs/ 不在同步范围，它们各自说给各自的读者听。"
 
 if [ "${1:-}" = "--push" ]; then
-    echo "==> 推送到 $V1_REMOTE"
-    git push origin HEAD:main
-    echo "==> 完成。第一版仓库已更新到 v${version}。"
+    push_mirrors
+    echo "==> 完成。第一版 GitHub / Gitee 镜像已更新到 v${version}。"
 else
     echo "==> 已在临时目录提交，**没有推送**。"
     echo "    确认上面的改动没问题后，重新执行并加 --push："

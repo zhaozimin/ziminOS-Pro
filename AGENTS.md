@@ -44,13 +44,13 @@
 
 - **全新安装先运行安装脚本**：两份契约第一节末各有一条一键命令（Windows / macOS），结果读当前文件夹的 `.ziminos-install-result.json`。脚本失败才回到契约的逐条做法；不要跳过脚本直接逐条执行——那在 Windows 上曾经花掉二十分钟。
 - 施工源只能临时放在工作区之外，不得在工作区内下载、解压或克隆。
-- **施工源先取 Gitee 发行版上的包，走不通再 `git clone`**：版本号从 raw 读 `manifest.json`、包从 `releases/download` 取，不需要 Git、不需要登录，一台没装过开发工具的 Windows 电脑也取得到。**不要用 `api/v5` 开放接口找发行版**：它对未登录请求限流（403 Rate Limit Exceeded）。不要下载仓库的「下载 ZIP」（未登录只拿到 HTML 跳转页），不要用 raw 地址逐个文件拼仓库（大文件 403、个别文件 451）。两份契约的第二节各有 Python 与 PowerShell 写法。
+- **施工源先取 Gitee 发行版上的包，走不通再 `git clone`**：版本号从 raw 读 `manifest.json`、包从 `releases/download` 取，不需要 Git、不需要登录，一台没装过开发工具的 Windows 电脑也取得到。**不要用 `api/v5` 开放接口找发行版**：它对未登录请求限流（403 Rate Limit Exceeded）。不要下载仓库的「下载 ZIP」（未登录只拿到 HTML 跳转页），不要用 raw 地址逐个文件拼仓库（大文件 403、个别文件 451）。两份契约的第二节各有 Python 与 PowerShell 写法。GitHub 当前只承担源码镜像与 README 快捷入口，发行包仍以 Gitee Release 为准。
 - 不得安装 Node.js、npm 依赖或任何额外插件、主题、字体。
-- 施工源仓库**按版次分开**，取错了不会在下载或克隆那一步报错：
-  - 第一版 → `https://gitee.com/ziminzhao/zimin-os-v1.git`
-  - 第二版 → `https://gitee.com/ziminzhao/ziminos-pro.git`
+- 施工源仓库**按版次分开**，每版有 GitHub / Gitee 两个同步镜像；用户明确给了哪个平台的链接，clone 时就沿用哪个平台：
+  - 第一版 → GitHub `https://github.com/zhaozimin/ziminOS.git`；Gitee `https://gitee.com/ziminzhao/zimin-os-v1.git`
+  - 第二版 → GitHub `https://github.com/zhaozimin/ziminOS-Pro.git`；Gitee `https://gitee.com/ziminzhao/ziminos-pro.git`
   第二版取了 v1 仓库，clone 照样成功，缺 `vault-pro/` 要等到交付物清单才发作；第一版取了 pro 仓库更糟——它会把整份施工源克隆到用户机器，等于让每个免费用户顺手把付费交付物拉到本地。
-- GitHub 上的 `zhaozimin/ziminOS` 已经访问不到（403），不要用它，也不要去找镜像。
+- 同一版的 GitHub 与 Gitee 是镜像，不是两套产品；不得把「切平台」误写成「切版次」。
 
 ## 六、开发任务
 

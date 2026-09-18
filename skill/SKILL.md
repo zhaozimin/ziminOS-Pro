@@ -1,6 +1,6 @@
 ---
 name: ziminos-vault-setup
-description: 在用户已经创建并命名一个文件夹、再用桌面 Agent 打开该文件夹后，根据 ziminOS Gitee 官方仓库把当前工作区原地搭建或升级为 Obsidian 个人知识管理笔记库。用户发送仓库地址并说「按照这个仓库搭建我的个人知识管理系统」「搭建/开荒 Obsidian 笔记库」「安装/更新 ziminOS」时使用；不询问名称或安装路径，不创建子级笔记库，不把源码仓库克隆到当前工作区。
+description: 在用户已经创建并命名一个文件夹、再用桌面 Agent 打开该文件夹后，根据 ziminOS GitHub / Gitee 官方镜像把当前工作区原地搭建或升级为 Obsidian 个人知识管理笔记库。用户发送仓库地址并说「按照这个仓库搭建我的个人知识管理系统」「搭建/开荒 Obsidian 笔记库」「安装/更新 ziminOS」时使用；不询问名称或安装路径，不创建子级笔记库，不把源码仓库克隆到当前工作区。
 ---
 
 # ziminOS 当前工作区安装
@@ -73,7 +73,7 @@ curl -fsSL https://gitee.com/ziminzhao/zimin-os-v1/raw/main/installer/install.sh
 
 ## 二、在工作区外取得施工源
 
-官方施工源是 Gitee 上的 `ziminzhao/zimin-os-v1`。无论用户给出仓库网页、文件链接还是什么都没给，都从这个仓库取；取法有两种，**先走取法一，走不通再走取法二**。两种取法最后都得到同一个 `$install_staging_dir/repo`（含 `vault/` 与 `fonts/`），把它记为施工源，下文每一步只认它。
+官方施工源有两个同步镜像：GitHub `zhaozimin/ziminOS` 与 Gitee `ziminzhao/zimin-os-v1`。发行包目前只挂在 Gitee，因此**先走取法一，走不通再走取法二**；需要 clone 时，用户若明确给了 GitHub 或 Gitee 链接就沿用同一平台，没给链接时优先 Gitee。两种取法最后都得到同一个 `$install_staging_dir/repo`（含 `vault/` 与 `fonts/`），把它记为施工源，下文每一步只认它。
 
 一律在当前工作区之外的系统临时目录里做（macOS / Linux 的 `/tmp`，Windows 的 `%TEMP%`），临时目录名以 `ziminos-install.` 开头，第五节清理时只认这个名字。禁止在 `$vault_root` 内下载、解压或克隆，禁止把仓库根目录复制进 `$vault_root`。
 
@@ -154,12 +154,21 @@ Move-Item $fonts.FullName (Join-Path $install_staging_dir 'repo\fonts')
 
 ### 取法二：git clone（取法一走不通时）
 
+用户从 GitHub 进入时：
+
+```bash
+install_staging_dir="$(mktemp -d /tmp/ziminos-install.XXXXXX)"
+git clone --depth 1 "https://github.com/zhaozimin/ziminOS.git" "$install_staging_dir/repo"
+```
+
+用户从 Gitee 进入，或没有指定平台时：
+
 ```bash
 install_staging_dir="$(mktemp -d /tmp/ziminos-install.XXXXXX)"
 git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_staging_dir/repo"
 ```
 
-Windows 上找不到 `git` 时，先看智能体自带的 PortableGit：`git.exe` 常常在它的 `cmd\` 目录里，而不在只放了 bash 的 `bin\` 里，用绝对路径调用即可。克隆也走不通就说明情况、停下来，不要去找别的镜像。
+两条命令只运行一条；它们是同一版次的镜像，不是两套产品。Windows 上找不到 `git` 时，先看智能体自带的 PortableGit：`git.exe` 常常在它的 `cmd\` 目录里，而不在只放了 bash 的 `bin\` 里，用绝对路径调用即可。当前镜像克隆失败时可以尝试同一版次的另一个官方镜像；两个都走不通就说明情况、停下来。
 
 确认下面的系统交付文件都存在：
 
@@ -454,7 +463,7 @@ PowerShell 的 `Remove-Item -LiteralPath $install_staging_dir -Recurse -Force` �
 ## 红线
 
 - 当前工作区就是最终笔记库，不另建目录。
-- 不在当前工作区克隆 Gitee 源码仓库。
+- 不在当前工作区克隆任何源码镜像。
 - 不让用户打开仓库或仓库内的 `vault/`。
 - 不删除或覆盖用户笔记。
 - 只交付仓库已锁定的 ziminOS、Dataview、Outliner、Quiet Outline、Minimal、Style Settings、ziminOS CSS 与 `fonts/` 里的四款字体；不临时下载或安装任何额外软件、插件、主题、图标包或字体。三十六枚命令图标与三枚设置页专用图标的 SVG 已经编进 `main.js`，不需要也不允许另外下载。**Outliner 与 Quiet Outline 同样已在仓库里，不要去 GitHub 或插件市场重新拉一份**——版本与 SHA-256 由 `docs/第三方组件.md` 锁定，现拉的那份对不上。

@@ -17,10 +17,12 @@
 
 两段别混着用：装错版次不会报错，只会让你得到一套不是你要的东西。
 
+下面默认给出 **GitHub 源码入口**。GitHub 与 Gitee 保存同一份源码；无需 Git 的安装包目前仍放在 Gitee Release，契约会自动先走安装包、走不通才克隆 GitHub。中国大陆网络访问 GitHub 不稳定时，可展开后面的 Gitee 镜像指令。
+
 ### 第一版 —— 一本笔记库（免费）
 
 ```text
-请读取并严格执行 https://gitee.com/ziminzhao/zimin-os-v1/blob/main/skill/SKILL.md，把当前工作区原地搭建或升级为我的 Obsidian 个人知识管理系统。当前工作区就是我已经创建并命名的最终笔记库：不要询问名称或安装路径，不要创建子级笔记库，不要把源码仓库克隆到当前工作区。请严格执行 SKILL.md 中的安全检查、安装或升级、验证与清理步骤，完成后告诉我如何用 Obsidian 打开并初始化。
+请读取并严格执行 https://github.com/zhaozimin/ziminOS/blob/main/skill/SKILL.md，把当前工作区原地搭建或升级为我的 Obsidian 个人知识管理系统。当前工作区就是我已经创建并命名的最终笔记库：不要询问名称或安装路径，不要创建子级笔记库，不要把源码仓库克隆到当前工作区。施工源按 SKILL.md 的顺序取得：无需 Git 的安装包仍从 Gitee Release 下载；需要克隆时使用 https://github.com/zhaozimin/ziminOS.git。请严格执行安全检查、安装或升级、验证与清理步骤，完成后告诉我如何用 Obsidian 打开并初始化。
 ```
 
 安装完成后，直接用 Obsidian 打开**同一个文件夹**。不需要 Node.js，也不需要另行下载插件、主题或字体。
@@ -30,14 +32,29 @@
 ### 第二版 —— 三本笔记库（学员测试中）
 
 ```text
-请读取并严格执行 https://gitee.com/ziminzhao/ziminos-pro/blob/main/skill-pro/SKILL.md，把当前工作区搭建**或升级**为 ziminOS 第二版三库系统。施工源按 SKILL.md 第二节的顺序取：先下载 Gitee 发行版上的分发包（不需要 Git），走不通再克隆 https://gitee.com/ziminzhao/ziminos-pro.git。当前工作区是系统根，不是笔记库：不要询问名称或安装位置，不要在工作区内克隆源码。请严格执行 SKILL.md 中的安装、验证与清理步骤，完成后告诉我怎么用 Obsidian 分别打开这三本库。
+请读取并严格执行 https://github.com/zhaozimin/ziminOS-Pro/blob/main/skill-pro/SKILL.md，把当前工作区搭建**或升级**为 ziminOS 第二版三库系统。施工源按 SKILL.md 第二节的顺序取：先下载 Gitee 发行版上的分发包（不需要 Git），走不通再克隆 https://github.com/zhaozimin/ziminOS-Pro.git。当前工作区是系统根，不是笔记库：不要询问名称或安装位置，不要在工作区内克隆源码。请严格执行 SKILL.md 中的安装、验证与清理步骤，完成后告诉我怎么用 Obsidian 分别打开这三本库。
 ```
 
 装完你会在这个文件夹里看到**三个并排的文件夹**：`兼收并蓄`、`以人为本`、`赛博永生`。用 Obsidian 分别打开它们，不是打开外面那一层。三本里只有「以人为本」需要你手动点一次初始化。
 
 **装完先看一眼对不对。** 如果这个文件夹里只出现了一本库，或者直接冒出 `00-inbox`、`01-projects`、`90-system` 这类文件夹，说明智能体执行的是第一版契约——那不是你要的，把这段指令重发一次，并告诉它「按 skill-pro/SKILL.md 装三库，不是 skill/SKILL.md」。
 
-> **旧指令失效**：早前流传的一键指令指向 `github.com/zhaozimin/ziminOS`，那个地址现在访问不到。请改用上面的 Gitee 地址。
+<details>
+<summary>中国大陆网络：改用 Gitee 镜像安装</summary>
+
+第一版：
+
+```text
+请读取并严格执行 https://gitee.com/ziminzhao/zimin-os-v1/blob/main/skill/SKILL.md，把当前工作区原地搭建或升级为我的 Obsidian 个人知识管理系统。当前工作区就是我已经创建并命名的最终笔记库：不要询问名称或安装路径，不要创建子级笔记库，不要把源码仓库克隆到当前工作区。需要克隆施工源时使用 https://gitee.com/ziminzhao/zimin-os-v1.git。请严格执行 SKILL.md 中的安全检查、安装或升级、验证与清理步骤，完成后告诉我如何用 Obsidian 打开并初始化。
+```
+
+第二版：
+
+```text
+请读取并严格执行 https://gitee.com/ziminzhao/ziminos-pro/blob/main/skill-pro/SKILL.md，把当前工作区搭建**或升级**为 ziminOS 第二版三库系统。施工源按 SKILL.md 第二节的顺序取：先下载 Gitee 发行版上的分发包（不需要 Git），走不通再克隆 https://gitee.com/ziminzhao/ziminos-pro.git。当前工作区是系统根，不是笔记库：不要询问名称或安装位置，不要在工作区内克隆源码。请严格执行 SKILL.md 中的安装、验证与清理步骤，完成后告诉我怎么用 Obsidian 分别打开这三本库。
+```
+
+</details>
 
 ---
 
@@ -48,7 +65,7 @@
 ### 第一版 —— 一本笔记库
 
 ```text
-请读取并严格执行 https://gitee.com/ziminzhao/zimin-os-v1/blob/main/skill/SKILL.md 中「三、原地搭建当前工作区」下的「升级」分支。当前工作区就是我已经装好的 Obsidian 笔记库，这是升级不是全新安装：不要重新铺库，不要询问名称或路径，不要覆盖我的配色、我自己放进 snippets/ 的片段、其他插件的配置和我已经选好的正文字体。必须先完整执行「二、在工作区外取得施工源」（先下载 Gitee 发行版上的安装包，走不通再克隆；都放在系统临时目录，不要放进当前工作区），升级后按「五、清理临时施工源」删掉临时源码。最后把升级前后的 ziminOS 版本号一起报给我。任何一步失败就停下来告诉我是哪一步，不要跳过，也不要换别的做法绕过去。
+请读取并严格执行 https://github.com/zhaozimin/ziminOS/blob/main/skill/SKILL.md 中「三、原地搭建当前工作区」下的「升级」分支。当前工作区就是我已经装好的 Obsidian 笔记库，这是升级不是全新安装：不要重新铺库，不要询问名称或路径，不要覆盖我的配色、我自己放进 snippets/ 的片段、其他插件的配置和我已经选好的正文字体。必须先完整执行「二、在工作区外取得施工源」（先下载 Gitee 发行版上的安装包，走不通再克隆 https://github.com/zhaozimin/ziminOS.git；都放在系统临时目录，不要放进当前工作区），升级后按「五、清理临时施工源」删掉临时源码。最后把升级前后的 ziminOS 版本号一起报给我。任何一步失败就停下来告诉我是哪一步，不要跳过，也不要换别的做法绕过去。
 ```
 
 当初是下载安装包手动装的：下载新版安装包，照 `安装说明.html` 里「以后怎么升级」那一节只换程序文件。**不要**把新包里的笔记库文件夹覆盖到你原来那本库上——你的设置和登录都在旧库里，盖掉就找不回来。
@@ -56,8 +73,10 @@
 ### 第二版 —— 三本笔记库
 
 ```text
-请读取并严格执行 https://gitee.com/ziminzhao/ziminos-pro/blob/main/skill-pro/SKILL.md 中的「三、C 三库系统的日常升级」。当前工作区是已经装好的 ziminOS 三库系统的系统根，这是升级不是安装：不要重新铺库，不要询问名称或位置，不要动我的笔记、配色、我自己放进 snippets/ 的片段与其他插件的配置。必须先完整执行「二、在工作区外取得施工源」（先下载 Gitee 发行版上的分发包，走不通再克隆 https://gitee.com/ziminzhao/ziminos-pro.git；都放在系统临时目录，不要放进工作区），再逐条执行 C 模式，然后按「四、验证」核对、按「五、清理」删掉临时源码。最后把升级前后的插件版本号一起报给我。任何一步失败就停下来告诉我是哪一步，不要跳过，也不要换别的做法绕过去。
+请读取并严格执行 https://github.com/zhaozimin/ziminOS-Pro/blob/main/skill-pro/SKILL.md 中的「三、C 三库系统的日常升级」。当前工作区是已经装好的 ziminOS 三库系统的系统根，这是升级不是安装：不要重新铺库，不要询问名称或位置，不要动我的笔记、配色、我自己放进 snippets/ 的片段与其他插件的配置。必须先完整执行「二、在工作区外取得施工源」（先下载 Gitee 发行版上的分发包，走不通再克隆 https://github.com/zhaozimin/ziminOS-Pro.git；都放在系统临时目录，不要放进工作区），再逐条执行 C 模式，然后按「四、验证」核对、按「五、清理」删掉临时源码。最后把升级前后的插件版本号一起报给我。任何一步失败就停下来告诉我是哪一步，不要跳过，也不要换别的做法绕过去。
 ```
+
+GitHub 连接不稳定时，把上面两段中的契约与 clone 地址分别替换为第一版的 `https://gitee.com/ziminzhao/zimin-os-v1` 或第二版的 `https://gitee.com/ziminzhao/ziminos-pro`；升级边界不变。
 
 **收到回执先看两个数字。** 它必须报出升级前和升级后的 ziminOS 版本号；只说「已完成」而没有这两个数字，就是没有证据，让它重跑一次。升级不需要先卸载，也不需要装 Node。
 

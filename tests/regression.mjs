@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译并载入 src 中的纯 TypeScript 模块
  * [OUTPUT]: 提供 npm test 的审计回归集，覆盖版本镜像、ISBN 校验、日期严格性、
  *           划线身份与批次归并、设置验形、外观配置保护、换行符保真、桌面数据库选择、
- *           项目状态回滚、Gitee 安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
+ *           项目状态回滚、GitHub / Gitee 双镜像安装入口与作者名片同构、公开源码隐私边界、移动端 Node 边界、
  *           片段出境口的桌面端闸门、本机绝对路径的唯一算处、状态栏路径的看拿分离、
  *           废弃正文/双链在编辑阅读两态的分层示警与三本库外观同构、五级周期的文件名反解、
  *           后台写入的分栏滚动保护（什么时候写、写到哪一篇、写什么值归 writes.mjs）、
@@ -71,7 +71,7 @@ const { dayText, periodOfTitle } = await loadTypeScript('src/core/time.ts', {
 /**
  * 这份源码此刻躺在哪个仓库里。
  *
- * 两个 Gitee 仓库的 src/ 逐字节相同（第二版那部分被装配期开关关着），
+ * 两个版次仓库的 src/ 逐字节相同（第二版那部分被装配期开关关着），
  * 所以拿代码当判据认不出来；真正区分两者的是**交付物**——只有第二版仓库有那份契约。
  * publish-v1.sh 会把 tests/ 整份同步过去并要求它在那边自己跑得过，
  * 因此每一条读 skill-pro/ 或 vault-pro/ 的断言都必须经这道闸，漏一条就卡死整条发布通道。
@@ -121,17 +121,17 @@ test('入库的 main.js 不带构建目录的相对位置', () => {
     assert.doesNotMatch(bundle, /\.\.\/node_modules\//, 'main.js 里出现了 ../node_modules/，它是在别的目录层级下构建出来的');
 });
 
-test('README 与安装契约共同指向 Gitee 唯一部署源', () => {
+test('第一版安装契约提供 GitHub / Gitee 两个同版镜像', () => {
     const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
     const skill = readFileSync(path.join(ROOT, 'skill/SKILL.md'), 'utf8');
-    const skillUrl = 'https://gitee.com/ziminzhao/zimin-os-v1/blob/main/skill/SKILL.md';
-    const cloneUrl = 'https://gitee.com/ziminzhao/zimin-os-v1.git';
-    const retiredGitHubUrl = 'https://github.com/zhaozimin/ziminOS';
+    const githubSkillUrl = 'https://github.com/zhaozimin/ziminOS/blob/main/skill/SKILL.md';
+    const giteeSkillUrl = 'https://gitee.com/ziminzhao/zimin-os-v1/blob/main/skill/SKILL.md';
+    const githubCloneUrl = 'https://github.com/zhaozimin/ziminOS.git';
+    const giteeCloneUrl = 'https://gitee.com/ziminzhao/zimin-os-v1.git';
 
-    assert.ok(readme.includes(skillUrl));
-    assert.ok(skill.includes(`git clone --depth 1 "${cloneUrl}"`));
-    assert.equal(readme.includes(retiredGitHubUrl), false);
-    assert.equal(skill.includes(retiredGitHubUrl), false);
+    assert.ok(readme.includes(githubSkillUrl) || readme.includes(giteeSkillUrl));
+    assert.ok(skill.includes(`git clone --depth 1 "${githubCloneUrl}"`));
+    assert.ok(skill.includes(`git clone --depth 1 "${giteeCloneUrl}"`));
 });
 
 test('作者名片把 Gitee 主页放在中国大陆分组', () => {
@@ -723,11 +723,18 @@ if (existsSync(proContractPath)) {
         LEGACY_INSPIRATION_FORMATS,
     } = await loadTypeScript('src/core/constants.ts');
 
-    const PRO_REPO = 'gitee.com/ziminzhao/ziminos-pro';
-    const V1_REPO = 'gitee.com/ziminzhao/zimin-os-v1';
+    const PRO_REPOS = [
+        'https://github.com/zhaozimin/ziminOS-Pro.git',
+        'https://gitee.com/ziminzhao/ziminos-pro.git',
+    ];
+    const V1_REPOS = [
+        'https://github.com/zhaozimin/ziminOS.git',
+        'https://gitee.com/ziminzhao/zimin-os-v1.git',
+    ];
 
     /**
-     * 两个版次住在两个 Gitee 仓库：第一版 zimin-os-v1（公开、免费），第二版 ziminos-pro。
+     * 两个版次各有 GitHub / Gitee 两个同步镜像：第一版 ziminOS / zimin-os-v1，
+     * 第二版 ziminOS-Pro / ziminos-pro。
      *
      * 分开不是洁癖：第一版的安装契约会把施工源整份克隆到用户机器的临时目录，
      * 指向 pro 仓库等于让每一个免费用户顺手把付费版的全部交付物拉到本地。
@@ -739,15 +746,18 @@ if (existsSync(proContractPath)) {
         const v1Contract = readFileSync(path.join(ROOT, 'skill/SKILL.md'), 'utf8');
         const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
 
-        assert.match(proContract, new RegExp(`git clone[^\\n]*${PRO_REPO.replace(/\./g, '\\.')}`));
-        assert.equal(proContract.includes(V1_REPO), false, '第二版契约不该取第一版仓库');
+        for (const repo of PRO_REPOS) assert.ok(proContract.includes(`git clone --depth 1 "${repo}"`));
+        for (const repo of V1_REPOS) assert.equal(proContract.includes(`git clone --depth 1 "${repo}"`), false, '第二版契约不该克隆第一版仓库');
 
         // 第一版契约整份克隆施工源，指向 pro 仓库就等于把付费交付物发给每一个免费用户
-        assert.equal(v1Contract.includes(PRO_REPO), false, '第一版契约不该取第二版仓库');
+        for (const repo of V1_REPOS) assert.ok(v1Contract.includes(`git clone --depth 1 "${repo}"`));
+        for (const repo of PRO_REPOS) assert.equal(v1Contract.includes(`git clone --depth 1 "${repo}"`), false, '第一版契约不该克隆第二版仓库');
 
-        // 首页两段指令各自导向自己那个仓库的契约
-        assert.ok(readme.includes(`${V1_REPO}/blob/main/skill/SKILL.md`));
-        assert.ok(readme.includes(`${PRO_REPO}/blob/main/skill-pro/SKILL.md`));
+        // GitHub 首页默认给 GitHub 快捷指令，同时保留 Gitee 国内镜像
+        assert.ok(readme.includes('https://github.com/zhaozimin/ziminOS/blob/main/skill/SKILL.md'));
+        assert.ok(readme.includes('https://github.com/zhaozimin/ziminOS-Pro/blob/main/skill-pro/SKILL.md'));
+        assert.ok(readme.includes('https://gitee.com/ziminzhao/zimin-os-v1/blob/main/skill/SKILL.md'));
+        assert.ok(readme.includes('https://gitee.com/ziminzhao/ziminos-pro/blob/main/skill-pro/SKILL.md'));
     });
 
     /**
@@ -875,6 +885,16 @@ if (existsSync(proContractPath)) {
         const script = readFileSync(path.join(ROOT, 'publish-v1.sh'), 'utf8');
 
         assert.doesNotMatch(script, /\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/u);
+    });
+
+    test('publish-v1.sh 把同一提交非强制推到 GitHub 与 Gitee', () => {
+        const script = readFileSync(path.join(ROOT, 'publish-v1.sh'), 'utf8');
+
+        assert.ok(script.includes('V1_GITHUB_REMOTE="git@github.com:zhaozimin/ziminOS.git"'));
+        assert.ok(script.includes('V1_GITEE_REMOTE="git@gitee.com:ziminzhao/zimin-os-v1.git"'));
+        assert.match(script, /git push --dry-run "\$V1_GITHUB_REMOTE" HEAD:main/);
+        assert.match(script, /git push --dry-run "\$V1_GITEE_REMOTE" HEAD:main/);
+        assert.doesNotMatch(script, /git push[^\n]*(?:--force|-f\b)/);
     });
 
     /**

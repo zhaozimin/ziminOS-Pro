@@ -86,7 +86,7 @@ curl -fsSL https://gitee.com/ziminzhao/ziminos-pro/raw/main/installer/install.sh
 
 施工源只有一份内容，取法有三种。**按顺序试，前一种走通就不看后面。** 三种取法最后都得到同一个 `$src`——同时含 `vault/`、`vault-pro/`、`skill-pro/`、`fonts/` 的那个目录，下文每一步只认它。
 
-三种取的是**同一个仓库**的不同形态：第二版的事实源是 Gitee 上的 `ziminzhao/ziminos-pro`。**第一版住在另一个仓库 `ziminzhao/zimin-os-v1`，那里没有 `vault-pro/` 与 `skill-pro/`**，拿它装第二版会卡在下面那张交付物清单上——这是最容易走错的一步，因为第一版的契约里写的正是那个地址。（GitHub 上的 `zhaozimin/ziminOS` 已 403，两个版次都不要用它。）
+三种取的是**同一份内容**的不同形态：第二版有两个同步源码镜像，GitHub `zhaozimin/ziminOS-Pro` 与 Gitee `ziminzhao/ziminos-pro`；发行包目前只挂在 Gitee。**第一版则是 GitHub `zhaozimin/ziminOS` / Gitee `ziminzhao/zimin-os-v1`，那里没有 `vault-pro/` 与 `skill-pro/`**。拿第一版装第二版会卡在下面那张交付物清单上——这是最容易走错的一步，因为 clone 本身仍会成功。
 
 一律在**工作区之外**的系统临时目录里做（macOS / Linux 的 `/tmp`，Windows 的 `%TEMP%`），临时目录名以 `ziminos-install.` 开头，第五节清理时只认这个名字。禁止在 `$system_root` 内下载、解压或克隆。
 
@@ -171,9 +171,19 @@ unzip -q "<用户给的 zip 路径>" -d "$install_staging_dir"
 src="$(find "$install_staging_dir" -maxdepth 2 -type d -name vault-pro | head -1 | xargs dirname)"
 ```
 
-找不到四个目录就停止并说明包不完整，**不要**试图去 GitHub 补那几个缺的目录——那个仓库里根本没有它们。要补就走取法一，从发行版重新取一份完整的。
+找不到四个目录就停止并说明包不完整，**不要**从另一份来源逐个拼目录。要补就走取法一重新取完整发行包，或走取法三完整克隆同一版次的官方镜像。
 
 ### 取法三：git clone（前两种都走不通时）
+
+用户从 GitHub 进入时：
+
+```bash
+install_staging_dir="$(mktemp -d /tmp/ziminos-install.XXXXXX)"
+git clone --depth 1 "https://github.com/zhaozimin/ziminOS-Pro.git" "$install_staging_dir/repo"
+src="$install_staging_dir/repo"
+```
+
+用户从 Gitee 进入，或没有指定平台时：
 
 ```bash
 install_staging_dir="$(mktemp -d /tmp/ziminos-install.XXXXXX)"
@@ -181,9 +191,9 @@ git clone --depth 1 "https://gitee.com/ziminzhao/ziminos-pro.git" "$install_stag
 src="$install_staging_dir/repo"
 ```
 
-**地址是 `ziminzhao/ziminos-pro`，不是第一版那个 `ziminzhao/zimin-os-v1`。** 后者 clone 下来是能成功的——失败要等到交付物清单那一步才发作，报的还是「仓库不完整」这种听上去像网络出错的话。用户如果给的是第一版地址或已经 403 的 GitHub 地址，直接告诉他那不是第二版的，换成上面这个。
+两条命令只运行一条；它们是同一版次的镜像。**地址必须是 GitHub 的 `zhaozimin/ziminOS-Pro` 或 Gitee 的 `ziminzhao/ziminos-pro`，不能是第一版的 `zhaozimin/ziminOS` / `ziminzhao/zimin-os-v1`。** 第一版 clone 下来是能成功的——失败要等到交付物清单那一步才发作，报的还是「仓库不完整」这种听上去像网络出错的话。
 
-Windows 上找不到 `git` 时，先看智能体自带的 PortableGit：`git.exe` 常常在它的 `cmd\` 目录里，而不在只放了 bash 的 `bin\` 里，用绝对路径调用即可。clone 需要认证或直接失败时，**不要让用户去创建账号、也不要去找别的镜像**：说明情况，停下来。一条装不上的指令好过一条把人引去别处的指令。
+Windows 上找不到 `git` 时，先看智能体自带的 PortableGit：`git.exe` 常常在它的 `cmd\` 目录里，而不在只放了 bash 的 `bin\` 里，用绝对路径调用即可。当前镜像 clone 失败时可以尝试同一版次的另一个官方镜像；两个都走不通就说明情况，停下来，不让用户为安装去创建账号。
 
 三种取法之后的每一步完全相同，因为**分发包内部就是仓库的目录结构**——这么打包正是为了让契约里的路径一个字都不用改。
 
@@ -611,7 +621,7 @@ PowerShell 的 `Remove-Item -LiteralPath $install_staging_dir -Recurse -Force` �
 
 - **先确认版次。** 用户没提三库 / pro / 付费，就去执行 `skill/SKILL.md`。
 - 系统根不是笔记库，绝不往它根目录写**笔记**。唯一的例外是第三节第 6 步那两份 `CLAUDE.md` / `AGENTS.md`——它们是给智能体读的指令而不是给人读的笔记，也正是「新会话认不出这是什么地方」这个问题的唯一解法。除它们之外一个 `.md` 都不许建。
-- 不在系统根内克隆 GitHub 仓库；不让用户打开仓库或仓库里的 `vault/`、`vault-pro/`。
+- 不在系统根内克隆任何源码镜像；不让用户打开仓库或仓库里的 `vault/`、`vault-pro/`。
 - **绝不移动、改名或删除用户已有的笔记库。** 升级靠在旁边新建，不靠搬家。
 - 在工作区之外写任何东西（B 模式那两个新目录）之前必须问，用户说不行就停。
 - 只交付仓库已锁定的资产，不临时下载任何软件、插件、主题、图标或字体。
