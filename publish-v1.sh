@@ -9,6 +9,8 @@
 #        editing/explorer/legacy 与 eternal/edition 两批互不相容的改动，
 #        最后要靠一次 23 个文件的三方合并才收得回来。收敛成单向通道之后，
 #        「同一个 bug 在两边各修一次、修错一次」这件事在结构上不再可能发生。
+#        Shell 变量紧邻中文标点时必须写成 ${name}，否则部分 Bash/locale 会把多字节
+#        字符误吞进变量名，让同步在全部回归通过之后才因 unbound variable 中止。
 #        方向不能反：pro 的 src/ 是 v1 的**严格超集**——第二版代码被装配期开关
 #        关掉后，免费库行为与第二版出现之前逐字节相同；从 v1 往回同步会删掉第二版。
 # [PROTOCOL]: 新增任何第二版专属的顶层路径时，必须同步 PRO_ONLY——
@@ -138,7 +140,7 @@ done
 
 echo "==> 检查目标仓库"
 for item in "${PRO_ONLY[@]}"; do
-    [ -e "$target/$item" ] && { echo "目标仓库里出现了第二版专属的 $item，中止。" >&2; exit 1; }
+    [ -e "$target/$item" ] && { echo "目标仓库里出现了第二版专属的 ${item}，中止。" >&2; exit 1; }
 done
 
 # 版次标记是第二版功能的总开关。它若混进公开仓库，
@@ -149,7 +151,7 @@ if find "$target" -name edition.json -not -path '*/.git/*' | grep -q .; then
 fi
 
 for item in "${PER_REPO[@]}"; do
-    [ -e "$target/$item" ] || echo "  提醒：目标仓库没有 $item（本脚本不负责它）"
+    [ -e "$target/$item" ] || echo "  提醒：目标仓库没有 ${item}（本脚本不负责它）"
 done
 
 # ============================================================
@@ -180,14 +182,14 @@ if [ -z "$(git status --porcelain)" ]; then
 fi
 
 echo
-echo "==> 将要发布的改动（v$version，来自 pro@$source_sha）"
+echo "==> 将要发布的改动（v${version}，来自 pro@${source_sha}）"
 git add -A
 git --no-pager diff --cached --stat
 echo
 
 git commit --quiet -m "sync: 从第二版仓库同步共享源码与笔记库模板 v$version
 
-来源 ziminos-pro@$source_sha。两版共享的 src/、vault/、fonts/、skill/、tests/
+来源 ziminos-pro@${source_sha}。两版共享的 src/、vault/、fonts/、skill/、tests/
 与构建配置由 publish-v1.sh 单向发布，第一版仓库不再直接改这些路径。
 
 src/ 含第二版那部分代码，但没有 edition.json 它一行都不执行——两版共用一份
@@ -199,7 +201,7 @@ README.md / AGENTS.md / CLAUDE.md / docs/ 不在同步范围，它们各自说�
 if [ "${1:-}" = "--push" ]; then
     echo "==> 推送到 $V1_REMOTE"
     git push origin HEAD:main
-    echo "==> 完成。第一版仓库已更新到 v$version。"
+    echo "==> 完成。第一版仓库已更新到 v${version}。"
 else
     echo "==> 已在临时目录提交，**没有推送**。"
     echo "    确认上面的改动没问题后，重新执行并加 --push："
