@@ -2,10 +2,10 @@
  * [INPUT]: 依赖 obsidian 的 Modal/ButtonComponent 与 App 类型，依赖 core/constants 的四个 PARA
  *          内容根目录、core/folders 的 normalizeFolderPath，core/types 的 ZiminosSettings
  * [OUTPUT]: 对外提供 ContainerNameConflict 事实、findContainerNameConflicts 四根目录同名检索、
- *           confirmContainerNameConflict 明示继续授权
+ *           requestAvailableContainerName 同流程更名能力
  * [POS]: projects 的容器命名边界；只把项目、领域、资源、存档根目录的第一层视为
- *        可比较容器，不扫普通子目录制造假阳性。它只陈述“哪里已有同名”并索取授权，
- *        目标位置覆盖与提交前复核仍由 createContainer 负责
+ *        可比较容器，不扫普通子目录制造假阳性。发现重名后在同一个弹窗列出位置并接住
+ *        新名称，直到名称可用或人主动取消；目标位置防覆盖与提交前复核仍由 createContainer 负责
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -83,16 +83,25 @@ export function findContainerNameConflicts(
     return conflicts;
 }
 
-/** 列出同名位置，只有用户明确点“仍然创建”才返回 true */
-export function confirmContainerNameConflict(
+/**
+ * 名称无冲突就原样返回；有冲突则在同一个弹窗里展示位置并等待改名。
+ *
+ * 弹窗内部会对每次新输入重新检索，因此连续撞名不会退出命令，也不会叠出多层弹窗。
+ */
+export function requestAvailableContainerName(
     app: App,
+    settings: ZiminosSettings,
     kindLabel: string,
     containerName: string,
-    conflicts: readonly ContainerNameConflict[],
-): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
+): Promise<string | null> {
+    const conflicts = findContainerNameConflicts(app, settings, containerName);
+
+    if (conflicts.length === 0) return Promise.resolve(containerName);
+
+    return new Promise<string | null>((resolve) => {
         new ContainerNameConflictModal(
             app,
+            settings,
             kindLabel,
             containerName,
             conflicts,
@@ -101,60 +110,76 @@ export function confirmContainerNameConflict(
     });
 }
 
-/** 同名可能是用户有意的，因此这里是显式授权门，不把警告假装成绝对禁止 */
+/** 同名纠错只占一个弹窗：列表与输入框一起更新，不让人重新运行命令 */
 class ContainerNameConflictModal extends Modal {
-    private resolver: ((value: boolean) => void) | null;
+    private resolver: ((value: string | null) => void) | null;
 
     private settled = false;
 
+    private conflictEl: HTMLElement | null = null;
+
+    private inputEl: HTMLInputElement | null = null;
+
+    private errorEl: HTMLElement | null = null;
+
+    private currentName: string;
+
+    private currentConflicts: readonly ContainerNameConflict[];
+
     constructor(
         app: App,
+        private readonly settings: ZiminosSettings,
         private readonly kindLabel: string,
-        private readonly containerName: string,
-        private readonly conflicts: readonly ContainerNameConflict[],
-        resolver: (value: boolean) => void,
+        containerName: string,
+        conflicts: readonly ContainerNameConflict[],
+        resolver: (value: string | null) => void,
     ) {
         super(app);
+        this.currentName = containerName;
+        this.currentConflicts = conflicts;
         this.resolver = resolver;
     }
 
     onOpen(): void {
         this.modalEl.style.width = '560px';
         this.modalEl.style.maxWidth = 'calc(100vw - 32px)';
-        this.titleEl.setText('发现同名容器');
+        this.titleEl.setText(`${this.kindLabel}名称已存在`);
         this.contentEl.empty();
 
-        const description = this.contentEl.createEl('p', {
-            text: `库中已经有名为“${this.containerName}”的容器：`,
+        this.conflictEl = this.contentEl.createDiv();
+        this.renderConflicts();
+
+        const label = this.contentEl.createEl('label', {
+            text: `请输入新的${this.kindLabel}名称`,
         });
-        description.style.margin = '0 0 12px';
+        label.style.display = 'block';
+        label.style.margin = '16px 0 6px';
+        label.style.fontWeight = '600';
 
-        const list = this.contentEl.createEl('ul');
-        list.style.margin = '0';
-        list.style.paddingLeft = '1.4em';
-
-        for (const conflict of this.conflicts) {
-            const item = list.createEl('li');
-            item.style.margin = '6px 0';
-
-            item.createEl('strong', { text: `${conflict.roles.join(' / ')}：` });
-            const path = item.createEl('code', { text: conflict.path });
-            path.style.overflowWrap = 'anywhere';
-        }
-
-        const hasArchiveConflict = this.conflicts.some((conflict) =>
-            conflict.roles.includes('存档'),
-        );
-        const willBeArchived = this.kindLabel === '项目' || this.kindLabel === '读书笔记';
-        const warning = this.contentEl.createEl('p', {
-            text:
-                hasArchiveConflict && willBeArchived
-                    ? '同名本身是允许的，但容易误认；而且存档里已有同名容器，这个新容器日后归档时会被阻止。'
-                    : '同名本身是允许的，但容易在搜索、链接和人工整理时误认；建议用更具体的名称。',
+        const inputEl = this.contentEl.createEl('input', {
+            type: 'text',
+            value: this.currentName,
         });
-        warning.style.margin = '14px 0 0';
-        warning.style.color = 'var(--text-muted)';
-        warning.style.lineHeight = '1.6';
+        inputEl.id = 'ziminos-container-name-conflict-input';
+        inputEl.style.width = '100%';
+        label.htmlFor = inputEl.id;
+        this.inputEl = inputEl;
+
+        const errorEl = this.contentEl.createEl('p');
+        errorEl.style.minHeight = '1.4em';
+        errorEl.style.margin = '6px 0 0';
+        errorEl.style.color = 'var(--text-error)';
+        this.errorEl = errorEl;
+
+        inputEl.addEventListener('input', () => {
+            this.showError('');
+        });
+        inputEl.addEventListener('keydown', (event: KeyboardEvent) => {
+            if (event.key !== 'Enter' || event.isComposing) return;
+
+            event.preventDefault();
+            this.submit();
+        });
 
         const buttonBar = this.contentEl.createDiv();
         buttonBar.style.display = 'flex';
@@ -163,23 +188,92 @@ class ContainerNameConflictModal extends Modal {
         buttonBar.style.marginTop = '18px';
 
         new ButtonComponent(buttonBar)
-            .setButtonText(`仍然创建${this.kindLabel}`)
-            .onClick(() => this.settle(true));
+            .setButtonText('取消')
+            .onClick(() => this.close());
 
-        const cancelButton = new ButtonComponent(buttonBar)
-            .setButtonText('取消，换个名称')
+        new ButtonComponent(buttonBar)
+            .setButtonText('使用新名称继续')
             .setCta()
-            .onClick(() => this.settle(false));
+            .onClick(() => this.submit());
 
-        cancelButton.buttonEl.focus();
+        inputEl.focus();
+        inputEl.select();
     }
 
     onClose(): void {
-        this.settle(false);
+        this.settle(null);
         this.contentEl.empty();
     }
 
-    private settle(value: boolean): void {
+    /** 用当前冲突事实重画列表；再次撞名时不关窗，只替换这一区 */
+    private renderConflicts(): void {
+        if (!this.conflictEl) return;
+
+        this.conflictEl.empty();
+
+        const description = this.conflictEl.createEl('p', {
+            text: `库中已经有名为“${this.currentName}”的容器：`,
+        });
+        description.style.margin = '0 0 12px';
+
+        const list = this.conflictEl.createEl('ul');
+        list.style.margin = '0';
+        list.style.paddingLeft = '1.4em';
+
+        for (const conflict of this.currentConflicts) {
+            const item = list.createEl('li');
+            item.style.margin = '6px 0';
+
+            item.createEl('strong', { text: `${conflict.roles.join(' / ')}：` });
+            const path = item.createEl('code', { text: conflict.path });
+            path.style.overflowWrap = 'anywhere';
+        }
+
+        const guidance = this.conflictEl.createEl('p', {
+            text: '请在下方直接换一个名称；确认后会继续刚才的创建流程，不需要重新运行命令。',
+        });
+        guidance.style.margin = '14px 0 0';
+        guidance.style.color = 'var(--text-muted)';
+        guidance.style.lineHeight = '1.6';
+    }
+
+    /** 校验并重查新名称；仍冲突时留在原弹窗，可继续修改 */
+    private submit(): void {
+        if (!this.inputEl) return;
+
+        const candidate = this.inputEl.value.trim();
+
+        if (!candidate) {
+            this.showError(`请输入新的${this.kindLabel}名称。`);
+            return;
+        }
+
+        if (/[\\/]/.test(candidate) || candidate === '.' || candidate === '..') {
+            this.showError(`${this.kindLabel}名称不能包含斜杠、反斜杠，也不能是 . 或 ..。`);
+            return;
+        }
+
+        const conflicts = findContainerNameConflicts(this.app, this.settings, candidate);
+
+        if (conflicts.length > 0) {
+            this.currentName = candidate;
+            this.currentConflicts = conflicts;
+            this.renderConflicts();
+            this.showError('这个名称仍然重复，请再换一个。');
+            this.inputEl.focus();
+            this.inputEl.select();
+            return;
+        }
+
+        this.settle(candidate);
+        this.close();
+    }
+
+    private showError(message: string): void {
+        if (this.errorEl) this.errorEl.setText(message);
+    }
+
+    private settle(value: string | null): void {
         if (this.settled) return;
 
         this.settled = true;

@@ -3,7 +3,7 @@
  *          依赖 core/constants 的 FIELDS/FOLDERS/NOTE_TYPES、core/folders 的
  *          ensureFolderPath/normalizeFolderPath、core/modals 的 TextInputModal/ChoiceModal、
  *          core/time 的 nowStampAndUid、core/types 的 ZiminosContext/ZiminosSettings，
- *          依赖同目录 moc 的 mocPathOf、nameConflict 的四根目录同名检索/授权，
+ *          依赖同目录 moc 的 mocPathOf、nameConflict 的四根目录同名检索/同流程更名，
  *          以及 templates 的 mocContent/mocFrontmatter
  * [OUTPUT]: 对外提供 ContainerKind 契约、PROJECT_KIND/AREA_KIND/BOOK_KIND 三份规格、
  *           CreateContainerPreset 预设契约、PersonPicker 选人能力契约、createContainer
@@ -29,10 +29,7 @@ import { ChoiceModal, TextInputModal } from '../../core/modals';
 import { nowStampAndUid } from '../../core/time';
 import type { ZiminosContext, ZiminosSettings } from '../../core/types';
 import { mocPathOf } from './moc';
-import {
-    confirmContainerNameConflict,
-    findContainerNameConflicts,
-} from './nameConflict';
+import { requestAvailableContainerName } from './nameConflict';
 import { mocContent, mocFrontmatter } from './templates';
 import type { Bibliography, ContainerSection, ProjectRelation } from './templates';
 
@@ -237,45 +234,33 @@ export async function createContainer(
             return null;
         }
 
-        const containerName = nameInput.trim();
+        const requestedName = nameInput.trim();
 
         // 防止名称意外生成嵌套目录或逃回父目录
-        if (/[\\/]/.test(containerName) || containerName === '.' || containerName === '..') {
+        if (/[\\/]/.test(requestedName) || requestedName === '.' || requestedName === '..') {
             new Notice(`${kind.label}名称不能包含斜杠、反斜杠，也不能是 . 或 ..。`);
             return null;
         }
 
         // ============================================================
-        // 3. 检查目标位置与四个 PARA 容器根目录的同名事实
+        // 3. 检查四个 PARA 根目录；重名时留在本次命令里改名
         // ============================================================
 
-        const containerFolderPath = normalizePath(`${baseFolder}/${containerName}`);
-        const mocFilePath = mocPathOf(containerFolderPath, containerName);
-        const initialConflicts = findContainerNameConflicts(app, settings, containerName);
-
-        // 目标路径已有任何对象时都不能继续：这不是“同名可能是有意的”，而是会直接接管旧内容。
-        if (app.vault.getAbstractFileByPath(containerFolderPath)) {
-            new Notice(`目标位置已经存在同名文件夹或文件，未执行创建：${containerFolderPath}`);
-            return null;
-        }
-
-        const otherConflicts = initialConflicts.filter(
-            (conflict) => conflict.path !== containerFolderPath,
+        const availableName = await requestAvailableContainerName(
+            app,
+            settings,
+            kind.label,
+            requestedName,
         );
-        const acknowledgedConflictPaths = new Set(otherConflicts.map((conflict) => conflict.path));
 
-        if (
-            otherConflicts.length > 0 &&
-            !(await confirmContainerNameConflict(
-                app,
-                kind.label,
-                containerName,
-                otherConflicts,
-            ))
-        ) {
-            new Notice(`已取消创建${kind.label}“${containerName}”。`);
+        if (availableName === null) {
+            new Notice(`已取消创建${kind.label}“${requestedName}”。`);
             return null;
         }
+
+        let containerName = availableName;
+        let containerFolderPath = normalizePath(`${baseFolder}/${containerName}`);
+        let mocFilePath = mocPathOf(containerFolderPath, containerName);
 
         // ============================================================
         // 4. 归属与关联的人：领域不问，开荒的首个项目走预设也不问
@@ -344,30 +329,24 @@ export async function createContainer(
         await ensureFolderPath(app, baseFolder);
 
         // ============================================================
-        // 7. 落盘前复核同名事实，再原子地创建容器文件夹
+        // 7. 落盘前复核同名事实；期间撞名仍可在本次命令里改名
         // ============================================================
 
-        const liveConflicts = findContainerNameConflicts(app, settings, containerName);
-
-        if (app.vault.getAbstractFileByPath(containerFolderPath)) {
-            new Notice(`目标位置已经存在同名文件夹或文件，未执行创建：${containerFolderPath}`);
-            return null;
-        }
-
-        const unacknowledgedConflicts = liveConflicts.filter(
-            (conflict) =>
-                conflict.path !== containerFolderPath &&
-                !acknowledgedConflictPaths.has(conflict.path),
+        const finalName = await requestAvailableContainerName(
+            app,
+            settings,
+            kind.label,
+            containerName,
         );
 
-        if (unacknowledgedConflicts.length > 0) {
-            new Notice(
-                `操作期间出现了新的同名容器，本次创建已停止；请重新执行以确认：${unacknowledgedConflicts
-                    .map((conflict) => conflict.path)
-                    .join('、')}`,
-            );
+        if (finalName === null) {
+            new Notice(`已取消创建${kind.label}“${containerName}”。`);
             return null;
         }
+
+        containerName = finalName;
+        containerFolderPath = normalizePath(`${baseFolder}/${containerName}`);
+        mocFilePath = mocPathOf(containerFolderPath, containerName);
 
         // 最后一层不走 ensureFolderPath：它的语义是“已有目录即复用”，而新容器绝不能复用同路径旧内容。
         const createdContainerFolder = await app.vault.createFolder(containerFolderPath);

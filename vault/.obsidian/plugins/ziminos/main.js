@@ -56810,10 +56810,13 @@ function findContainerNameConflicts(app, settings, containerName) {
   }
   return conflicts;
 }
-function confirmContainerNameConflict(app, kindLabel, containerName, conflicts) {
+function requestAvailableContainerName(app, settings, kindLabel, containerName) {
+  const conflicts = findContainerNameConflicts(app, settings, containerName);
+  if (conflicts.length === 0) return Promise.resolve(containerName);
   return new Promise((resolve) => {
     new ContainerNameConflictModal(
       app,
+      settings,
       kindLabel,
       containerName,
       conflicts,
@@ -56822,55 +56825,118 @@ function confirmContainerNameConflict(app, kindLabel, containerName, conflicts) 
   });
 }
 var ContainerNameConflictModal = class extends import_obsidian48.Modal {
-  constructor(app, kindLabel, containerName, conflicts, resolver) {
+  constructor(app, settings, kindLabel, containerName, conflicts, resolver) {
     super(app);
+    this.settings = settings;
     this.kindLabel = kindLabel;
-    this.containerName = containerName;
-    this.conflicts = conflicts;
     this.settled = false;
+    this.conflictEl = null;
+    this.inputEl = null;
+    this.errorEl = null;
+    this.currentName = containerName;
+    this.currentConflicts = conflicts;
     this.resolver = resolver;
   }
   onOpen() {
     this.modalEl.style.width = "560px";
     this.modalEl.style.maxWidth = "calc(100vw - 32px)";
-    this.titleEl.setText("\u53D1\u73B0\u540C\u540D\u5BB9\u5668");
+    this.titleEl.setText(`${this.kindLabel}\u540D\u79F0\u5DF2\u5B58\u5728`);
     this.contentEl.empty();
-    const description = this.contentEl.createEl("p", {
-      text: `\u5E93\u4E2D\u5DF2\u7ECF\u6709\u540D\u4E3A\u201C${this.containerName}\u201D\u7684\u5BB9\u5668\uFF1A`
+    this.conflictEl = this.contentEl.createDiv();
+    this.renderConflicts();
+    const label = this.contentEl.createEl("label", {
+      text: `\u8BF7\u8F93\u5165\u65B0\u7684${this.kindLabel}\u540D\u79F0`
+    });
+    label.style.display = "block";
+    label.style.margin = "16px 0 6px";
+    label.style.fontWeight = "600";
+    const inputEl = this.contentEl.createEl("input", {
+      type: "text",
+      value: this.currentName
+    });
+    inputEl.id = "ziminos-container-name-conflict-input";
+    inputEl.style.width = "100%";
+    label.htmlFor = inputEl.id;
+    this.inputEl = inputEl;
+    const errorEl = this.contentEl.createEl("p");
+    errorEl.style.minHeight = "1.4em";
+    errorEl.style.margin = "6px 0 0";
+    errorEl.style.color = "var(--text-error)";
+    this.errorEl = errorEl;
+    inputEl.addEventListener("input", () => {
+      this.showError("");
+    });
+    inputEl.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing) return;
+      event.preventDefault();
+      this.submit();
+    });
+    const buttonBar = this.contentEl.createDiv();
+    buttonBar.style.display = "flex";
+    buttonBar.style.justifyContent = "flex-end";
+    buttonBar.style.gap = "8px";
+    buttonBar.style.marginTop = "18px";
+    new import_obsidian48.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88").onClick(() => this.close());
+    new import_obsidian48.ButtonComponent(buttonBar).setButtonText("\u4F7F\u7528\u65B0\u540D\u79F0\u7EE7\u7EED").setCta().onClick(() => this.submit());
+    inputEl.focus();
+    inputEl.select();
+  }
+  onClose() {
+    this.settle(null);
+    this.contentEl.empty();
+  }
+  /** 用当前冲突事实重画列表；再次撞名时不关窗，只替换这一区 */
+  renderConflicts() {
+    if (!this.conflictEl) return;
+    this.conflictEl.empty();
+    const description = this.conflictEl.createEl("p", {
+      text: `\u5E93\u4E2D\u5DF2\u7ECF\u6709\u540D\u4E3A\u201C${this.currentName}\u201D\u7684\u5BB9\u5668\uFF1A`
     });
     description.style.margin = "0 0 12px";
-    const list = this.contentEl.createEl("ul");
+    const list = this.conflictEl.createEl("ul");
     list.style.margin = "0";
     list.style.paddingLeft = "1.4em";
-    for (const conflict of this.conflicts) {
+    for (const conflict of this.currentConflicts) {
       const item = list.createEl("li");
       item.style.margin = "6px 0";
       item.createEl("strong", { text: `${conflict.roles.join(" / ")}\uFF1A` });
       const path = item.createEl("code", { text: conflict.path });
       path.style.overflowWrap = "anywhere";
     }
-    const hasArchiveConflict = this.conflicts.some(
-      (conflict) => conflict.roles.includes("\u5B58\u6863")
-    );
-    const willBeArchived = this.kindLabel === "\u9879\u76EE" || this.kindLabel === "\u8BFB\u4E66\u7B14\u8BB0";
-    const warning = this.contentEl.createEl("p", {
-      text: hasArchiveConflict && willBeArchived ? "\u540C\u540D\u672C\u8EAB\u662F\u5141\u8BB8\u7684\uFF0C\u4F46\u5BB9\u6613\u8BEF\u8BA4\uFF1B\u800C\u4E14\u5B58\u6863\u91CC\u5DF2\u6709\u540C\u540D\u5BB9\u5668\uFF0C\u8FD9\u4E2A\u65B0\u5BB9\u5668\u65E5\u540E\u5F52\u6863\u65F6\u4F1A\u88AB\u963B\u6B62\u3002" : "\u540C\u540D\u672C\u8EAB\u662F\u5141\u8BB8\u7684\uFF0C\u4F46\u5BB9\u6613\u5728\u641C\u7D22\u3001\u94FE\u63A5\u548C\u4EBA\u5DE5\u6574\u7406\u65F6\u8BEF\u8BA4\uFF1B\u5EFA\u8BAE\u7528\u66F4\u5177\u4F53\u7684\u540D\u79F0\u3002"
+    const guidance = this.conflictEl.createEl("p", {
+      text: "\u8BF7\u5728\u4E0B\u65B9\u76F4\u63A5\u6362\u4E00\u4E2A\u540D\u79F0\uFF1B\u786E\u8BA4\u540E\u4F1A\u7EE7\u7EED\u521A\u624D\u7684\u521B\u5EFA\u6D41\u7A0B\uFF0C\u4E0D\u9700\u8981\u91CD\u65B0\u8FD0\u884C\u547D\u4EE4\u3002"
     });
-    warning.style.margin = "14px 0 0";
-    warning.style.color = "var(--text-muted)";
-    warning.style.lineHeight = "1.6";
-    const buttonBar = this.contentEl.createDiv();
-    buttonBar.style.display = "flex";
-    buttonBar.style.justifyContent = "flex-end";
-    buttonBar.style.gap = "8px";
-    buttonBar.style.marginTop = "18px";
-    new import_obsidian48.ButtonComponent(buttonBar).setButtonText(`\u4ECD\u7136\u521B\u5EFA${this.kindLabel}`).onClick(() => this.settle(true));
-    const cancelButton = new import_obsidian48.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88\uFF0C\u6362\u4E2A\u540D\u79F0").setCta().onClick(() => this.settle(false));
-    cancelButton.buttonEl.focus();
+    guidance.style.margin = "14px 0 0";
+    guidance.style.color = "var(--text-muted)";
+    guidance.style.lineHeight = "1.6";
   }
-  onClose() {
-    this.settle(false);
-    this.contentEl.empty();
+  /** 校验并重查新名称；仍冲突时留在原弹窗，可继续修改 */
+  submit() {
+    if (!this.inputEl) return;
+    const candidate = this.inputEl.value.trim();
+    if (!candidate) {
+      this.showError(`\u8BF7\u8F93\u5165\u65B0\u7684${this.kindLabel}\u540D\u79F0\u3002`);
+      return;
+    }
+    if (/[\\/]/.test(candidate) || candidate === "." || candidate === "..") {
+      this.showError(`${this.kindLabel}\u540D\u79F0\u4E0D\u80FD\u5305\u542B\u659C\u6760\u3001\u53CD\u659C\u6760\uFF0C\u4E5F\u4E0D\u80FD\u662F . \u6216 ..\u3002`);
+      return;
+    }
+    const conflicts = findContainerNameConflicts(this.app, this.settings, candidate);
+    if (conflicts.length > 0) {
+      this.currentName = candidate;
+      this.currentConflicts = conflicts;
+      this.renderConflicts();
+      this.showError("\u8FD9\u4E2A\u540D\u79F0\u4ECD\u7136\u91CD\u590D\uFF0C\u8BF7\u518D\u6362\u4E00\u4E2A\u3002");
+      this.inputEl.focus();
+      this.inputEl.select();
+      return;
+    }
+    this.settle(candidate);
+    this.close();
+  }
+  showError(message2) {
+    if (this.errorEl) this.errorEl.setText(message2);
   }
   settle(value) {
     if (this.settled) return;
@@ -57171,31 +57237,24 @@ async function createContainer(ctx, kind, preset, pickPerson2) {
       new import_obsidian49.Notice(`\u672A\u8F93\u5165${kind.label}\u540D\u79F0\uFF0C\u64CD\u4F5C\u5DF2\u53D6\u6D88\u3002`);
       return null;
     }
-    const containerName = nameInput.trim();
-    if (/[\\/]/.test(containerName) || containerName === "." || containerName === "..") {
+    const requestedName = nameInput.trim();
+    if (/[\\/]/.test(requestedName) || requestedName === "." || requestedName === "..") {
       new import_obsidian49.Notice(`${kind.label}\u540D\u79F0\u4E0D\u80FD\u5305\u542B\u659C\u6760\u3001\u53CD\u659C\u6760\uFF0C\u4E5F\u4E0D\u80FD\u662F . \u6216 ..\u3002`);
       return null;
     }
-    const containerFolderPath = (0, import_obsidian49.normalizePath)(`${baseFolder}/${containerName}`);
-    const mocFilePath = mocPathOf(containerFolderPath, containerName);
-    const initialConflicts = findContainerNameConflicts(app, settings, containerName);
-    if (app.vault.getAbstractFileByPath(containerFolderPath)) {
-      new import_obsidian49.Notice(`\u76EE\u6807\u4F4D\u7F6E\u5DF2\u7ECF\u5B58\u5728\u540C\u540D\u6587\u4EF6\u5939\u6216\u6587\u4EF6\uFF0C\u672A\u6267\u884C\u521B\u5EFA\uFF1A${containerFolderPath}`);
-      return null;
-    }
-    const otherConflicts = initialConflicts.filter(
-      (conflict) => conflict.path !== containerFolderPath
-    );
-    const acknowledgedConflictPaths = new Set(otherConflicts.map((conflict) => conflict.path));
-    if (otherConflicts.length > 0 && !await confirmContainerNameConflict(
+    const availableName = await requestAvailableContainerName(
       app,
+      settings,
       kind.label,
-      containerName,
-      otherConflicts
-    )) {
-      new import_obsidian49.Notice(`\u5DF2\u53D6\u6D88\u521B\u5EFA${kind.label}\u201C${containerName}\u201D\u3002`);
+      requestedName
+    );
+    if (availableName === null) {
+      new import_obsidian49.Notice(`\u5DF2\u53D6\u6D88\u521B\u5EFA${kind.label}\u201C${requestedName}\u201D\u3002`);
       return null;
     }
+    let containerName = availableName;
+    let containerFolderPath = (0, import_obsidian49.normalizePath)(`${baseFolder}/${containerName}`);
+    let mocFilePath = mocPathOf(containerFolderPath, containerName);
     let relation;
     if (kind.asksOwnership && !preset) {
       const ownership = await new ChoiceModal(app, {
@@ -57232,20 +57291,19 @@ async function createContainer(ctx, kind, preset, pickPerson2) {
     }
     const description = descriptionInput.trim();
     await ensureFolderPath(app, baseFolder);
-    const liveConflicts = findContainerNameConflicts(app, settings, containerName);
-    if (app.vault.getAbstractFileByPath(containerFolderPath)) {
-      new import_obsidian49.Notice(`\u76EE\u6807\u4F4D\u7F6E\u5DF2\u7ECF\u5B58\u5728\u540C\u540D\u6587\u4EF6\u5939\u6216\u6587\u4EF6\uFF0C\u672A\u6267\u884C\u521B\u5EFA\uFF1A${containerFolderPath}`);
-      return null;
-    }
-    const unacknowledgedConflicts = liveConflicts.filter(
-      (conflict) => conflict.path !== containerFolderPath && !acknowledgedConflictPaths.has(conflict.path)
+    const finalName = await requestAvailableContainerName(
+      app,
+      settings,
+      kind.label,
+      containerName
     );
-    if (unacknowledgedConflicts.length > 0) {
-      new import_obsidian49.Notice(
-        `\u64CD\u4F5C\u671F\u95F4\u51FA\u73B0\u4E86\u65B0\u7684\u540C\u540D\u5BB9\u5668\uFF0C\u672C\u6B21\u521B\u5EFA\u5DF2\u505C\u6B62\uFF1B\u8BF7\u91CD\u65B0\u6267\u884C\u4EE5\u786E\u8BA4\uFF1A${unacknowledgedConflicts.map((conflict) => conflict.path).join("\u3001")}`
-      );
+    if (finalName === null) {
+      new import_obsidian49.Notice(`\u5DF2\u53D6\u6D88\u521B\u5EFA${kind.label}\u201C${containerName}\u201D\u3002`);
       return null;
     }
+    containerName = finalName;
+    containerFolderPath = (0, import_obsidian49.normalizePath)(`${baseFolder}/${containerName}`);
+    mocFilePath = mocPathOf(containerFolderPath, containerName);
     const createdContainerFolder = await app.vault.createFolder(containerFolderPath);
     const existingMocFile = app.vault.getAbstractFileByPath(mocFilePath);
     if (existingMocFile) {
