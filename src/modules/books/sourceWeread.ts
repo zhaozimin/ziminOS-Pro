@@ -2,7 +2,9 @@
  * [INPUT]: 依赖 obsidian 的 Platform/Notice/requestUrl（后者是公开 API，可自定义请求头与携带 Cookie）；
  *          运行时按需 require('@electron/remote') 取 BrowserWindow（登录窗口，仅桌面端）；
  *          依赖 core/types 的 ZiminosContext、parsers 的 ParsedHighlight
- * [OUTPUT]: 对外提供 wereadAvailable、loginWeread/disconnectWeread/disposeWereadSession 登录态生命周期、
+ * [OUTPUT]: 对外提供 wereadCookie（这台机器上的登录态，全插件唯一读它的地方）、
+ *           migrateWereadCookie（老库 data.json 的一次性搬迁）、wereadAvailable、
+ *           loginWeread/disconnectWeread/disposeWereadSession 登录态生命周期、
  *           listWereadBooks、readWereadBookHighlights
  * [POS]: 划线来源之一：微信读书。三个来源里唯一需要登录的一个，也因此是唯一会失效的一个。
  *        它与另两个来源的分工写在这里：苹果图书与 Kindle 的数据在本机，读它们是确定的；
@@ -22,6 +24,11 @@
  *        两套都要认），只看状态码就会把一次失败当成「这本书一条划线都没有」讲给学员听。
  *        令牌刻意不落盘：它随时能拿登录态再换，存下来只会多一份会过期、要维护、
  *        断开时要记得一并清掉的凭据——全插件的持久凭据仍然只有 Cookie 一份。
+ *        而那一份**住在 Obsidian 官方的 SecretStorage 里，不在 data.json**：
+ *        data.json 随笔记库走（Sync、iCloud、备份、打包发给同学），而这串字是一把
+ *        能读学员整个微信读书账号的钥匙。它此前一直待在 data.json 里，靠 `.obsidian/.gitignore`
+ *        挡住 git——挡得住版本库，挡不住同步与备份。同一个仓库里 Eagle 那枚只能碰
+ *        本机资源库的配对令牌反而用着更强的存法，弱的那套却护着更值钱的东西。
  *        章节名有两个来源：划线接口自带的章节表，以及想法条目自带的 chapterName；
  *        后者不是冗余——一本书可能一条纯划线都没有，那时章节表是空的
  *        部分取数也必须诚实：想法接口失败时可以保留已取回的划线，
@@ -78,12 +85,66 @@ const LOGIN_TIMEOUT_MS = 120000;
 let activeLoginCancel: (() => void) | null = null;
 
 // ============================================================
+// 凭据
+// ============================================================
+
+/**
+ * 登录态在这台机器上的去处。
+ *
+ * **它不进 data.json。** 那份文件是随笔记库走的：Obsidian Sync、iCloud、Dropbox、一次备份、
+ * 以及学员把整个库打包发给同学的那一刻，它都跟着走。而这串字是一把能读他整个微信读书账号的钥匙——
+ * 比 Eagle 那个只能碰本机资源库的配对令牌敏感得多，却一直用着更弱的存法。
+ * 同一个仓库里两种秘密用两套标准，而弱的那套护着更值钱的东西，这不是取舍，是一笔没还的债。
+ *
+ * `SecretStorage` 自 Obsidian 1.11.4 起就是公开 API（`App.secretStorage`），
+ * 而本插件的 minAppVersion 是 1.13.0——没有哪个用户够不着它。
+ * 它按库隔离，所以键里不必再拼库名；这条与 Eagle 那枚令牌的写法保持一致。
+ */
+const WEREAD_COOKIE_SECRET_ID = 'ziminos-weread-cookie';
+
+/**
+ * 这台机器上存着的登录态。空串＝没连过。
+ *
+ * 全模块只有这一处读它，设置页也经注入问到这里来——凭据有两个读法，迟早有一处读的是旧地方。
+ */
+export function wereadCookie(ctx: ZiminosContext): string {
+    return ctx.app.secretStorage.getSecret(WEREAD_COOKIE_SECRET_ID)?.trim() ?? '';
+}
+
+/** 写下登录态。`setSecret` 对非法 ID 会抛，所以调用方必须把它当成会失败的一步 */
+function storeWereadCookie(ctx: ZiminosContext, cookie: string): void {
+    ctx.app.secretStorage.setSecret(WEREAD_COOKIE_SECRET_ID, cookie);
+}
+
+/**
+ * 把老库 data.json 里那串 Cookie 搬进 SecretStorage，并把原处抹干净。
+ *
+ * 搬不过去就**原样留着**：宁可它继续待在 data.json 里，也不能在搬运途中把学员的登录态弄丢——
+ * 丢了他得重新扫一次码，而那是我们替他做的决定造成的。
+ * 新处已经有值时旧的直接作废：那是他后来重新连过一次，此刻有效的是新的那份。
+ */
+export async function migrateWereadCookie(ctx: ZiminosContext): Promise<void> {
+    const legacy = ctx.settings.wereadCookie.trim();
+
+    if (!legacy) return;
+
+    try {
+        if (!wereadCookie(ctx)) storeWereadCookie(ctx, legacy);
+    } catch {
+        return;
+    }
+
+    ctx.settings.wereadCookie = '';
+    await ctx.saveSettings();
+}
+
+// ============================================================
 // 登录
 // ============================================================
 
-/** 已经连上微信读书了没有。判据是设置里存着 Cookie，真假由第一次取数去验 */
+/** 已经连上微信读书了没有。判据是本机存着 Cookie，真假由第一次取数去验 */
 export function wereadAvailable(ctx: ZiminosContext): boolean {
-    return Platform.isDesktopApp && !!ctx.settings.wereadCookie.trim();
+    return Platform.isDesktopApp && !!wereadCookie(ctx);
 }
 
 /**
@@ -168,8 +229,14 @@ export async function loginWeread(ctx: ZiminosContext): Promise<boolean> {
                         .join('; ');
 
                     clearCachedKey();
-                    ctx.settings.wereadCookie = cookie;
-                    await ctx.saveSettings();
+                    storeWereadCookie(ctx, cookie);
+
+                    // 老库那份留在 data.json 里的同时抹掉：凭据只该有一个去处
+                    if (ctx.settings.wereadCookie) {
+                        ctx.settings.wereadCookie = '';
+                        await ctx.saveSettings();
+                    }
+
                     finish(true);
                 } catch {
                     finish(false);
@@ -188,8 +255,13 @@ export async function loginWeread(ctx: ZiminosContext): Promise<boolean> {
 export async function disconnectWeread(ctx: ZiminosContext): Promise<void> {
     activeLoginCancel?.();
     clearCachedKey();
-    ctx.settings.wereadCookie = '';
-    await ctx.saveSettings();
+    storeWereadCookie(ctx, '');
+
+    // 从老库升上来、还没来得及迁移就点了断开的，那一份也一起抹掉
+    if (ctx.settings.wereadCookie) {
+        ctx.settings.wereadCookie = '';
+        await ctx.saveSettings();
+    }
 }
 
 /** 插件卸载时收掉扫码窗口与全部内存凭据 */
@@ -256,7 +328,7 @@ async function api(ctx: ZiminosContext, path: string): Promise<Record<string, un
         url: `${BASE}${path}`,
         method: 'GET',
         headers: {
-            Cookie: ctx.settings.wereadCookie,
+            Cookie: wereadCookie(ctx),
             Referer: `${BASE}/`,
             'User-Agent':
                 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
@@ -307,7 +379,7 @@ function clearCachedKey(): void {
 
 /** 用登录态换一枚取数令牌。换不到返回空串——调用方据此降级，而不是抛错中断 */
 async function apiKey(ctx: ZiminosContext): Promise<string> {
-    const cookie = ctx.settings.wereadCookie.trim();
+    const cookie = wereadCookie(ctx);
 
     if (cachedCookie !== cookie) {
         cachedKey = '';

@@ -192,9 +192,17 @@ export interface SettingActions {
     readonly initialize: () => Promise<void>;
     /**
      * 开微信读书的扫码登录窗口。登录逻辑住在 books 模块，设置页因此不 import 它。
-     * 返回是否连上；设置页不看这个值——它连完就整页重建，状态现读设置对象。
+     * 返回是否连上；设置页不看这个值——它连完就整页重建，状态现问 isWereadConnected。
      */
     readonly connectWeread: () => Promise<boolean>;
+    /**
+     * 连上微信读书了没有。
+     *
+     * 它必须是个洞而不是读一眼设置对象：那串 Cookie 自本版起住在 Obsidian 的 SecretStorage 里，
+     * 不再随 data.json 走，而「凭据存在哪」是 books 模块自己的事。
+     * 设置页若自己去翻那个 key，凭据就有了第二个读法——搬家的时候必然只搬一处。
+     */
+    readonly isWereadConnected: () => boolean;
     /**
      * 断开微信读书：清掉持久 Cookie，也清掉同一会话里那份内存令牌。
      *

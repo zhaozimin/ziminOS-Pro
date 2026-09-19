@@ -59,7 +59,13 @@ import {
     registerReadBookCommand,
     registerSyncHighlightsCommand,
 } from './modules/books/readBook';
-import { disconnectWeread, disposeWereadSession, loginWeread } from './modules/books/sourceWeread';
+import {
+    disconnectWeread,
+    disposeWereadSession,
+    loginWeread,
+    migrateWereadCookie,
+    wereadCookie,
+} from './modules/books/sourceWeread';
 import { registerCursorMemory } from './modules/editing/cursorMemory';
 import { registerPasteLink } from './modules/editing/pasteLink';
 import { registerEagleBridge } from './modules/eagle';
@@ -142,6 +148,11 @@ export default class ZiminosPlugin extends Plugin {
 
         // 扫码窗口与内存令牌属于插件会话；卸载时必须一并收口
         this.register(disposeWereadSession);
+
+        // 老库那串留在 data.json 里的微信读书 Cookie 搬进 SecretStorage。
+        // 它必须早于任何读凭据的路径——命令、设置页与取数都只认新处，旧处只在这里被读最后一次。
+        // 不 await：它只是一次搬家，失败也只是让那串字继续待在原地，不该拖住插件加载
+        void migrateWereadCookie(ctx);
 
         // ============================================================
         // 开荒：各模块自报诉求，开荒模块只认这份契约，不认识任何模块
@@ -333,6 +344,8 @@ export default class ZiminosPlugin extends Plugin {
                 // 设置页不 import books 模块，因此这项能力也走注入
                 connectWeread: () => loginWeread(ctx),
                 disconnectWeread: () => disconnectWeread(ctx),
+                // 凭据存在哪是 books 模块自己的事，设置页只问「连上了没有」
+                isWereadConnected: () => wereadCookie(ctx).length > 0,
                 syncAppearanceSwitch,
                 syncRibbon,
                 syncExplorer,

@@ -448,11 +448,40 @@ def verify_pro(layout, target, vaults, fonts):
 
 
 def remove_tree(path):
-    """删临时目录。Windows 上 git 留下的只读文件、杀毒软件的短暂占用都会让一次删除失败，先去只读再重试。"""
+    """
+    删一棵目录树，返回它是不是真的不在了。
+
+    Windows 上 git 留下的只读文件、杀毒软件的短暂占用都会让一次删除失败，所以先去只读再重试。
+    但三次都失败时不能静悄悄地返回：清临时目录无所谓，撤销一次失败的安装却是另一回事——
+    调用方据此决定要不要把「没撤干净」说出去。
+
+    **判据自始至终是磁盘上它还在不在，不是「我调用成功没有」。** 两者会分叉：
+    错误处理器把异常吞下之后 rmtree 会正常返回，而那棵树原封不动；反过来，等重试这几秒的工夫，
+    占着文件的那个进程也可能已经放手。问错问题就会又一次谎报撤销，而这正是本函数要避免的那件事。
+    """
 
     def clear_readonly(func, target, _info):
-        os.chmod(target, stat.S_IWRITE)
-        func(target)
+        """
+        去掉挡路的权限位，再把失败的那一步重放一次。两处都不能想当然：
+
+        其一，`S_IWRITE` 在 Windows 上就是「去掉只读」，在 POSIX 上却是 0o200——
+        读与进入的权限一起没了，那个目录从此比原来更删不掉。所以两个平台给不同的值。
+
+        其二，rmtree 交来的 `func` 不一定只吃一个路径。在它的 fd 安全路径上，失败的那一步
+        可能是 `os.open`，重放时少一个 flags 参数抛的是 **TypeError**——它不是 OSError，
+        会穿透下面那圈重试，让 roll_back 自己把 main 掀翻：结果文件写不出来、退出码不是约定的那个，
+        而工作区里还留着半个库。真机上这一步只要有一层目录读不进去就会发生。
+        """
+        try:
+            os.chmod(target, stat.S_IWRITE if os.name == "nt" else stat.S_IRWXU)
+        except OSError:
+            return
+
+        try:
+            func(target)
+        except (OSError, TypeError):
+            # 重放不成就交给上面那圈重试与最后的磁盘校验，不把异常带出这棵树
+            pass
 
     for attempt in range(3):
         try:
@@ -460,22 +489,39 @@ def remove_tree(path):
                 shutil.rmtree(path, onexc=clear_readonly)
             else:
                 shutil.rmtree(path, onerror=clear_readonly)
-            return
         except OSError:
-            time.sleep(1 + attempt)
+            pass
+
+        if not os.path.exists(path):
+            return True
+
+        time.sleep(1 + attempt)
+
+    return not os.path.exists(path)
 
 
 def roll_back(target, before):
-    """全新安装失败时，把这一次写进工作区的东西原样撤掉：安装前它是空的，撤干净才能换别的办法重装。"""
-    for name in set(os.listdir(target)) - before - {RESULT_NAME}:
+    """
+    全新安装失败时，把这一次写进工作区的东西原样撤掉：安装前它是空的，撤干净才能换别的办法重装。
+
+    返回撤不掉的那几个名字。**撤了一半却报告撤干净了，比撤不掉本身更伤人**：
+    契约照着「已经撤干净」让智能体退回逐条安装，而残留的 `.obsidian/plugins/ziminos`
+    会让下一次运行判成「已经装过」，于是它去升级一个从来没装成的库，全程没有任何东西报错。
+    """
+    leftovers = []
+
+    for name in sorted(set(os.listdir(target)) - before - {RESULT_NAME}):
         path = os.path.join(target, name)
         if os.path.isdir(path) and not os.path.islink(path):
-            remove_tree(path)
+            if not remove_tree(path):
+                leftovers.append(name)
         else:
             try:
                 os.remove(path)
             except OSError:
-                pass
+                leftovers.append(name)
+
+    return leftovers
 
 
 def main(argv=None):
@@ -494,6 +540,15 @@ def main(argv=None):
     staging = None
     before = None
     code = EXIT_FAILED
+
+    def undo():
+        """撤销这一次写进工作区的东西，并把真实结果记进 result。两处失败出口共用一份，免得只改一处。"""
+        leftovers = roll_back(target, before)
+
+        result["rolled_back"] = not leftovers
+
+        if leftovers:
+            result["rollback_leftovers"] = leftovers
 
     try:
         if not os.path.isdir(target):
@@ -517,8 +572,7 @@ def main(argv=None):
             problems = verify_pro(layout, target, vaults, fonts) if args.edition == "pro" else verify_free(layout, target, fonts)
             if problems:
                 result.update(status="failed", problems=problems)
-                roll_back(target, before)
-                result["rolled_back"] = True
+                undo()
             else:
                 result["status"] = "ok"
                 code = EXIT_OK
@@ -529,8 +583,7 @@ def main(argv=None):
         result.update(status="failed", error="%s: %s" % (type(error).__name__, error))
         code = EXIT_FAILED
         if before is not None:
-            roll_back(target, before)
-            result["rolled_back"] = True
+            undo()
     finally:
         if staging:
             remove_tree(staging)

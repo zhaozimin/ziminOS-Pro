@@ -23876,8 +23876,19 @@ function attr(html2, pattern) {
   var _a2, _b2;
   return clean((_b2 = (_a2 = pattern.exec(html2)) == null ? void 0 : _a2[1]) != null ? _b2 : "");
 }
+var ENTITIES = {
+  "&nbsp;": " ",
+  "&amp;": "&",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&lt;": "<",
+  "&gt;": ">"
+};
 function clean(value) {
-  return value.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+  return value.replace(/<[^>]*>/g, " ").replace(/&(?:nbsp|amp|quot|#39|lt|gt);/g, (entity) => {
+    var _a2;
+    return (_a2 = ENTITIES[entity]) != null ? _a2 : entity;
+  }).replace(/\s+/g, " ").trim();
 }
 function text2(value) {
   if (value === null || value === void 0) return "";
@@ -24960,8 +24971,27 @@ var SKILL_VERSION = "1.0.3";
 var REQUIRED_COOKIES = ["wr_vid", "wr_skey"];
 var LOGIN_TIMEOUT_MS = 12e4;
 var activeLoginCancel = null;
+var WEREAD_COOKIE_SECRET_ID = "ziminos-weread-cookie";
+function wereadCookie(ctx) {
+  var _a2, _b2;
+  return (_b2 = (_a2 = ctx.app.secretStorage.getSecret(WEREAD_COOKIE_SECRET_ID)) == null ? void 0 : _a2.trim()) != null ? _b2 : "";
+}
+function storeWereadCookie(ctx, cookie) {
+  ctx.app.secretStorage.setSecret(WEREAD_COOKIE_SECRET_ID, cookie);
+}
+async function migrateWereadCookie(ctx) {
+  const legacy = ctx.settings.wereadCookie.trim();
+  if (!legacy) return;
+  try {
+    if (!wereadCookie(ctx)) storeWereadCookie(ctx, legacy);
+  } catch (e2) {
+    return;
+  }
+  ctx.settings.wereadCookie = "";
+  await ctx.saveSettings();
+}
 function wereadAvailable(ctx) {
-  return import_obsidian12.Platform.isDesktopApp && !!ctx.settings.wereadCookie.trim();
+  return import_obsidian12.Platform.isDesktopApp && !!wereadCookie(ctx);
 }
 async function loginWeread(ctx) {
   const BrowserWindow = resolveBrowserWindow();
@@ -25007,8 +25037,11 @@ async function loginWeread(ctx) {
           if (!REQUIRED_COOKIES.every((name) => names.includes(name))) return;
           const cookie = cookies.map((cookie2) => `${cookie2.name}=${cookie2.value}`).join("; ");
           clearCachedKey();
-          ctx.settings.wereadCookie = cookie;
-          await ctx.saveSettings();
+          storeWereadCookie(ctx, cookie);
+          if (ctx.settings.wereadCookie) {
+            ctx.settings.wereadCookie = "";
+            await ctx.saveSettings();
+          }
           finish(true);
         } catch (e2) {
           finish(false);
@@ -25023,8 +25056,11 @@ async function loginWeread(ctx) {
 async function disconnectWeread(ctx) {
   activeLoginCancel == null ? void 0 : activeLoginCancel();
   clearCachedKey();
-  ctx.settings.wereadCookie = "";
-  await ctx.saveSettings();
+  storeWereadCookie(ctx, "");
+  if (ctx.settings.wereadCookie) {
+    ctx.settings.wereadCookie = "";
+    await ctx.saveSettings();
+  }
 }
 function disposeWereadSession() {
   activeLoginCancel == null ? void 0 : activeLoginCancel();
@@ -25045,7 +25081,7 @@ async function api(ctx, path) {
     url: `${BASE}${path}`,
     method: "GET",
     headers: {
-      Cookie: ctx.settings.wereadCookie,
+      Cookie: wereadCookie(ctx),
       Referer: `${BASE}/`,
       "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     },
@@ -25070,7 +25106,7 @@ function clearCachedKey() {
   cachedCookie = "";
 }
 async function apiKey(ctx) {
-  const cookie = ctx.settings.wereadCookie.trim();
+  const cookie = wereadCookie(ctx);
   if (cachedCookie !== cookie) {
     cachedKey = "";
     cachedCookie = cookie;
@@ -61109,14 +61145,17 @@ var SettingsPanels = class {
   /**
    * 微信读书的连接状态，加一个按钮。
    *
-   * 它是设置而不只是命令，理由是「人主导」：这是全插件唯一一份存在 data.json 里的凭据，
+   * 它是设置而不只是命令，理由是「人主导」：这是全插件唯一一份持久凭据，
    * 那就必须有一处能看见它在不在、并且能当场撤掉。命令面板里那条「连接微信读书」
    * 只能连不能断——一条只往一个方向走的命令，不构成开关。
    * 断开只清掉本机存的那串 Cookie，不去动微信读书那边的任何东西：
    * 插件从来不代替用户管理他在别人家的账号。
+   *
+   * 状态经注入问出来而不是读设置对象：那串 Cookie 住在 SecretStorage 里，
+   * 而「凭据存在哪」是 books 模块自己的事，与断开走的是同一条纪律。
    */
   renderWereadRow(containerEl) {
-    const connected = !!this.ctx.settings.wereadCookie.trim();
+    const connected = this.actions.isWereadConnected();
     new import_obsidian63.Setting(containerEl).setName(TEXTS6.wereadName).setDesc(
       import_obsidian63.Platform.isDesktopApp ? connected ? TEXTS6.wereadConnected : TEXTS6.wereadDisconnected : TEXTS6.wereadMobile
     ).addButton((button) => {
@@ -61666,6 +61705,7 @@ var ZiminosPlugin = class extends import_obsidian65.Plugin {
       edition
     };
     this.register(disposeWereadSession);
+    void migrateWereadCookie(ctx);
     const collectSeeds = () => [
       projectsSeed(),
       reviewSeed(ctx),
@@ -61759,6 +61799,8 @@ var ZiminosPlugin = class extends import_obsidian65.Plugin {
         // 设置页不 import books 模块，因此这项能力也走注入
         connectWeread: () => loginWeread(ctx),
         disconnectWeread: () => disconnectWeread(ctx),
+        // 凭据存在哪是 books 模块自己的事，设置页只问「连上了没有」
+        isWereadConnected: () => wereadCookie(ctx).length > 0,
         syncAppearanceSwitch,
         syncRibbon,
         syncExplorer,

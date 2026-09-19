@@ -67,7 +67,7 @@ v1_main_matching_head() {
     probe="$(mktemp -d /tmp/ziminos-v1-probe.XXXXXX)"
     if ! git init --quiet --bare "$probe" || ! git -C "$probe" fetch --quiet --depth 1 --filter=blob:none "$V1_REMOTE" main; then
         rm -rf "$probe"
-        echo "连不上第一版仓库（$V1_REMOTE），确认不了它与本地是否一致" >&2
+        echo "连不上第一版仓库（${V1_REMOTE}），确认不了它与本地是否一致" >&2
         return 1
     fi
     commit="$(git -C "$probe" rev-parse FETCH_HEAD)"
@@ -253,7 +253,7 @@ notes="$out_dir/$name.release.md"
 cat > "$notes" << NOTES
 **不用智能体、不用装 Git，下载就能装。** 需要 Obsidian 1.13.0 或更高版本。
 
-1. 下载附件 **$name.zip**（$size）。页面上如果还有 \`v$version.zip\`、\`v$version.tar.gz\`，那是 Gitee 自动附带的源代码，不是安装包。
+1. 下载附件 **${name}.zip**（${size}）。页面上如果还有 \`v$version.zip\`、\`v$version.tar.gz\`，那是 Gitee 自动附带的源代码，不是安装包。
 2. 解压，双击里面的「安装说明.html」，照着做：装字体 → 用 Obsidian 打开「ziminOS」文件夹 → 设置里点「初始化」。
 3. 已经装过的人：只看安装说明里的「以后怎么升级」，**不要**把新的「ziminOS」文件夹覆盖到你原来那本库上。
 

@@ -129,11 +129,17 @@ export interface ZiminosSettings {
      */
     bookTagCount: number;
     /**
-     * 微信读书的登录态 Cookie，由「连接微信读书」扫码后写入。
+     * 老库残留的微信读书登录态，**只作为一次性搬迁的入口存在**。
      *
-     * 它是全部设置里唯一一项**凭据**，因此三条纪律：只在本机 data.json 里、
-     * 绝不出现在任何笔记或提示文案里、过期时如实报「登录已过期」而不是装作没有划线。
-     * 空串＝没连过，那时读书命令只查本机的苹果图书与 Kindle。
+     * 它曾经是唯一一项住在 data.json 里的凭据，靠 `.obsidian/.gitignore` 挡着不进 git——
+     * 挡得住版本库，挡不住 Obsidian Sync、iCloud、备份，以及学员把整个库打包发给同学。
+     * 而那串字是一把能读他整个微信读书账号的钥匙，比 Eagle 那枚只能碰本机资源库的配对令牌
+     * 敏感得多，却一直用着更弱的存法。所以它搬去了 Obsidian 官方的 `SecretStorage`
+     * （见 modules/books/sourceWeread 的 `wereadCookie`），那里按库隔离、不随 data.json 同步。
+     *
+     * 字段留着不删，是因为**老库的 data.json 里还有值**：normalizeSettings 得先把它读出来，
+     * `migrateWereadCookie` 才搬得走。搬完即写回空串，此后它永远是空的。
+     * 新代码一律不读它——凭据有两个读法，搬家时就只会搬一处。
      */
     wereadCookie: string;
     /**

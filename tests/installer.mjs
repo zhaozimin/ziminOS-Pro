@@ -12,7 +12,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -120,6 +120,139 @@ test('安装程序：中途出错时把写进工作区的东西原样撤掉，�
         assert.deepEqual(readdirSync(target).filter((name) => name !== RESULT_NAME), ['.agent-config'], '回滚没撤干净，或者撤掉了原本就在的东西');
     } finally {
         rmSync(work, { recursive: true, force: true });
+    }
+});
+
+/**
+ * 撤不干净时必须说出来。
+ *
+ * `remove_tree` 曾经在三次重试都失败后静悄悄返回，`roll_back` 不问结果，`main` 无条件写下
+ * `rolled_back: true`——三段各自都说得通，合起来是一句谎话。后果成链：契约照着「已经撤干净」
+ * 让智能体退回逐条安装，而残留的 `.obsidian/plugins/ziminos` 会让下一次运行判成 `upgrade`，
+ * 于是它去升级一个从来没装成的库，全程没有任何东西报错。
+ *
+ * 用「父目录不可写」制造删不掉：POSIX 下删一个条目要的是父目录的写权限，
+ * 这正是 Windows 上文件被占用的等价情形，而那是这个安装器的主战场。
+ */
+test('安装程序：撤不干净时点名撤不掉的那几个，不报告「已撤销」', {
+    skip: process.platform === 'win32'
+        ? '这条靠 POSIX 的「删条目要父目录写权限」造现场'
+        : process.getuid?.() === 0
+            ? 'root 不受目录权限限制，这条测不出东西'
+            : false,
+}, () => {
+    const work = scratch();
+    const target = path.join(work, 'target');
+
+    try {
+        mkdirSync(path.join(target, '.obsidian', 'plugins', 'ziminos'), { recursive: true });
+        writeFileSync(path.join(target, '.obsidian', 'plugins', 'ziminos', 'main.js'), 'x');
+        // 删一个条目要的是**它父目录**的写权限，而 clear_readonly 只会去 chmod 删不掉的那个自己，
+        // 救不回来——等价于 Windows 上那棵树被别的进程占着
+        chmodSync(target, 0o500);
+
+        const probe = spawnSync('python3', ['-c', [
+            'import importlib.util, json, sys',
+            "spec = importlib.util.spec_from_file_location('zi', sys.argv[1])",
+            'zi = importlib.util.module_from_spec(spec)',
+            'spec.loader.exec_module(zi)',
+            'zi.time.sleep = lambda seconds: None',
+            'print(json.dumps(zi.roll_back(sys.argv[2], set())))',
+        ].join('\n'), CORE, target], { encoding: 'utf8' });
+
+        assert.equal(probe.status, 0, probe.stderr);
+        assert.deepEqual(JSON.parse(probe.stdout.trim()), ['.obsidian'], 'roll_back 没把撤不掉的那个交出来');
+        assert.ok(existsSync(path.join(target, '.obsidian')), '这条用例的前提没成立：那棵树其实被删掉了');
+    } finally {
+        // roll_back 的 clear_readonly 会把删不掉的那几层 chmod 成「只写」，
+        // 不整棵恢复的话，连这条用例自己的临时目录都清不掉
+        spawnSync('chmod', ['-R', 'u+rwx', work]);
+        rmSync(work, { recursive: true, force: true });
+    }
+});
+
+/**
+ * 回滚不许把整个安装器掀翻。
+ *
+ * `shutil.rmtree` 在它的 fd 安全路径上，会把失败的那一步原样交给错误处理器——
+ * 那一步可能是 `os.open`，而处理器里无条件的 `func(target)` 少一个 flags 参数，
+ * 抛的是 **TypeError**。它不是 OSError，穿过 remove_tree 那圈重试，从 roll_back 抛出来，
+ * 落在 main 的 `except` 块里——于是结果文件根本写不出来，退出码也不是约定的 30，
+ * 而工作区里还留着半个库。真机上这一步只要有一层目录读不进去就会发生，
+ * 而那正是这个安装器在 Windows 上最常遇到的现场。
+ *
+ * 0o200 的目录（只写、进不去）就是最短的复现路径。
+ */
+test('安装程序：读不进去的那一层不会让回滚抛出非 OSError', {
+    skip: process.platform === 'win32'
+        ? '这条靠 POSIX 权限位造一个读不进去的目录'
+        : process.getuid?.() === 0
+            ? 'root 不受目录权限限制，这条测不出东西'
+            : false,
+}, () => {
+    const work = scratch();
+    const target = path.join(work, 'target');
+    const unreadable = path.join(target, '.obsidian', 'plugins', 'ziminos');
+
+    try {
+        mkdirSync(unreadable, { recursive: true });
+        chmodSync(unreadable, 0o200);
+
+        const probe = spawnSync('python3', ['-c', [
+            'import importlib.util, json, sys',
+            "spec = importlib.util.spec_from_file_location('zi', sys.argv[1])",
+            'zi = importlib.util.module_from_spec(spec)',
+            'spec.loader.exec_module(zi)',
+            'zi.time.sleep = lambda seconds: None',
+            'print(json.dumps(zi.roll_back(sys.argv[2], set())))',
+        ].join('\n'), CORE, target], { encoding: 'utf8' });
+
+        assert.equal(probe.status, 0, `回滚自己抛了异常，结果文件将写不出来：\n${probe.stderr}`);
+        assert.doesNotMatch(probe.stderr, /TypeError/, '错误处理器又在无条件重放 rmtree 交来的 func');
+    } finally {
+        spawnSync('chmod', ['-R', 'u+rwx', work]);
+        rmSync(work, { recursive: true, force: true });
+    }
+});
+
+/**
+ * 两处失败出口必须走同一份记账。
+ *
+ * 自检不过与抛异常是两条独立的路，各写一遍「撤销 + 写字段」的话，
+ * 将来只会有一处被修到——这个仓库已经在 editDebts 与 formatter 上付过一次这个代价。
+ */
+test('安装程序：失败出口都经同一份记账，rolled_back 由残留决定而不是写死', () => {
+    const core = read('installer/ziminos_install.py');
+
+    assert.match(core, /def undo\(\):/, 'main 里不再有统一的撤销记账');
+    assert.match(core, /result\["rolled_back"\] = not leftovers/, 'rolled_back 不再由真实残留决定');
+    assert.match(core, /result\["rollback_leftovers"\] = leftovers/, '撤不掉的名字没有落进结果文件');
+    assert.doesNotMatch(core, /result\["rolled_back"\] = True/, '又有人把 rolled_back 写死成 True 了');
+    assert.equal((core.match(/\bundo\(\)\n/g) ?? []).length, 2, '失败出口不是两处——新增一处却没走 undo() 的话，它会再次谎报撤销');
+    // 处理器吞掉异常之后 rmtree 会正常返回而那棵树原封不动，所以判据只能是磁盘
+    assert.match(core, /return not os\.path\.exists\(path\)/, 'remove_tree 不再拿磁盘事实当判据');
+    assert.doesNotMatch(core, /os\.chmod\(target, stat\.S_IWRITE\)\n/, 'POSIX 上把目录 chmod 成 0o200 会让它更删不掉');
+});
+
+/**
+ * 契约得跟着结果文件的语义走。
+ *
+ * 那一格原本写着「脚本已经撤掉了它写进文件夹的东西」——这句话在撤不干净时不是事实，
+ * 而智能体正是照它决定下一步。代码说真话而契约还在替它打包票，等于没修。
+ */
+test('安装契约按 rolled_back 分两条路，并点名 rollback_leftovers', () => {
+    const contracts = ['skill/SKILL.md', ...(IS_PRO_REPO ? ['skill-pro/SKILL.md'] : [])];
+
+    for (const contract of contracts) {
+        const text = read(contract);
+
+        assert.match(text, /`rolled_back`/, `${contract} 没有教智能体先看 rolled_back`);
+        assert.match(text, /`rollback_leftovers`/, `${contract} 没有点名撤不掉的那几个`);
+        assert.doesNotMatch(
+            text,
+            /脚本已经撤掉了它写进文件夹的东西/,
+            `${contract} 仍在无条件断言回滚一定成功`,
+        );
     }
 });
 
