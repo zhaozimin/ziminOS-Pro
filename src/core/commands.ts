@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Plugin 类型；依赖 ./constants 的 PeriodKey 与 TransitionAction 两个类型
  * [OUTPUT]: 对外提供命令身份契约 CommandSpec、分组名 COMMAND_GROUPS、图标名 COMMAND_ICONS，
- *           三十八条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
+ *           四十二条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
  *           TransitionCommand）/BOOK_COMMANDS/INSPIRATION_COMMAND/PERIOD_COMMANDS/THEME_COMMAND/
  *           OPEN_CALENDAR_COMMAND/CONTACT_COMMANDS/CLIENT_COMMANDS/APPEARANCE_COMMAND/FORMAT_COMMAND/
  *           RECENT_FILES_COMMAND/COPY_PATH_COMMAND/EXPORT_COMMAND/LEGACY_COMMANDS，
@@ -108,7 +108,11 @@ export const GROUP_COLORS: Readonly<Record<CommandGroup, string>> = {
 };
 
 /**
- * 四十一个图标名：三十八条命令各一枚，加设置页那三张没有命令与之对应的标签页（边栏、文件、编辑）。
+ * 四十三个图标名：四十二条命令，加设置页那三张没有命令与之对应的标签页（边栏、文件、编辑）。
+ *
+ * 不是一一对应：三条整架导入命令共用 importLibrary 一枚。它们做的是**同一件事**——
+ * 把一个来源里全部有划线的书端进来，只是来源不同，而那也正是它们共用同一个内核的原因。
+ * 给它们各画一枚，图标就开始讲一个代码里不存在的区别。
  *
  * 一律带 `ziminos-` 前缀：图标名是 Obsidian 全局共享的命名空间，
  * 不加前缀就可能盖掉 lucide 里的同名图标，或者被后装的插件盖掉。
@@ -129,6 +133,8 @@ export const COMMAND_ICONS = {
     book: 'ziminos-book',
     readBook: 'ziminos-read-book',
     weread: 'ziminos-weread',
+    importLibrary: 'ziminos-import-library',
+    enrichBook: 'ziminos-enrich-book',
     syncHighlights: 'ziminos-sync-highlights',
     highlights: 'ziminos-highlights',
     excerpt: 'ziminos-excerpt',
@@ -171,7 +177,7 @@ export const COMMAND_ICONS = {
 } as const;
 
 // ============================================================
-// 三十八条命令：顺序即它们在左侧边栏里的先后
+// 四十二条命令：顺序即它们在左侧边栏里的先后
 // ============================================================
 
 /**
@@ -268,7 +274,19 @@ export const TRANSITION_COMMANDS: readonly TransitionCommand[] = [
  * 混进项目组会让「新建项目」与「新建读书笔记」在边栏上看起来是同一类事的两个按钮。
  */
 export const BOOK_COMMANDS: Readonly<
-    Record<'read' | 'sync' | 'connectWeread' | 'create' | 'importNotes' | 'excerpt', CommandSpec>
+    Record<
+        | 'read'
+        | 'importWeread'
+        | 'importKindle'
+        | 'importApple'
+        | 'enrich'
+        | 'sync'
+        | 'connectWeread'
+        | 'create'
+        | 'importNotes'
+        | 'excerpt',
+        CommandSpec
+    >
 > = {
     /**
      * 主干命令：一步读一本书。
@@ -281,6 +299,49 @@ export const BOOK_COMMANDS: Readonly<
         id: 'read-book',
         name: '读一本书',
         icon: COMMAND_ICONS.readBook,
+        group: COMMAND_GROUPS.books,
+    },
+    /**
+     * 整架端走：把一个来源里全部有划线或有笔记的书一次导进来。
+     *
+     * 三条命令而不是一条带来源选择的命令，判据是**用户会到哪里找它**：
+     * 他插上 Kindle 的那一刻，心里想的是「我的 Kindle 里有东西要进来」，
+     * 而不是「我要导入读书笔记，来源是 Kindle」。三条共用同一个内核，
+     * 差别只有「枚举哪一批书」——所以它们也共用同一枚图标。
+     *
+     * 这三条**一次都不联网查豆瓣**：八十本书就是一百六十次豆瓣请求，
+     * 几十次之后必被拦，而那时候一半的书有封面、一半没有，谁也说不清是哪一半。
+     * 书目交给「补齐书籍信息」一本一本补。
+     */
+    importWeread: {
+        id: 'import-weread-library',
+        name: '导入微信读书全部笔记',
+        icon: COMMAND_ICONS.importLibrary,
+        group: COMMAND_GROUPS.books,
+    },
+    importKindle: {
+        id: 'import-kindle-library',
+        name: '导入 Kindle 全部笔记',
+        icon: COMMAND_ICONS.importLibrary,
+        group: COMMAND_GROUPS.books,
+    },
+    importApple: {
+        id: 'import-apple-books-library',
+        name: '导入苹果图书全部笔记',
+        icon: COMMAND_ICONS.importLibrary,
+        group: COMMAND_GROUPS.books,
+    },
+    /**
+     * 给一本书补上豆瓣那套书目（封面、出版社、ISBN、分类词）。
+     *
+     * 它一次只查一本：**这是整个读书模块里唯一一条与豆瓣打交道的批量安全阀**。
+     * 它同时是认错之后的纠正入口——已经查过一次的书再运行它，一定弹候选让人指认，
+     * 因为这时候他按下它的唯一理由就是「上次那本不对」。
+     */
+    enrich: {
+        id: 'enrich-book-info',
+        name: '补齐书籍信息',
+        icon: COMMAND_ICONS.enrichBook,
         group: COMMAND_GROUPS.books,
     },
     /** 读到一半再拉一次划线。与建书共用同一套取数与合并，只是不再建档 */

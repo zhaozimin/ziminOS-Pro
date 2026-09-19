@@ -1,5 +1,6 @@
 /**
- * [INPUT]: 依赖同目录 sourceAppleBooks 与 sourceKindle 的探测与取数函数，
+ * [INPUT]: 依赖同目录 sourceAppleBooks 与 sourceKindle 的探测与取数函数、
+ *          titleMatch 的 matchByTitle（书名比对那把尺子只有一把），
  *          以及 parsers 的 ParsedHighlight 类型
  * [OUTPUT]: 对外提供 SourceBook/SourceHit 契约、collectHighlightsFor（按书名从全部可用来源取划线并保留失败说明）
  *           与 availableSourceLabels（这台机器上此刻有哪些来源）
@@ -18,6 +19,7 @@
  */
 
 import type { ParsedHighlight } from './parsers';
+import { matchByTitle } from './titleMatch';
 import type { ZiminosContext } from '../../core/types';
 import { listWereadBooks, readWereadBookHighlights, wereadAvailable } from './sourceWeread';
 import {
@@ -194,80 +196,26 @@ function unmatchedHit(label: string, names: readonly string[]): SourceHit {
 /**
  * 在一批书里找出「就是这一本」。
  *
- * 三轮从严到宽：逐字 → 去掉书名号标点空白后逐字 → 互相包含。
- * 最后那一轮是为副标题准备的：豆瓣叫《卡片笔记写作法》，
- * 苹果图书里可能叫《卡片笔记写作法：如何实现从阅读到写作》。
- * 但互相包含也要求较短的那个不少于四个字——两个字的书名（《活着》）
- * 会包含进太多别的书里，那种误配比漏配难发现得多。
- * 有作者信息时，第三轮还要求作者也对得上一半，再收一道口。
+ * 规则本身住在 titleMatch——同一把尺子还要量另外两处（批量导入时「这本书是不是已经在库里」、
+ * 补书目时「豆瓣候选里哪一条就是它」）。本函数只负责把来源的形状翻译成那把尺子认得的形状：
+ * 来源里的一本书只有一个名字，而我们手上的这本书有好几个（主书名、带副标题的全名）。
  *
- * **收 names 而不是一个 title**，是 2026-08-14 真机实测逼出来的一条。
- * 那本书豆瓣写作「思维 : 关于决策、问题解决与预测的新科学」，
- * 主书名只有「思维」两个字（文件名只能用主书名，副标题太长），
- * 而微信读书那头写的是带副标题的全名。于是逐字不中、归一不中，
- * 第三轮又被那道四字门槛挡在外面——一本明明有笔记的书，机器一条都取不到。
- *
- * 出路不是把门槛放宽到两个字（那会让《活着》匹配上一堆书，误配比漏配难发现得多），
- * 而是**把这本书已知的每一个名字都拿来试**：主书名、带副标题的全名，都是它。
- * 全名一到手，第二轮的归一比对就直接命中了，一道门槛都不用动。
- * 这两个名字建书时本来就在手上（全名正是写进 aliases 的那个），从来不必现算。
+ * **收 names 而不是一个 title**，是 2026-08-14 真机实测逼出来的一条：
+ * 那本书豆瓣写作「思维 : 关于决策、问题解决与预测的新科学」，主书名只有「思维」两个字，
+ * 而微信读书那头写的是带副标题的全名，于是三轮全落空。把已知的每个名字都拿来试，
+ * 全名一到手第二轮就直接命中，一道门槛都不用动。
  */
 function matchBook<T extends SourceBook>(
     books: readonly T[],
     names: readonly string[],
     author: string,
 ): T | null {
-    // 空名字不参与比对：normalize('') 是空串，而空串被任何字符串包含，
-    // 第三轮会拿它匹配上书架第一本书——一次静默的、100% 错的命中
-    const candidates = names.map((name) => name.trim()).filter(Boolean);
+    // 带着原对象一起进匹配器：匹配器认的是名字，调用方要的是那本书本身
+    const wrapped = books.map((book) => ({
+        titles: [book.title],
+        author: book.author,
+        book,
+    }));
 
-    for (const name of candidates) {
-        const exact = books.find((book) => book.title === name);
-
-        if (exact) return exact;
-    }
-
-    for (const name of candidates) {
-        const key = normalize(name);
-
-        if (!key) continue;
-
-        const normalized = books.find((book) => normalize(book.title) === key);
-
-        if (normalized) return normalized;
-    }
-
-    const authorKey = normalize(author);
-
-    for (const name of candidates) {
-        const key = normalize(name);
-
-        if (key.length < 4) continue;
-
-        const loose = books.find((book) => {
-            const candidate = normalize(book.title);
-            const overlaps =
-                candidate.length >= 4 && (candidate.includes(key) || key.includes(candidate));
-
-            if (!overlaps) return false;
-            if (!authorKey) return true;
-
-            // 作者对得上一半即可：豆瓣写「[德] 申克·阿伦斯」，设备里可能只有「申克·阿伦斯」
-            const bookAuthor = normalize(book.author);
-
-            return !bookAuthor || bookAuthor.includes(authorKey) || authorKey.includes(bookAuthor);
-        });
-
-        if (loose) return loose;
-    }
-
-    return null;
-}
-
-/** 归一：剥书名号、去掉全部空白与常见标点，只留「是不是同一本书」这件事 */
-function normalize(value: string): string {
-    return value
-        .replace(/^《|》$/g, '')
-        .replace(/[\s：:，,。.、·・\-—_()（）[\]【】"'"'?？!！]/g, '')
-        .toLowerCase();
+    return matchByTitle(wrapped, { titles: names, author })?.book ?? null;
 }

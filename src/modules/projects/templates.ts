@@ -15,7 +15,7 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { CARD_FIELDS } from '../../core/constants';
+import { BOOK_FIELDS, CARD_FIELDS } from '../../core/constants';
 
 // ============================================================
 // 模板骨架的字段与视图定义
@@ -275,15 +275,16 @@ function bibliographyLines(bibliography?: Bibliography): string[] {
     if (!bibliography) return [];
 
     const { translators, publisher, publishDate, pages, cover } = bibliography;
+    const key = BOOK_FIELDS;
 
     return [
         ...(translators?.length
-            ? ['translator:', ...translators.map((name) => `  - ${toYamlString(name)}`)]
+            ? [`${key.translators}:`, ...translators.map((name) => `  - ${toYamlString(name)}`)]
             : []),
-        ...(publisher ? [`publisher: ${toYamlString(publisher)}`] : []),
-        ...(publishDate ? [`published: ${toYamlString(publishDate)}`] : []),
-        ...(pages ? [`pages: ${pages}`] : []),
-        ...(cover ? [`cover: ${cover}`] : []),
+        ...(publisher ? [`${key.publisher}: ${toYamlString(publisher)}`] : []),
+        ...(publishDate ? [`${key.publishDate}: ${toYamlString(publishDate)}`] : []),
+        ...(pages ? [`${key.pages}: ${pages}`] : []),
+        ...(cover ? [`${key.cover}: ${cover}`] : []),
     ];
 }
 

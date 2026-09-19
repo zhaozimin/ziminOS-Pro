@@ -2,6 +2,7 @@
  * [INPUT]: 依赖 obsidian 的 TFile 类型；依赖 core/constants 的 FIELDS/MOC_PREFIX/NOTE_TYPES、
  *          core/folders 的 isSystemPath、core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 isBookMoc（哪篇笔记算一本书）、bookNameOf（这本书叫什么）、
+ *           bookTitlesOf/bookAuthorOf（它已知的全部名字与作者，三条命令共用同一份答案）、
  *           allBookMocs（全库的书，命令侧候选清单）、isArchivedBook（读完归档了没有）
  * [POS]: books 模块的身份判定处，与 contacts/identity 担同一职：
  *        「哪篇算数」这个问题只答一遍，导入与摘卡两条命令共用同一个答案。
@@ -37,6 +38,37 @@ export function bookNameOf(file: TFile): string {
     return file.basename.startsWith(MOC_PREFIX)
         ? file.basename.slice(MOC_PREFIX.length)
         : file.basename;
+}
+
+/**
+ * 这本书已知的全部名字：文件夹名（去掉书名号）＋ aliases 里的每一个。
+ *
+ * 三条命令都得问这一句——同步划线、批量导入时的库内查重、补书目时的豆瓣指认。
+ * 各问各的话，同一本书在三条命令下会得到三批不同的名字，
+ * 而书名匹配的成败全看递进去的是哪一批。aliases 里装的正是带副标题的全名，
+ * 那往往才是设备与豆瓣那头写的名字。
+ */
+export function bookTitlesOf(ctx: ZiminosContext, moc: TFile): readonly string[] {
+    const raw = ctx.app.metadataCache.getFileCache(moc)?.frontmatter?.[FIELDS.aliases];
+    const list = Array.isArray(raw) ? raw : [raw];
+    const aliases = list.map((value) => String(value ?? '').trim()).filter(Boolean);
+
+    return [stripBraces(bookNameOf(moc)), ...aliases].filter(Boolean);
+}
+
+/** 书的 MOC 上写着的第一位作者，用来给书名匹配再收一道口 */
+export function bookAuthorOf(ctx: ZiminosContext, moc: TFile): string {
+    const raw = ctx.app.metadataCache.getFileCache(moc)?.frontmatter?.author;
+    const list = Array.isArray(raw) ? raw : [raw];
+
+    return String(list[0] ?? '').trim();
+}
+
+/** 《书名》→ 书名 */
+function stripBraces(name: string): string {
+    const inner = /^《(.+)》$/.exec(name);
+
+    return inner ? inner[1] : name;
 }
 
 /** 全库的书，按名字排序。功能目录照旧排除 */

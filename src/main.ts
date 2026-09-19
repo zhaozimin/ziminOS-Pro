@@ -50,6 +50,8 @@ import type { VaultSeed, ZiminosContext, ZiminosSettings } from './core/types';
 import { aboutViews, renderAboutPanel } from './modules/about/view';
 import { registerAppearanceSwitch } from './modules/appearance/statusBar';
 import { registerCreateBookCommand } from './modules/books/createBook';
+import { registerEnrichBookCommand } from './modules/books/enrichBook';
+import { registerLibraryImportCommands } from './modules/books/importLibrary';
 import { registerExcerptCardCommand } from './modules/books/extractCard';
 import { registerImportHighlightsCommand } from './modules/books/importHighlights';
 import {
@@ -185,6 +187,11 @@ export default class ZiminosPlugin extends Plugin {
         // 「读一本书」是主干：一条命令走完「查书目 → 建档 → 把设备里的划线灌进来」，
         // 它与手动建书共用同一个容器洞，差别只在 preset 里的字段是查来的还是问来的
         registerReadBookCommand(ctx, (preset) => createContainer(ctx, BOOK_KIND, preset));
+        // 整架导入走同一个容器洞，只是 preset 里带 quiet：一次几十本，没有人在看其中任何一本。
+        // 三条命令（微信读书 / Kindle / 苹果图书）共用一个内核，差别只有「枚举哪一批书」
+        registerLibraryImportCommands(ctx, (preset) => createContainer(ctx, BOOK_KIND, preset));
+        // 豆瓣那条路整件收在这里：一次运行只查一本，批量导入一次都不碰它
+        registerEnrichBookCommand(ctx);
         registerSyncHighlightsCommand(ctx);
         registerConnectWereadCommand(ctx);
         registerCreateBookCommand(ctx, (preset) => createContainer(ctx, BOOK_KIND, preset));

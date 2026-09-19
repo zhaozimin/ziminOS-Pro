@@ -17,19 +17,23 @@
  *        概述放最后，是因为前面全是点选，中途取消不至于让人白写一段话；
  *        归属必须在动土之前问完，客户委托却没选到人时中止，不留半个空文件夹。
  *        文案与流程仍逐段对照 create-project-moc.js，只有一处 V3 主动偏离并已备案：
- *        归属由两项拆成三项，「自己做」从此不再多问一句同行者（理由写在 OWNERSHIP 头上）
+ *        归属由两项拆成三项，「自己做」从此不再多问一句同行者（理由写在 OWNERSHIP 头上）。
+ *        v0.36.0 加的 preset.quiet 是同一条流程的第二种在场形态而不是第二条流程：
+ *        批量导入一次要建几十本书，没有人在看任何一本，于是不打开文件、不聚焦、不弹 Notice，
+ *        撞名不改名、失败改为抛出。**建档这件事本身一个字都没有分叉**——
+ *        另写一条「批量版」建档流程，代价就是某天防覆盖校验只修好了其中一条
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import { MarkdownView, Notice, normalizePath } from 'obsidian';
-import type { TFile } from 'obsidian';
+import type { App, TFile } from 'obsidian';
 import { BOOK_HEADINGS, FIELDS, FOLDERS, NOTE_TYPES } from '../../core/constants';
 import { ensureFolderPath, normalizeFolderPath } from '../../core/folders';
 import { ChoiceModal, TextInputModal } from '../../core/modals';
 import { nowStampAndUid } from '../../core/time';
 import type { ZiminosContext, ZiminosSettings } from '../../core/types';
 import { mocPathOf } from './moc';
-import { requestAvailableContainerName } from './nameConflict';
+import { findContainerNameConflicts, requestAvailableContainerName } from './nameConflict';
 import { mocContent, mocFrontmatter } from './templates';
 import type { Bibliography, ContainerSection, ProjectRelation } from './templates';
 
@@ -196,6 +200,46 @@ export interface CreateContainerPreset {
     bibliography?: Bibliography;
     /** 覆盖 kind 自带的小节骨架。目前无人使用，留着是因为容器规格本就允许各类自带骨架 */
     sections?: readonly ContainerSection[];
+    /**
+     * 没有人在场：不打开文件、不聚焦编辑器、不弹任何 Notice，失败一律抛出。
+     *
+     * 它是流程开关而不是容器内容，放进 preset 是因为两者在逻辑上本就是同一件事的两半——
+     * 没有 preset 就意味着有人正对着弹窗答题，那时「不露面」这个要求根本不成立。
+     *
+     * 批量导入一次要建几十本书。逐本打开文件、逐本聚焦编辑器、逐本弹一条成功 Notice，
+     * 得到的是几十个标签页和一屏幕滚动的提示——而用户此刻并不在看任何一本，
+     * 他在等这一批跑完。失败改为抛出而不是 Notice，是因为批量的调用方必须拿到原因写进报告：
+     * 一条飘过去的 Notice 在第二十本的时候已经没有人读得到了。
+     */
+    quiet?: boolean;
+}
+
+/**
+ * 拿到一个可用的容器名。
+ *
+ * 有人在场时，撞名留在同一条创建流程里改名（v0.35.1 的判据：文案承诺了续接，控制流就得续接）。
+ * 没有人在场时，撞名不是一个可以「请你改一下」的情形——它就是这一本没建成，
+ * 原因抛给调用方去记账。**绝不自动改名**：一个自己给书改过名的批量导入，
+ * 会在库里留下《人类简史 2》这种谁也不知道从哪来的条目。
+ */
+async function resolveContainerName(
+    app: App,
+    settings: ZiminosSettings,
+    kindLabel: string,
+    requestedName: string,
+    quiet: boolean,
+): Promise<string | null> {
+    if (!quiet) {
+        return await requestAvailableContainerName(app, settings, kindLabel, requestedName);
+    }
+
+    const conflicts = findContainerNameConflicts(app, settings, requestedName);
+
+    if (conflicts.length) {
+        throw new Error(`已存在同名目录：${conflicts.map((item) => item.path).join('、')}`);
+    }
+
+    return requestedName;
 }
 
 /**
@@ -210,6 +254,8 @@ export async function createContainer(
     pickPerson?: PersonPicker,
 ): Promise<TFile | null> {
     const { app } = ctx;
+    // 没有人在场时，这条流程的每一次「说话」都要改成「抛出」，让批量的调用方接住写进报告
+    const quiet = preset?.quiet === true;
 
     try {
         // ============================================================
@@ -230,6 +276,8 @@ export async function createContainer(
               }).openAndGetValue();
 
         if (nameInput === null || !nameInput.trim()) {
+            if (quiet) throw new Error(`未提供${kind.label}名称`);
+
             new Notice(`未输入${kind.label}名称，操作已取消。`);
             return null;
         }
@@ -238,6 +286,8 @@ export async function createContainer(
 
         // 防止名称意外生成嵌套目录或逃回父目录
         if (/[\\/]/.test(requestedName) || requestedName === '.' || requestedName === '..') {
+            if (quiet) throw new Error(`名称含斜杠或反斜杠：${requestedName}`);
+
             new Notice(`${kind.label}名称不能包含斜杠、反斜杠，也不能是 . 或 ..。`);
             return null;
         }
@@ -246,11 +296,12 @@ export async function createContainer(
         // 3. 检查四个 PARA 根目录；重名时留在本次命令里改名
         // ============================================================
 
-        const availableName = await requestAvailableContainerName(
+        const availableName = await resolveContainerName(
             app,
             settings,
             kind.label,
             requestedName,
+            quiet,
         );
 
         if (availableName === null) {
@@ -332,11 +383,12 @@ export async function createContainer(
         // 7. 落盘前复核同名事实；期间撞名仍可在本次命令里改名
         // ============================================================
 
-        const finalName = await requestAvailableContainerName(
+        const finalName = await resolveContainerName(
             app,
             settings,
             kind.label,
             containerName,
+            quiet,
         );
 
         if (finalName === null) {
@@ -358,6 +410,8 @@ export async function createContainer(
         const existingMocFile = app.vault.getAbstractFileByPath(mocFilePath);
 
         if (existingMocFile) {
+            if (quiet) throw new Error(`MOC 已存在，未覆盖：${mocFilePath}`);
+
             new Notice(`${kind.label} MOC 笔记已经存在，未执行覆盖：${mocFilePath}`);
             return null;
         }
@@ -434,6 +488,10 @@ export async function createContainer(
             throw error;
         }
 
+        // 没有人在场时到此为止：文件已经落盘，而打开它、把光标摆进正文、
+        // 报一句「建好了」全都是说给此刻正看着屏幕的那个人听的
+        if (quiet) return mocFile;
+
         const leaf = app.workspace.getLeaf(false);
 
         await leaf.openFile(mocFile, {
@@ -472,6 +530,9 @@ export async function createContainer(
 
         return mocFile;
     } catch (error) {
+        // 没有人在场：原因必须回到调用方手里，它要把这一本为什么没建成写进报告
+        if (quiet) throw error;
+
         const message = error instanceof Error ? error.message : String(error);
 
         new Notice(`创建${kind.label}失败：${message}`);

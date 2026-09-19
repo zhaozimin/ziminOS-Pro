@@ -190,15 +190,59 @@ test('重名弹窗列出位置，并允许在原命令中连续改名直到名�
 
 test('新建流程在询问归属前报冲突，提交前复核且不复用旧容器', () => {
     const source = readFileSync(`${ROOT}src/modules/projects/createContainer.ts`, 'utf8');
-    const firstProbe = source.indexOf('const availableName = await requestAvailableContainerName');
+    const firstProbe = source.indexOf('const availableName = await resolveContainerName');
     const ownershipPrompt = source.indexOf('if (kind.asksOwnership && !preset)');
 
     assert.ok(firstProbe >= 0 && firstProbe < ownershipPrompt);
-    assert.match(source, /const finalName = await requestAvailableContainerName/);
+    assert.match(source, /const finalName = await resolveContainerName/);
+    // 两处复核仍然经同一个入口，而那个入口在有人在场时走的还是同流程更名
+    assert.match(source, /requestAvailableContainerName\(app, settings, kindLabel, requestedName\)/);
     assert.doesNotMatch(source, /confirmContainerNameConflict\(/);
     assert.match(source, /await app\.vault\.createFolder\(containerFolderPath\)/);
     assert.doesNotMatch(source, /ensureFolderPath\(app, containerFolderPath\)/);
     assert.match(source, /currentContainer === createdContainerFolder/);
     assert.match(source, /createdContainerFolder\.children\.length === 0/);
     assert.match(source, /await app\.vault\.delete\(createdContainerFolder, true\)/);
+});
+
+/*
+ * 没有人在场时，这条流程的每一次「说话」都必须改成「抛出」。
+ * 漏掉任何一处，批量导入就会在第几十本上弹出一个没有人看的弹窗并把整批卡在那儿——
+ * 而它不报错，界面只是停住。
+ */
+test('没有人在场时撞名不改名、不弹窗、不打开文件，失败一律抛出', () => {
+    const source = readFileSync(`${ROOT}src/modules/projects/createContainer.ts`, 'utf8');
+
+    // 只截 resolveContainerName 这一个函数体来看：静默那条路必须落到纯检索上，
+    // 而且它只有两种结局——原样交出这个名字，或者抛。**绝不自动改名**：
+    // 留一本《人类简史 2》比少导一本更难收拾，而学员根本不会知道那是谁改的
+    const head = source.indexOf('async function resolveContainerName');
+    const resolver = source.slice(head, source.indexOf('\n}', head));
+
+    assert.ok(head > 0);
+    assert.match(resolver, /if \(!quiet\) \{\s*return await requestAvailableContainerName/);
+    assert.match(resolver, /findContainerNameConflicts\(app, settings, requestedName\)/);
+    assert.match(resolver, /throw new Error\(`已存在同名目录/);
+    assert.deepEqual(resolver.match(/return [^;]+;/g), [
+        'return await requestAvailableContainerName(app, settings, kindLabel, requestedName);',
+        'return requestedName;',
+    ]);
+
+    // 四条失败路径都要抛，而不是弹一条没有人看得见的 Notice 然后把整批卡在那儿
+    for (const pattern of [
+        /if \(quiet\) throw new Error\(`未提供\$\{kind\.label\}名称`\)/,
+        /if \(quiet\) throw new Error\(`名称含斜杠或反斜杠/,
+        /if \(quiet\) throw new Error\(`MOC 已存在，未覆盖/,
+        /if \(quiet\) throw error;/,
+    ]) {
+        assert.match(source, pattern);
+    }
+
+    // 落盘之后就返回：打开文件、聚焦编辑器、报一句「建好了」都是说给在场的人听的
+    const quietReturn = source.indexOf('if (quiet) return mocFile;');
+
+    assert.ok(quietReturn > 0);
+    assert.ok(quietReturn < source.indexOf('leaf.openFile(mocFile'));
+    assert.ok(quietReturn < source.indexOf('editor.focus()'));
+    assert.ok(quietReturn < source.lastIndexOf('已创建：'));
 });

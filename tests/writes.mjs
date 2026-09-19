@@ -678,6 +678,7 @@ test('自写守卫只登记机器的反应，替人落笔的写入不登记', ()
         'src/modules/contacts/createContact.ts': 1, // 人脉档案出生
         'src/modules/setup/init.ts': 1, // 开荒骨架
         'src/modules/books/extractCard.ts': 1, // 摘录卡片带着完整 YAML 出生
+        'src/modules/books/importLibrary.ts': 1, // 批量导入的账目报告是插件自己的账
         'src/modules/review/periodic.ts': 4, // 周期笔记出生、空笔记套骨架、归位搬家
         'src/modules/inspiration/capture.ts': 1, // 灵感集第一次出生
         'src/modules/eternal/export.ts': 1, // 出库单是插件自己的账

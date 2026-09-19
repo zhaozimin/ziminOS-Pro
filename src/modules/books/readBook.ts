@@ -5,7 +5,9 @@
  *          isbn 的 isbnUid、tags 的 bookTags、
  *          sources 的 collectHighlightsFor、importHighlights 的 mergeHighlights、
  *          createBook 的 BookContainerCreator 洞
- * [OUTPUT]: 对外提供 registerReadBookCommand（命令 read-book：一步建书并把划线灌进去）
+ * [OUTPUT]: 对外提供 registerReadBookCommand（命令 read-book：一步建书并把划线灌进去）、
+ *           registerSyncHighlightsCommand/registerConnectWereadCommand、
+ *           pullHighlights 与 pickBook（补齐书籍信息那条命令共用同一张书目清单）
  * [POS]: 读书笔记模块的主干命令，也是整个模块存在的理由。
  *        它取代的是学员原本的三步：豆瓣插件建档 → 划线插件导到某个文件夹 → 手工复制粘贴汇总。
  *        那三步里有两步是机器该干的活儿：书目字段（出版社、ISBN、页数、评分）机器查得到，
@@ -35,7 +37,7 @@ import { isbnUid } from './isbn';
 import { bookTags } from './tags';
 import { availableSourceLabels, collectHighlightsFor } from './sources';
 import { loginWeread } from './sourceWeread';
-import { allBookMocs, bookNameOf, isBookMoc } from './identity';
+import { allBookMocs, bookAuthorOf, bookNameOf, bookTitlesOf, isBookMoc } from './identity';
 
 const MESSAGES = {
     namePrompt: '想读哪本书？',
@@ -299,30 +301,23 @@ export function registerSyncHighlightsCommand(ctx: ZiminosContext): void {
 async function syncCurrentBook(ctx: ZiminosContext): Promise<void> {
     const active = ctx.app.workspace.getActiveFile();
     const target =
-        active && isBookMoc(ctx, active)
-            ? active
-            : await pickBook(ctx);
+        active && isBookMoc(ctx, active) ? active : await pickBook(ctx, '同步哪本书的划线？');
 
     if (!target) return;
 
     // 别名里装的正是带副标题的全名（建书时写进去的），它往往才是微读与设备那头的书名。
     // 「同步」与「读一本书」必须递同一批名字，否则同一本书在两条命令下匹配结果会不一样
-    const names = [stripBraces(bookNameOf(target)), ...aliasesOf(ctx, target)];
-    const author = firstAuthorOf(ctx, target);
-
-    await pullHighlights(ctx, target, names, author);
+    await pullHighlights(ctx, target, bookTitlesOf(ctx, target), bookAuthorOf(ctx, target));
 }
 
-/** 这本书的别名。缺席、写成标量、写成列表三种形态都认 */
-function aliasesOf(ctx: ZiminosContext, moc: TFile): readonly string[] {
-    const raw = ctx.app.metadataCache.getFileCache(moc)?.frontmatter?.aliases;
-    const list = Array.isArray(raw) ? raw : [raw];
-
-    return list.map((value) => String(value ?? '').trim()).filter(Boolean);
-}
-
-/** 从全库的书里选一本 */
-async function pickBook(ctx: ZiminosContext): Promise<TFile | null> {
+/**
+ * 从全库的书里选一本。
+ *
+ * 标题是参数：同步划线与补齐书籍信息都要这张清单，而它们问的不是同一件事。
+ * 「站在书上就用它、站在别处先选一本」这条待客之道由调用方各自决定，
+ * 因为只有它知道当前这篇算不算数。
+ */
+export async function pickBook(ctx: ZiminosContext, title: string): Promise<TFile | null> {
     const books = allBookMocs(ctx);
 
     if (!books.length) {
@@ -332,25 +327,10 @@ async function pickBook(ctx: ZiminosContext): Promise<TFile | null> {
     }
 
     return new ChoiceModal(ctx.app, {
-        title: '同步哪本书的划线？',
+        title,
         items: books,
         labelOf: (file) => bookNameOf(file),
     }).openAndGetChoice();
-}
-
-/** 书的 MOC 上写着的第一位作者，用来给书名匹配再收一道口 */
-function firstAuthorOf(ctx: ZiminosContext, moc: TFile): string {
-    const raw = ctx.app.metadataCache.getFileCache(moc)?.frontmatter?.author;
-    const list = Array.isArray(raw) ? raw : [raw];
-
-    return String(list[0] ?? '').trim();
-}
-
-/** 《书名》→ 书名 */
-function stripBraces(name: string): string {
-    const inner = /^《(.+)》$/.exec(name);
-
-    return inner ? inner[1] : name;
 }
 
 // ============================================================

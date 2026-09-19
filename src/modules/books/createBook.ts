@@ -2,7 +2,8 @@
  * [INPUT]: 依赖 obsidian 的 Notice 与 TFile 类型；依赖 core/commands 的 BOOK_COMMANDS、
  *          core/modals 的 TextInputModal、core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 BookContainerPreset/BookContainerCreator 契约、
- *           createBook 与 registerCreateBookCommand（命令 create-book）
+ *           createBook 与 registerCreateBookCommand（命令 create-book）、
+ *           wrapBookTitle/unwrapBookTitle 两条书名号规则（批量导入共用同一份）
  * [POS]: books 模块的建书入口。一本书就是一个项目，「文件夹 + MOC」那套流程住在
  *        projects 的 createContainer 里——本模块不 import 它，只声明一个
  *        「建一个书籍容器」的洞（BookContainerCreator），由 main 用 createContainer
@@ -44,6 +45,11 @@ export interface BookContainerPreset {
     bibliography?: Bibliography;
     /** 覆盖小节骨架。目前无人使用，形状与容器预设保持一致 */
     sections?: readonly ContainerSection[];
+    /**
+     * 没有人在场：不打开文件、不聚焦、不弹 Notice，失败一律抛出。
+     * 只有批量导入递它——那一刻用户在等整批跑完，不在看任何一本。
+     */
+    quiet?: boolean;
 }
 
 /**
@@ -118,13 +124,16 @@ export function registerCreateBookCommand(
 /**
  * 给书名包上《》；学员自己敲了书名号就不再包一层。
  * 《》让书在文件树、导航表与边栏的任何清单里一眼认出来是书，不与项目混行。
+ *
+ * 导出给批量导入共用：一本从微信读书端走的书与一本手打进来的书，
+ * 在文件树里必须长成同一个样子——两份包书名号的规则迟早会长歪一份。
  */
-function wrapBookTitle(input: string): string {
+export function wrapBookTitle(input: string): string {
     return `《${input}》`;
 }
 
-/** 去掉用户可能已经输入的一层书名号，aliases 只保留书本自己的名字 */
-function unwrapBookTitle(input: string): string {
+/** 去掉可能已经带着的一层书名号，aliases 只保留书本自己的名字 */
+export function unwrapBookTitle(input: string): string {
     const inner = /^《(.+)》$/.exec(input);
 
     return (inner ? inner[1] : input).trim();

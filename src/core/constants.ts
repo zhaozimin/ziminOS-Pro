@@ -590,6 +590,25 @@ export const BOOK_CALLOUTS = {
  * 两处各写一份的话，手改 data.json 写进来的怪数会在一边被拍平、在另一边照单全收，
  * 于是下拉框显示「前 5 个」而笔记里落进四十条——这种分叉不报错。
  */
+/**
+ * 书目字段落进 YAML 时的键名。
+ *
+ * 两条路会写下这批键，而它们形态完全不同：建书时按行拼文本（projects/templates），
+ * 补齐书籍信息时用官方 processFrontMatter 写对象（books/enrichBook）。
+ * 各写各的话，某天新建的书写 `publisher`、补齐的书写 `press`，
+ * 而按出版社筛的那张表只会少掉一半的书——不报错，也没人会发现。
+ * 它住在这里而不是任何一个模块里，理由与 FIELDS 同源：字段名是全库共享的语言。
+ */
+export const BOOK_FIELDS = {
+    translators: 'translator',
+    publisher: 'publisher',
+    publishDate: 'published',
+    pages: 'pages',
+    cover: 'cover',
+    source: 'source',
+    author: 'author',
+} as const;
+
 export const BOOK_TAG_COUNTS: readonly number[] = [0, 3, 5, 8];
 
 /** 全新库的读书标签默认值；老库升级时由 DEFAULT_SETTINGS 自动补齐，也是读取侧的回落值 */
