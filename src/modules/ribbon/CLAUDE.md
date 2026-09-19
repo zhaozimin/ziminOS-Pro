@@ -19,4 +19,16 @@ Obsidian 自己在 workspace.json 里还有一把 item.hidden 的锁，它比 zi
 
 对上只暴露 registerRibbon(ctx)，并返回一个按当前设置重画的函数交给设置页。它必须在全部命令注册完成后装配，否则花名册上还没有的命令会静默漏摆。删掉本模块，三十八条命令仍可从命令面板调用，只损失边栏按钮与定制图标。
 
+## 边栏上不属于 ziminOS 的那些图标
+
+本模块只管 ziminOS 自己那几个按钮。Obsidian 自带的快速切换、白板、日记、模板、命令面板、数据库归那把
+item.hidden 的锁管，而新库第一次打开时它是什么样，由随库交付的 `vault/.obsidian/workspace.json` 种子决定
+（v0.37.0）：六个收起，只留关系图谱。种子只含 `left-ribbon` 一个键，键的先后同时决定图标的先后——
+`WorkspaceRibbon.load()` 读完隐藏状态之后，正是按 hiddenItems 的键顺序给 items 排的序。
+
+这条路刻意不写进代码：插件去改宿主的工作区状态文件，要么赶在 Obsidian 把内存里那份写回磁盘之前（赌时序），
+要么伸手去碰非公开的 leftRibbon（开红线的口子），两条都不值得，而种子在安装那一刻写下，两样都不需要。
+脆弱处也说清楚：那些键是 `插件id:界面文案`，随 Obsidian 的界面语言与版本文案变化；对不上时后果只是
+「多出几个图标」，不是报错。tests/regression.mjs 钉住种子与本模块的默认清单说同一件事，以及种子确实被 git 跟踪。
+
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

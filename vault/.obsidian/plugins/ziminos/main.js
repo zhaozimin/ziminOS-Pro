@@ -22041,13 +22041,7 @@ var DEFAULT_RIBBON_COMMANDS = [
   THEME_COMMAND.id,
   CONTACT_COMMANDS.create.id,
   CONTACT_COMMANDS.favor.id,
-  APPEARANCE_COMMAND.id,
-  // 旧版那三个默认就摆出来：它们存在的全部理由就是「回到 ribbon 上」，
-  // 一个需要先去设置页勾选才回来的按钮，等于没有回来。
-  // 顺序归用户——摆出来之后拖到哪儿由 Obsidian 自己记
-  LEGACY_COMMANDS.vault.id,
-  LEGACY_COMMANDS.help.id,
-  LEGACY_COMMANDS.settings.id
+  APPEARANCE_COMMAND.id
 ];
 function normalizeRibbonCommands(value) {
   if (!Array.isArray(value)) return DEFAULT_RIBBON_COMMANDS;
@@ -60907,7 +60901,7 @@ var TABS = [
     label: "\u8FB9\u680F",
     icon: COMMAND_ICONS.dock,
     module: "\u5DE6\u4FA7\u8FB9\u680F v1",
-    status: "\u8FD0\u884C\u4E2D \xB7 \u56DB\u5341\u4E8C\u6761\u547D\u4EE4\u914D Pikaicons \u56FE\u6807\uFF0C\u9ED8\u8BA4\u6446\u51FA\u5341\u6761"
+    status: "\u8FD0\u884C\u4E2D \xB7 \u56DB\u5341\u4E8C\u6761\u547D\u4EE4\u914D Pikaicons \u56FE\u6807\uFF0C\u9ED8\u8BA4\u6446\u51FA\u4E03\u6761"
   }
 ];
 var TEXTS6 = {

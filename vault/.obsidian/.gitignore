@@ -1,4 +1,11 @@
 # ziminOS：只隔离每位用户自己的本地状态，公共插件与外观配置仍可正常跟踪。
+#
+# workspace*.json 这一条在两端的意思是相反的，而两端都对：
+# 在学员的笔记库里，它是本机状态（面板布局、最近打开的文件），每分钟都在变，不该进任何人的 Git；
+# 在 ziminOS 自己的仓库里，vault/.obsidian/workspace.json 是一份**种子**——它只含 left-ribbon 一个键，
+# 决定学员第一次打开这本库时左侧功能区摆着谁。种子必须随交付物出门，所以它由 `git add -f` 强制跟踪，
+# 本条规则对它不再生效（.gitignore 管不着已跟踪的文件）。tests/packaging.mjs 钉住它只准有那一个键，
+# 防的是谁把 vault/ 当笔记库打开一次，就把开发机的布局与最近打开文件一起提交出门。
 workspace*.json
 plugins/ziminos/data.json
 plugins/ziminos/holiday-cache.json

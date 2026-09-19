@@ -3,7 +3,8 @@
 # [INPUT]: 依赖本仓库为第二版事实源（含 vault-pro/ 与 skill-pro/），依赖 npm run check 通过，
 #          依赖 git 与 rsync；第一版的 GitHub / Gitee 两个目标仓库均需可写
 # [OUTPUT]: 把两版共享的那部分（src / vault / eagle-companion / fonts / skill / tests / 构建与依赖配置）
-#           单向发布到第一版公开仓库，并在 --push 时把同一提交推到 GitHub 与 Gitee
+#           单向发布到第一版公开仓库，并在 --push 时把同一提交推到 GitHub 与 Gitee；
+#           FORCE_TRACK 里的种子文件被目标端的 .gitignore 挡着，必须显式 force-add 才出得了门
 # [POS]: Pro 事实源到第一版两个公开镜像之间**唯一**的同步通道，方向只有 pro → v1 一条。
 #        它存在的理由是一次事故：两个仓库曾各自能改同一份 src/，于是分叉出
 #        editing/explorer/legacy 与 eternal/edition 两批互不相容的改动，
@@ -57,6 +58,17 @@ PRO_ONLY=(
     pack-zip.py
     upload-release.py
     publish-v1.sh
+)
+
+# 被 vault/.obsidian/.gitignore 挡着、却必须随交付物出门的种子文件。
+# 那条 workspace*.json 的规则是给**学员的笔记库**写的（布局与最近打开的文件是本机状态），
+# 而同一个文件名在仓库这边是一份只含 left-ribbon 的种子，决定学员第一眼的左侧功能区。
+# rsync 把它搬过去了，但目标仓库的 `git add -A` 认那条规则，于是它会停在工作区、永不入库；
+# 更隐蔽的是随后那句 `git status --porcelain` 判空——只改了种子的那一次会被报成「无需发布」。
+# 因此这里显式 force-add。两版的 vault/ 树哈希必须逐字节相同，
+# make-v1-package.sh 打包前正是拿这个哈希对账，漏一个就在那里中止。
+FORCE_TRACK=(
+    vault/.obsidian/workspace.json
 )
 
 # 两个仓库各自说给各自读者听的，发布时一律不碰——
@@ -134,6 +146,16 @@ for item in "${SHARED[@]}"; do
     else
         cp "$item" "$target/$item"
     fi
+done
+
+# ============================================================
+# 三点五、把被忽略规则挡着的种子显式入库
+# ============================================================
+
+for item in "${FORCE_TRACK[@]}"; do
+    [ -e "$target/$item" ] || { echo "同步之后目标仓库里没有 ${item}" >&2; exit 1; }
+
+    git -C "$target" add -f "$item"
 done
 
 # ============================================================

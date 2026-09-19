@@ -220,6 +220,7 @@ git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_stag
 施工源/vault/.obsidian/templates.json
 施工源/vault/.obsidian/community-plugins.json
 施工源/vault/.obsidian/appearance.json
+施工源/vault/.obsidian/workspace.json
 施工源/fonts/lxgw-wenkai-gb-screen/LXGWWenKaiGBScreen.ttf
 施工源/fonts/lxgw-wenkai-gb-screen/OFL.txt
 施工源/fonts/source-han-serif-cn/SourceHanSerifCN-Regular.otf
@@ -234,7 +235,7 @@ git clone --depth 1 "https://gitee.com/ziminzhao/zimin-os-v1.git" "$install_stag
 
 这十三个片段的文件名带【】与中文，复制时一律用引号包住路径；扩展名必须是小写 `.css`，大写的 `.CSS` Obsidian 的片段加载器认不出来。
 
-`.obsidian/.gitignore` 是随库落地的隐私护栏：即使学员以后在笔记库里初始化 Git，也不会把微信读书 Cookie、工作区状态和本机运行缓存提交出去。最后四份则是笔记库的开箱设置，别当成可有可无的杂项：`app.json` 定下附件落在 `./附件`、粘链接用 wiki 语法并自动跟着改名；`templates.json` 把模板目录指向 `90-system/Template`，缺了它学员打开核心「模板」插件后得自己去翻路径；`community-plugins.json` 决定三个系统插件是否启用；`appearance.json` 决定主题与十一个默认启用的片段。
+`.obsidian/.gitignore` 是随库落地的隐私护栏：即使学员以后在笔记库里初始化 Git，也不会把微信读书 Cookie、工作区状态和本机运行缓存提交出去。最后五份则是笔记库的开箱设置，别当成可有可无的杂项：`app.json` 定下附件落在 `./附件`、粘链接用 wiki 语法并自动跟着改名；`templates.json` 把模板目录指向 `90-system/Template`，缺了它学员打开核心「模板」插件后得自己去翻路径；`community-plugins.json` 决定三个系统插件是否启用；`appearance.json` 决定主题与十一个默认启用的片段；`workspace.json` 只含一个 `left-ribbon` 键，决定学员第一次打开这本库时左侧功能区上摆着谁——Obsidian 自带的快速切换、白板、日记、模板、命令面板、数据库六个图标默认收起，只留关系图谱与 ziminOS 自己那七个按钮，键的先后同时决定图标的先后。它是**种子**不是状态：Obsidian 一打开就会往同一个文件里继续写面板布局与最近打开的文件，那些是学员自己的，所以升级分支一个字都不碰它。
 
 取法一的安装包在打包时已经按这份清单逐项核对过；改完名之后 `repo/fonts/` 下是平铺的五个字体文件，许可证留在包里的 `许可证/`，不参与安装。因此取法一核对 `repo/vault/` 下的每一项与五个字体文件名即可，取法二逐项核对全部条目。
 

@@ -1,0 +1,20 @@
+{
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": true,
+      "canvas:新建白板": true,
+      "daily-notes:打开/创建今天的日记": true,
+      "templates:插入模板": true,
+      "command-palette:打开命令面板": true,
+      "bases:新建数据库": true,
+      "ziminos:新建项目": false,
+      "ziminos:记录灵感": false,
+      "ziminos:打开今天的日记": false,
+      "ziminos:写复盘主题": false,
+      "ziminos:新建人脉": false,
+      "ziminos:记人情": false,
+      "ziminos:打开外观开关": false,
+      "graph:查看关系图谱": false
+    }
+  }
+}

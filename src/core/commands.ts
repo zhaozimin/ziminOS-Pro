@@ -582,7 +582,7 @@ export const LEGACY_COMMANDS: Readonly<Record<'vault' | 'help' | 'settings', Com
 // ============================================================
 
 /**
- * 全新库默认摆进左侧边栏的十条命令。
+ * 全新库默认摆进左侧边栏的七条命令。
  *
  * 全部命令都摆上去等于把选择的负担丢回给学员——那条边栏会长成一根谁也不看的图标柱。
  * 这七条的判据是「一天里可能按不止一次」：记灵感、开日记、写主题是每天的动作，
@@ -595,9 +595,18 @@ export const LEGACY_COMMANDS: Readonly<Record<'vault' | 'help' | 'settings', Com
  * 「整理当前笔记格式」默认开着自动整理，它是那条留给例外情况的手动路，
  * 常按不上它反而说明自动那条跑得好。
  *
+ * **旧版那三条 v0.37.0 起不在这份清单里，这是对 v0.17.0 的一次纠正。**
+ * 当时写的理由是「一个需要先去设置页勾选才回来的按钮，等于没有回来」——它把两件事说成了一件：
+ * 「切换笔记库这个功能必须够得着」与「它默认就该占着边栏那一列的一格」。
+ * 前者由模块存在、命令注册与设置页「边栏」那张清单共同保证，一条都没少；
+ * 后者则该和其余四十一条服从同一把尺子，而按那把尺子，切换笔记库、帮助、设置一天按不到一次。
+ * 同版把 Obsidian 自己那六个核心图标也藏了起来（vault/.obsidian/workspace.json 那份种子），
+ * 两件事是同一个判断：边栏是每天都在看的那一列，它的长度就是它的可读性。
+ *
  * 老库升级正是它生效的场景：0.4.0 升上来的库 data.json 里没有 ribbonCommands 这个键，
  * 于是以这份清单打底，一次性长出这七个图标；而已经调过侧边栏的人以存档为准，
- * 一条都不会被覆盖。两种情况都由 main.ts 那句「默认值打底、存档覆盖」的合并顺序保证。
+ * 一条都不会被覆盖——包括当年摆出过旧版那三个的人，这次纠正不会把他的按钮撤走。
+ * 两种情况都由 main.ts 那句「默认值打底、存档覆盖」的合并顺序保证。
  */
 export const DEFAULT_RIBBON_COMMANDS: readonly string[] = [
     PROJECT_COMMANDS.create.id,
@@ -607,12 +616,6 @@ export const DEFAULT_RIBBON_COMMANDS: readonly string[] = [
     CONTACT_COMMANDS.create.id,
     CONTACT_COMMANDS.favor.id,
     APPEARANCE_COMMAND.id,
-    // 旧版那三个默认就摆出来：它们存在的全部理由就是「回到 ribbon 上」，
-    // 一个需要先去设置页勾选才回来的按钮，等于没有回来。
-    // 顺序归用户——摆出来之后拖到哪儿由 Obsidian 自己记
-    LEGACY_COMMANDS.vault.id,
-    LEGACY_COMMANDS.help.id,
-    LEGACY_COMMANDS.settings.id,
 ];
 
 /**

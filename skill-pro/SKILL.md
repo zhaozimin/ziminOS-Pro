@@ -538,6 +538,7 @@ AGENTS.md
 
 - 三本库各自有 `.obsidian/`，各自有 `.obsidian/themes/Minimal/theme.css` 与 13 个 `.css` 片段（`ls .obsidian/snippets/*.css | wc -l` ≥ 13）；三份 `appearance.json` 的 `enabledCssSnippets` 都含 `【编辑-删除线】突出废弃内容`。
 - `以人为本/.obsidian/plugins/ziminos/{main.js,manifest.json,styles.css,ziminOS-Eagle-Bridge.eagleplugin,edition.json}` 齐全，伴侣包 `unzip -t` 校验通过；`edition.json` 是合法 JSON 且 `role` 为 `human`。
+- `以人为本/.obsidian/workspace.json` 存在，且**只有 `left-ribbon` 一个顶层键**。它是决定左侧功能区上摆着谁的种子，随 `vault/` 整份铺过来：Obsidian 自带的快速切换、白板、日记、模板、命令面板、数据库六个图标收起，只留关系图谱与 ziminOS 自己那七个按钮。**另外两本库没有这个文件，不要为它们补一份**——它们不装 ziminOS 插件，收起那几个图标只会让边栏空着。
 - `赛博永生/.obsidian/plugins/ziminos/edition.json` 的 `role` 为 `eternal`；`10-原料/`、`20-知识/索引.md`、`90-系统/账本.md`、`CLAUDE.md`、`README.md` 齐全（这本库的三层目录名是中文的，不是 `10-raw` / `20-wiki` / `90-system`）。
 - `兼收并蓄/灵感集.md` 与 `兼收并蓄/剪藏/` 存在；`.obsidian/plugins/dataview/main.js` 存在。
 - **两份 `edition.json`（`以人为本` 与 `赛博永生`）的 `vaults` 完全一致**，且三个值都是 `$system_root` 下真实存在的目录名。只有装了 ziminOS 插件的库才有版次标记；《兼收并蓄》没有这个插件，**也不该有 `edition.json`，不要为了凑数给它补一份**。
