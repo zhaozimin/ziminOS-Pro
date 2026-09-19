@@ -5,14 +5,29 @@
 ==================== */
 
 /* 只作用于笔记的编辑与阅读视图。裸 img 会连插件界面（设置页、状态栏、
-   ziminOS 名片）里的图片一起居中——那些界面的排版不归这个片段管。 */
-.markdown-source-view img,
+   ziminOS 名片）里的图片一起居中——那些界面的排版不归这个片段管。
+   cm-widgetBuffer 是 CodeMirror 塞在 widget 两侧的零宽占位 img，
+   它得留在行内，居中不是它的事。 */
+.markdown-source-view img:not(.cm-widgetBuffer),
 .markdown-preview-view img {
     display: block !important;
     margin-left: auto !important;
     margin-right: auto !important;
 }
 
- .markdown-source-view.mod-cm6 .cm-content > * {
-    margin: auto !important;
+/* 实时预览里「单独占一行的图片」有两种住法，两条都得给。
+   1.13 及更早：它是 .cm-content 的块级 widget，宽度 fit-content，
+   auto 外边距就能把它推到中间。 */
+.markdown-source-view.mod-cm6 .cm-content > .image-embed {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* 1.14 起：图片改成行内原子区间，住进 .cm-line（方向键可进出、空格看
+   大图），行内盒子吃不到 auto 外边距，只有那一行的 text-align 说得上话。
+   所以要居中的不再是图片，是收着它的那一行。
+   带 HyperMD- 行标记的那一行不碰：列表符号、引用条、标题井号都在图片
+   左边，连它们一起挪就不是「图片居中」了。 */
+.markdown-source-view.mod-cm6 .cm-content > .cm-line:has(> .image-embed):not([class*="HyperMD-"]) {
+    text-align: center;
 }
