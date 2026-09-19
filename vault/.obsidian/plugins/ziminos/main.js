@@ -54821,6 +54821,7 @@ function monthGrid(year, month) {
 var CALENDAR_VIEW_TYPE = "ziminos-calendar";
 function registerCalendar(ctx, openPeriod, hasNote) {
   const holidays = new HolidayService(ctx);
+  const hostWillRestore = ctx.app.workspace.getLeavesOfType(CALENDAR_VIEW_TYPE).length > 0;
   ctx.plugin.registerView(
     CALENDAR_VIEW_TYPE,
     (leaf) => new ZiminosCalendarView(leaf, holidays, openPeriod, hasNote)
@@ -54829,6 +54830,7 @@ function registerCalendar(ctx, openPeriod, hasNote) {
     void revealCalendar(ctx.app, true).catch(() => void 0);
   });
   ctx.app.workspace.onLayoutReady(() => {
+    if (hostWillRestore) return;
     void revealCalendar(ctx.app, false).catch(() => void 0);
   });
 }
