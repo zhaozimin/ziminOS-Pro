@@ -5,7 +5,9 @@
  *           「今」全局回归当日月视图、打开命令与默认右侧栏入口）及 CalendarPeriodOpener /
  *           CalendarNoteProbe 两个注入契约
  * [POS]: calendar 模块的唯一呈现层。头部只管“看哪个时间”，标题与网格只发出“写这个周期”意图；
- *        真正的模板、目录与写盘仍由 main 注入的 opener 统一实现，不分叉第二套周期笔记系统
+ *        真正的模板、目录与写盘仍由 main 注入的 opener 统一实现，不分叉第二套周期笔记系统。
+ *        它同时是全模块唯一决定「这个视图该不该现在摆进侧栏」的地方——热重载时那一叶归宿主还原，
+ *        插件不再重复开一个（v0.36.1，见 registerCalendar 的 hostWillRestore）
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -43,6 +45,18 @@ export function registerCalendar(
 ): void {
     const holidays = new HolidayService(ctx);
 
+    // 「库里已经有一个日历了吗」这个问题必须在 registerView **之前**问，那一刻答案才是真的。
+    //
+    // 注册的那一刻宿主会对每一个同类型叶子做一次重建：先**同步**把它换成空视图，
+    // 再在随后的微任务里还原回日历。那段窗口里 getLeavesOfType 查不到它——
+    // 叶子还在，只是此刻自报「我是 empty」。而布局已就绪时 onLayoutReady 是**同步**回调
+    // （插件热重载正是这种情形：更新插件走 disablePlugin + enablePlugin，
+    // _userDisabled 为假，宿主刻意留着老叶子等着自己还原）。
+    // 于是 registerView 与 onLayoutReady 之间没有一次 await，我们恰好就在那个窗口里
+    // 问「有没有」，得到「没有」，再开一个；老叶子随后被宿主还原——右侧栏多出一个中国日历，
+    // 每重载一次多一个。tests/calendar-leaf.mjs 按真机语义钉住这条。
+    const hostWillRestore = ctx.app.workspace.getLeavesOfType(CALENDAR_VIEW_TYPE).length > 0;
+
     ctx.plugin.registerView(
         CALENDAR_VIEW_TYPE,
         (leaf) => new ZiminosCalendarView(leaf, holidays, openPeriod, hasNote),
@@ -53,6 +67,9 @@ export function registerCalendar(
     });
 
     ctx.app.workspace.onLayoutReady(() => {
+        // 老叶子归宿主还原，位置与页签顺序都是用户自己摆的；这时再开一个不是冗余，是多一个。
+        if (hostWillRestore) return;
+
         // active=false：默认展开右侧栏但不抢走编辑器焦点；功能始终注册，不提供关闭开关
         void revealCalendar(ctx.app, false).catch(() => undefined);
     });
