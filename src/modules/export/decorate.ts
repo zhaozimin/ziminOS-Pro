@@ -273,8 +273,10 @@ function measureTextWidth(text: string, fontSize: number, fontFamily: string): n
  * 一行 flex 是块级的，它的盒子横跨整张纸宽，把它整块变成链接，
  * 用户点在标题右边八厘米的空白上也会跳转——那不是他以为自己点到的东西。
  *
- * 坐标走 offsetLeft/offsetTop 链而不是 getBoundingClientRect：后者会把祖先身上的
- * transform 一并算进去，而预览正是靠 transform 缩放的。用布局值，量到的就永远是纸自己的坐标。
+ * 坐标全部经 pushRects 算，页眉页脚与正文共用那一处——v0.32.0 之前这里另走一套
+ * offsetLeft/offsetTop 链，两套算同一件事，其中一套把页脚的 y 算了两遍、整条链接落到纸外面。
+ * 预览是靠 transform 缩放的，所以客户端矩形带着那个比例；frameOf 量一次纸的原点与比例，
+ * pushRects 再把它除回去，于是缩放与不缩放时给出同一组纸面坐标。
  */
 export function linkRegions(article: HTMLElement, style: ExportStyle): LinkRegion[] {
     const regions: LinkRegion[] = [];

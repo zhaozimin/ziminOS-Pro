@@ -228,14 +228,17 @@ export class SettingsPanels {
     /**
      * 微信读书的连接状态，加一个按钮。
      *
-     * 它是设置而不只是命令，理由是「人主导」：这是全插件唯一一份存在 data.json 里的凭据，
+     * 它是设置而不只是命令，理由是「人主导」：这是全插件唯一一份持久凭据，
      * 那就必须有一处能看见它在不在、并且能当场撤掉。命令面板里那条「连接微信读书」
      * 只能连不能断——一条只往一个方向走的命令，不构成开关。
      * 断开只清掉本机存的那串 Cookie，不去动微信读书那边的任何东西：
      * 插件从来不代替用户管理他在别人家的账号。
+     *
+     * 状态经注入问出来而不是读设置对象：那串 Cookie 住在 SecretStorage 里，
+     * 而「凭据存在哪」是 books 模块自己的事，与断开走的是同一条纪律。
      */
     private renderWereadRow(containerEl: HTMLElement): void {
-        const connected = !!this.ctx.settings.wereadCookie.trim();
+        const connected = this.actions.isWereadConnected();
 
         new Setting(containerEl)
             .setName(TEXTS.wereadName)
@@ -256,7 +259,7 @@ export class SettingsPanels {
 
                     try {
                         if (connected) {
-                            // 只抹掉 data.json 里那串 Cookie 不算断开——同一会话的内存令牌还在。
+                            // 只抹掉存着的那串 Cookie 不算断开——同一会话的内存令牌还在。
                             // 「断开」的边界只有 books 模块自己知道，因此走注入（v0.16.0 审计结论）
                             await this.actions.disconnectWeread();
                         } else {

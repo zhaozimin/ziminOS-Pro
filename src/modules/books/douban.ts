@@ -378,16 +378,29 @@ function attr(html: string, pattern: RegExp): string {
     return clean(pattern.exec(html)?.[1] ?? '');
 }
 
-/** 剥标签、还原实体、压空白。豆瓣的字段值里混着 `<a>`、`&amp;` 与大量换行缩进 */
+/** 这一趟认得的实体。表与正则同源，加一条只改这里 */
+const ENTITIES: Record<string, string> = {
+    '&nbsp;': ' ',
+    '&amp;': '&',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&lt;': '<',
+    '&gt;': '>',
+};
+
+/**
+ * 剥标签、还原实体、压空白。豆瓣的字段值里混着 `<a>`、`&amp;` 与大量换行缩进。
+ *
+ * 实体**一趟换完**，而不是一条 replace 接一条：链式替换里 `&amp;` 排在 `&lt;` 前面，
+ * 于是 `&amp;lt;` 先变成 `&lt;`、再变成 `<`——一次二次解码。书名里带尖括号的概率不高，
+ * 但这段文字接着会被写进 Markdown，而 Obsidian 的渲染器认 HTML：
+ * 那个 `<` 从此不再是学员看到的那个字，它成了标记。一趟扫描让这件事在机制上不可能发生，
+ * 而不是靠「记得把 &amp; 放最后」这种下一个人不会知道的约定。
+ */
 function clean(value: string): string {
     return value
         .replace(/<[^>]*>/g, ' ')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
+        .replace(/&(?:nbsp|amp|quot|#39|lt|gt);/g, (entity) => ENTITIES[entity] ?? entity)
         .replace(/\s+/g, ' ')
         .trim();
 }

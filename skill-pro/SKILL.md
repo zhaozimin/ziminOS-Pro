@@ -76,7 +76,7 @@ curl -fsSL https://gitee.com/ziminzhao/ziminos-pro/raw/main/installer/install.sh
 | `ok` | 装好了，而且每个文件都与安装包逐字节核对过 | 删掉这个结果文件，直接按第六节交付给用户，并把结果里的 `version` 报给他 |
 | `upgrade` | 这里已经装过 ziminOS | 删掉结果文件，按结果里的 `mode` 走：`upgrade-B` 进「三、B 从第一版升级到第二版」，`upgrade-C` 进「三、C 三库系统的日常升级」，都从第二节取得施工源开始 |
 | `refused` | 文件夹不安全或不是空的，`message` 写着原因 | 把 `message` 原话告诉用户，停下来，不要换办法绕过去 |
-| `failed` | 取包、校验或自检没过，`error` 或 `problems` 写着卡在哪 | 脚本已经撤掉了它写进文件夹的东西。删掉结果文件，从第二节起逐条执行；把 `error` 一并告诉用户 |
+| `failed` | 取包、校验或自检没过，`error` 或 `problems` 写着卡在哪 | 先看 `rolled_back`：`true` 表示它写进文件夹的东西已经撤干净，删掉结果文件、从第二节起逐条执行即可；`false` 时 `rollback_leftovers` 列着撤不掉的那几个，**先请用户手动删掉它们再继续**——留着它们，下一次运行会把这里当成「已经装过」而去走升级。两种情况都把 `error` 告诉用户 |
 
 命令本身报错、没有生成结果文件时，按 `failed` 处理。
 

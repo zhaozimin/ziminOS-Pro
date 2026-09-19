@@ -880,11 +880,40 @@ if (existsSync(proContractPath)) {
      * Bash 在部分多字节 locale 下会把变量后的中文标点误吞进变量名。
      * `set -u` 最终报的是 `version�: unbound variable`，而且发生在两边回归全绿之后；
      * 变量与非 ASCII 字符相邻时必须用 `${name}` 明确划界。
+     *
+     * 这条刻意扫**全部** Shell 脚本，而不是点名某一个文件。v0.35.1 在 publish-v1.sh 上
+     * 修过一次这个 bug，当时的回归却只钉住了那一个文件名，于是同样的写法在
+     * make-v1-package.sh 里安然活到了 v0.35.3——其中一处还落在每次打包必经的 heredoc 里：
+     * zip 打好了、SHA 算完了，最后一步生成发行说明时才中止，症状与当初一字不差。
+     * **缺陷属于一类写法，不属于一个文件**，断言的范围必须按缺陷的形状来定。
+     *
+     * 报出的是「哪个文件第几行、吞进去的是哪个变量」而不是一句「不该匹配」：
+     * 这条一旦变红，读的人要的是下一步动作，不是再去全仓库找一遍。
      */
-    test('publish-v1.sh 的 Shell 变量与中文相邻时显式划界', () => {
-        const script = readFileSync(path.join(ROOT, 'publish-v1.sh'), 'utf8');
+    test('Shell 脚本里的变量与中文相邻时一律显式划界', () => {
+        const scripts = [
+            ...readdirSync(ROOT).filter((name) => name.endsWith('.sh')),
+            ...readdirSync(path.join(ROOT, 'installer'))
+                .filter((name) => name.endsWith('.sh'))
+                .map((name) => path.join('installer', name)),
+        ].sort();
 
-        assert.doesNotMatch(script, /\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/u);
+        // 脚本搬了家而扫描范围没跟着改时，这条会变成一条永远绿的测试
+        assert.ok(scripts.length >= 5, `只找到 ${scripts.length} 个 Shell 脚本，扫描范围已经失效`);
+
+        const offenders = [];
+
+        for (const script of scripts) {
+            readFileSync(path.join(ROOT, script), 'utf8')
+                .split('\n')
+                .forEach((line, index) => {
+                    const hit = /\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/u.exec(line);
+
+                    if (hit) offenders.push(`${script}:${index + 1} \u2192 ${hit[0]}`);
+                });
+        }
+
+        assert.deepEqual(offenders, [], `这些变量紧挨着非 ASCII 字符，必须写成 \${name}：\n${offenders.join('\n')}`);
     });
 
     test('publish-v1.sh 把同一提交非强制推到 GitHub 与 Gitee', () => {
