@@ -1,21 +1,26 @@
 /**
  * [INPUT]: 依赖 obsidian 的 TFile 与 App 类型；依赖 core/constants 的 FIELDS/FOLDERS，
- *          core/folders 的 isInFolder/normalizeFolderPath，core/types 的 ZiminosContext
+ *          core/folders 的 isInFolder/normalizeFolderPath，core/modals 的 ChoiceModal/TextInputModal，
+ *          core/types 的 ZiminosContext
  * [OUTPUT]: 对外提供 isLivePath（还在经营范围内）、liveNotesOfType（命令侧的候选人清单）、
- *           descriptionOf、lastContactDayOf 与 pickPerson（跨两库的选人弹窗）
+ *           descriptionOf 与 askDescription（那句简介的一读一问）、lastContactDayOf
+ *           与 pickPerson（跨两库的选人弹窗）
  * [POS]: 「谁还算数」这个问题的唯一答案处，被两条命令与十几个视图共用。
  *        全部视图靠 type 认身份、不靠文件夹，唯一还认位置的是归档——
  *        因为「不再往来的人」需要一个退出机制，而他的身份没变，
  *        变的是你不再经营这段关系，这件事只能用位置表达。
  *        归档目录取自插件设置，不再需要库内的一份配置笔记：
- *        视图搬进插件之后，位置依赖彻底收敛到设置页那一个输入框
+ *        视图搬进插件之后，位置依赖彻底收敛到设置页那一个输入框。
+ *        那句简介的读（descriptionOf）与问（askDescription）同住这里：它是一个人在名录与
+ *        选人列表里的脸面，「这一句该写什么」只能有一个说法，人脉与客户两条建档命令共用它
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import { Notice, TFile } from 'obsidian';
+import type { App } from 'obsidian';
 import type { ViewContext } from '../../core/codeblock';
 import { FIELDS, FOLDERS, NOTE_TYPES } from '../../core/constants';
-import { ChoiceModal } from '../../core/modals';
+import { ChoiceModal, TextInputModal } from '../../core/modals';
 import { isInFolder, isSystemPath, normalizeFolderPath } from '../../core/folders';
 import { dayOfTitle } from '../../core/time';
 import type { ZiminosContext } from '../../core/types';
@@ -58,6 +63,25 @@ export function descriptionOf(ctx: ZiminosContext, file: TFile): string {
     const value = ctx.app.metadataCache.getFileCache(file)?.frontmatter?.[FIELDS.description];
 
     return String(value ?? '').trim();
+}
+
+/**
+ * 建档时问那句简介，人脉与客户两条命令共用。
+ *
+ * 必填，没有例外（v0.38.0 用户明令）：空着的档案在选人列表里只剩一个名字，
+ * 同名时无从分辨，在名录「一句话」那一栏里也只是一格空白。空白提交留在原窗补，
+ * 因此返回的一定是修剪过的非空文本；只有人主动取消才返回 null，调用方据此不建档。
+ * 单行而不是多行：它落进 frontmatter，又要跟在名字后面挤进选人列表的那一行。
+ */
+export async function askDescription(app: App): Promise<string | null> {
+    const answer = await new TextInputModal(app, {
+        title: '用一句话介绍这个人',
+        hint: '可以写你们是怎么认识的，或者这个人对你意味着什么。之后每次选人，它都跟在名字后面。',
+        placeholder: '例如：2024 年读书会上认识，做独立出版，常一起聊选题',
+        required: '这一句必须填，填好才能建档。',
+    }).openAndGetValue();
+
+    return answer === null ? null : answer.trim();
 }
 
 /**

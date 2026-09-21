@@ -283,7 +283,7 @@ const balance: ViewDefinition = {
         }
 
         if (!balances.size) {
-            renderEmpty(view.el, '没有未两清的人情。命令面板运行「记人情」记下一笔。');
+            renderEmpty(view.el, '没有未两清的人情。命令面板运行「礼尚往来」记下一笔。');
 
             return;
         }

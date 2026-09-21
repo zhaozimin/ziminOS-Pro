@@ -2,15 +2,19 @@
  * [INPUT]: 依赖 core/constants 的 FIELDS/NOTE_TYPES/CLIENT_MOC/LEDGER/PAYMENT_FIELDS，
  *          依赖 ../review/templates 的 viewBlock 与 ./moc 的 basenameOf
  * [OUTPUT]: 对外提供 personTemplateFile/personNoteContent、clientTemplateFile/clientNoteContent、
- *           contactMocContent/clientMocContent、ensureClientAnswerView 七个纯函数，
+ *           contactMocContent/clientMocContent、ensureClientViews 七个纯函数，
  *           以及 PersonValues/ClientValues 两个入参类型
  * [POS]: 人脉与客户模块唯一生成文本的地方，纯函数无副作用。
  *        一条贯穿全文件的纪律：模板文件的 type 必须留空。识别身份靠 type 而不靠文件夹，
  *        模板一旦自带 type: person，它自己就会变成名录里的一个人、投喂名单上的一张嘴、
- *        以及「记人情」选人列表里的一个候选。留空是它不污染任何统计的唯一办法，
+ *        以及「礼尚往来」选人列表里的一个候选。留空是它不污染任何统计的唯一办法，
  *        代价是手工复制模板建档要自己补 type——用命令建档则不必操心。
+ *        客户档案的自动小节收在 CLIENT_SECTIONS 一张有序表里，新建档案与补齐旧档案都照它来：
+ *        模板长出什么、旧档案该补什么、补在哪一节前面，只有这一个答案，两边不会各说各话。
  *        两张 MOC 的使用说明正文一并在此：它们是学员唯一会反复读的说明书，
- *        而说明书与实现分处两地必然漂移，所以让它们从同一处生成
+ *        而说明书与实现分处两地必然漂移，所以让它们从同一处生成。
+ *        用户亲手敲的字（简介、联系方式）一律以双引号字符串落进 YAML：一句「微信: abc」
+ *        或以 @ 打头的平台账号裸写进去，整份 frontmatter 就解析失败，而那不会报错，只会让档案从名录里消失
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -31,6 +35,8 @@ export interface PersonValues {
     readonly uid: number | null;
     /** 模板留空，建档填 person */
     readonly type: string;
+    /** 一句话简介：怎么认识的、这个人对我意味着什么；建档时必填，模板留空 */
+    readonly description: string;
     /** 归属圈子，建档时默认指向人脉 MOC */
     readonly up: string;
     readonly tier: string;
@@ -43,13 +49,47 @@ export interface ClientValues {
     /** 14 位数字 UID；模板文件传 null 表示留空 */
     readonly uid: number | null;
     readonly type: string;
+    /** 一句话简介，与人脉档案同一个字段、同一种问法；建档时必填，模板留空 */
+    readonly description: string;
     /** 他从哪个渠道来 */
     readonly source: string;
     readonly contact: string;
 }
 
-const CLIENT_ANSWER_HEADING = '## 客户答疑（自动）';
-const CLIENT_ANSWER_VIEW = viewBlock('客户答疑');
+/** 客户档案上一个由插件长出来的视图小节 */
+interface ClientSection {
+    readonly heading: string;
+    /** 笔记内视图名，即 ```ziminos 代码块里那一行 */
+    readonly view: string;
+    /**
+     * 这一节是哪一版才加进模板的。带着它的，旧档案里天然没有，「补齐客户档案检索」负责补；
+     * 不带的是模板从第一天就有的——旧档案里缺了，说明是用户自己删的，补齐命令不替他加回来。
+     */
+    readonly since?: string;
+}
+
+/**
+ * 客户档案的自动小节，顺序即档案里从上到下的顺序。
+ *
+ * 相关项目紧挨着付费与交付：两条交易线（买东西的、找你办事的）回答的都是「我欠他什么交付」，
+ * 放在一起才看得全；之后是答疑、发生过的事与待办——与人脉档案同一条时间线。
+ */
+const CLIENT_SECTIONS: readonly ClientSection[] = [
+    { heading: '## 付费与交付', view: '付费与交付' },
+    { heading: '## 相关项目（自动）', view: '相关项目', since: 'v0.38.0' },
+    { heading: '## 客户答疑（自动）', view: '客户答疑', since: 'v0.23.0' },
+    { heading: '## 关键事件（自动）', view: '关键事件' },
+    { heading: '## 待办（自动）', view: '待办' },
+];
+
+/**
+ * 一个 frontmatter 字段的整行：有值写成 YAML 双引号字符串，空值只留键名。
+ * 与 projects/templates 的 toYamlString 同法（借 JSON.stringify 转义，中文与冒号都安全）；
+ * 不跨模块共享那份实现——模块之间彼此不认识，一行代码不值得为此打洞。
+ */
+function quotedField(key: string, value: string): string {
+    return value ? `${key}: ${JSON.stringify(value)}` : `${key}:`;
+}
 
 // ============================================================
 // 人脉档案
@@ -66,7 +106,7 @@ export function personNoteContent(values: PersonValues): string {
     const frontmatter = [
         '---',
         `${FIELDS.aliases}:`,
-        `${FIELDS.description}:`,
+        quotedField(FIELDS.description, values.description),
         `${FIELDS.created}: ${values.created}`,
         `${FIELDS.updated}:`,
         `${FIELDS.tags}:`,
@@ -112,7 +152,15 @@ export function personNoteContent(values: PersonValues): string {
 
 /** 供手工复制的人脉模板：全字段留空，type 尤其必须空 */
 export function personTemplateFile(): string {
-    return personNoteContent({ created: '', uid: null, type: '', up: '', tier: '', direction: '' });
+    return personNoteContent({
+        created: '',
+        uid: null,
+        type: '',
+        description: '',
+        up: '',
+        tier: '',
+        direction: '',
+    });
 }
 
 // ============================================================
@@ -132,14 +180,14 @@ export function clientNoteContent(values: ClientValues): string {
     const frontmatter = [
         '---',
         `${FIELDS.aliases}:`,
-        `${FIELDS.description}:`,
+        quotedField(FIELDS.description, values.description),
         `${FIELDS.created}: ${values.created}`,
         `${FIELDS.updated}:`,
         `${FIELDS.tags}:`,
         `${FIELDS.uid}:${values.uid === null ? '' : ` ${values.uid}`}`,
         `${FIELDS.type}:${values.type ? ` ${values.type}` : ''}`,
         `${FIELDS.source}:${values.source ? ` ${values.source}` : ''}`,
-        `${FIELDS.contact}:${values.contact ? ` ${values.contact}` : ''}`,
+        quotedField(FIELDS.contact, values.contact),
         `${FIELDS.homepage}:`,
         '---',
     ].join('\n');
@@ -147,52 +195,53 @@ export function clientNoteContent(values: ClientValues): string {
     return [
         frontmatter,
         '',
-        '## 付费与交付',
-        '',
-        viewBlock('付费与交付'),
-        '',
-        CLIENT_ANSWER_HEADING,
-        '',
-        CLIENT_ANSWER_VIEW,
-        '',
-        '## 关键事件（自动）',
-        '',
-        viewBlock('关键事件'),
-        '',
-        '## 待办（自动）',
-        '',
-        viewBlock('待办'),
-        '',
+        ...CLIENT_SECTIONS.flatMap((section) => [section.heading, '', viewBlock(section.view), '']),
     ].join('\n');
 }
 
 /** 供手工复制的客户模板：全字段留空 */
 export function clientTemplateFile(): string {
-    return clientNoteContent({ created: '', uid: null, type: '', source: '', contact: '' });
+    return clientNoteContent({
+        created: '',
+        uid: null,
+        type: '',
+        description: '',
+        source: '',
+        contact: '',
+    });
 }
 
 /**
- * 给旧客户档案只补一块“客户答疑”视图。
+ * 给旧客户档案补上后来才加进模板的那几块视图（目前是相关项目与客户答疑）。
  *
- * 这是显式升级命令的纯文本内核：已有块逐字不动；已有同名标题就只把块放进标题下；
- * 标题也没有时优先插在关键事件前，让新旧档案的阅读顺序一致。全文换行符沿用原文件。
+ * 这是显式升级命令的纯文本内核，逐块三步：代码块已在就逐字不动；只剩同名标题就把代码块放进标题下；
+ * 标题也没有，就插在模板里排在它后面、而这份档案里确实还在的第一节之前——于是补完的档案
+ * 与新建的档案从上到下是同一个顺序；后面一节都找不到才追加到文末。全文换行符沿用原文件，重复运行不变。
  */
-export function ensureClientAnswerView(content: string): string {
+export function ensureClientViews(content: string): string {
     const newline = content.includes('\r\n') ? '\r\n' : '\n';
-    const normalized = content.replace(/\r\n/g, '\n');
+    let updated = content.replace(/\r\n/g, '\n');
 
-    if (normalized.includes(CLIENT_ANSWER_VIEW)) return content;
+    CLIENT_SECTIONS.forEach((section, index) => {
+        if (!section.since) return;
 
-    const section = `${CLIENT_ANSWER_HEADING}\n\n${CLIENT_ANSWER_VIEW}\n`;
-    let updated: string;
+        const block = viewBlock(section.view);
 
-    if (normalized.includes(CLIENT_ANSWER_HEADING)) {
-        updated = normalized.replace(CLIENT_ANSWER_HEADING, `${CLIENT_ANSWER_HEADING}\n\n${CLIENT_ANSWER_VIEW}`);
-    } else if (normalized.includes('## 关键事件（自动）')) {
-        updated = normalized.replace('## 关键事件（自动）', `${section}\n## 关键事件（自动）`);
-    } else {
-        updated = `${normalized.replace(/\n*$/, '')}\n\n${section}`;
-    }
+        if (updated.includes(block)) return;
+
+        if (updated.includes(section.heading)) {
+            updated = updated.replace(section.heading, `${section.heading}\n\n${block}`);
+
+            return;
+        }
+
+        const whole = `${section.heading}\n\n${block}\n`;
+        const next = CLIENT_SECTIONS.slice(index + 1).find((later) => updated.includes(later.heading));
+
+        updated = next
+            ? updated.replace(next.heading, `${whole}\n${next.heading}`)
+            : `${updated.replace(/\n*$/, '')}\n\n${whole}`;
+    });
 
     return newline === '\n' ? updated : updated.replace(/\n/g, newline);
 }
@@ -278,7 +327,7 @@ export function contactMocContent(
         '',
         '### 日常三个动作',
         '',
-        '- **建档**：命令面板运行「新建人脉」，三连问（姓名 → 分层 → 方向），归属自动指向本 MOC。档案平铺存放，不建子目录。',
+        '- **建档**：命令面板运行「新建人脉」，四问（姓名 → 分层 → 方向 → 一句话简介），归属自动指向本 MOC。简介必填：写你们怎么认识的，或者这个人对你意味着什么，名录「一句话」那一栏显示的就是它。档案平铺存放，不建子目录。',
         `- **进投喂名单**：打开档案，属性里把 \`${FIELDS.gift}\` 写成 true、填好 \`${FIELDS.address}\`。带特产回来时，名单和地址已经就位。`,
         '- **记事记账**：全部写进**当天日记**，靠一行的形态自动分流到他的档案：',
         '',
@@ -288,7 +337,7 @@ export function contactMocContent(
         '| `- [ ] 出网咖投资方案给 [[张三]]` | 待办 |',
         `| \`- [[张三]]${LEDGER.separator}去${LEDGER.separator}送了半斤生普${LEDGER.separator}两清\` | 人情账本 |`,
         '',
-        `账本行也可以用命令「记人情」四步点选写入。手写时注意：人名必须带 \`[[ ]]\`（它是索引），分隔符用全角 \`${LEDGER.separator}\`，状态取 ${LEDGER.statuses.join(' / ')}，${LEDGER.defaultStatus}可整段省略。`,
+        `账本行也可以用命令「礼尚往来」四步点选写入。手写时注意：人名必须带 \`[[ ]]\`（它是索引），分隔符用全角 \`${LEDGER.separator}\`，状态取 ${LEDGER.statuses.join(' / ')}，${LEDGER.defaultStatus}可整段省略。`,
         '',
         '### 名录怎么读',
         '',
@@ -332,7 +381,7 @@ export function clientMocContent(created: string, uid: number): string {
         '',
         '### 日常三个动作',
         '',
-        '- **建档**：命令面板运行「新建客户」，填写称呼、渠道和联系方式。',
+        '- **建档**：命令面板运行「新建客户」，填写称呼、渠道、联系方式和一句话简介（必填：怎么认识的、这个人对你意味着什么），选客户时它跟在名字后面。',
         '- **记一笔钱**：运行「增加付费」，选客户、产品并填写金额。',
         '- **完成交付**：打开客户档案，在「付费与交付」小节勾掉对应任务；MOC 自动刷新。',
         '',
@@ -358,6 +407,8 @@ export function clientMocContent(created: string, uid: number): string {
         '### 一条法，两类档案都守',
         '',
         '**日常发生的事只写一处：当天日记，句子里带 `[[客户名]]`。** 客户档案的「关键事件」和「待办」会自己把它们检索过来，和人脉档案完全同一套机制。所以客户档案里没有手写的「他的问题」「交付记录」小节——**你不用维护任何一份档案的正文**。',
+        '',
+        `替他做的项目同样不用往档案里抄：「新建项目」时选「客户委托的」并选中他（写进项目的 \`${FIELDS.client}\`），项目就出现在他档案的「相关项目」里；项目做完或放弃，自动移进「关键事件」。从旧版升级上来的客户档案没有这一块，运行一次「补齐客户档案检索」即可补上。`,
         '',
     ].join('\n');
 }

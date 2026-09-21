@@ -3,7 +3,8 @@
  *          core/constants 的 FIELDS/NOTE_TYPES/PAYMENT_FIELDS，core/table 的渲染原语，
  *          core/time 的 dayText/dayOfMillis/daysBetween/today，core/vaultIndex 的 extractLinks/toStringList/toText；
  *          依赖 ./identity 的 archiveFolderOf/isLivePath/lastContactDayOf
- * [OUTPUT]: 对外提供 clientViews（客户 MOC 七视图 + 客户档案的付费与交付/客户答疑 + 项目 MOC 的项目收款）
+ * [OUTPUT]: 对外提供 clientViews（客户 MOC 七视图 + 客户档案的付费与交付/客户答疑 + 项目 MOC 的项目收款）；
+ *           客户答疑只列两栏——哪一篇、那次解决了什么（概述即答疑笔记的 description）
  * [POS]: 客户与付费这条线的全部读侧。两条交易线回答的问题不同，所以分两区：
  *        产品型（陌生人买东西，只知道渠道与联系方式）问的是钱从哪来、货给了没；
  *        服务型（认识的人找你办事，有项目有过程）问的是欠谁的活、哪类问题该做成课。
@@ -17,7 +18,15 @@
 import type { TFile } from 'obsidian';
 import type { ViewContext, ViewDefinition } from '../../core/codeblock';
 import { FIELDS, NOTE_TYPES, PAYMENT_FIELDS } from '../../core/constants';
-import { noteLink, renderEmpty, renderHeading, renderNote, renderSummary, renderTable } from '../../core/table';
+import {
+    noteLink,
+    renderEmpty,
+    renderHeading,
+    renderNote,
+    renderSummary,
+    renderTable,
+    richText,
+} from '../../core/table';
 import type { Cell } from '../../core/table';
 import { dayOfMillis, dayText, daysBetween, today } from '../../core/time';
 import { extractLinks, toStringList, toText } from '../../core/vaultIndex';
@@ -441,6 +450,11 @@ const clientPayments: ViewDefinition = {
  *
  * 两道条件必须同时成立：标签说明“这是一篇答疑”，frontmatter 双链说明“它属于这个客户”。
  * 只看反链会把正文示例里偶然提到的人也算进来；只看标签则无法回答这篇是谁的。
+ *
+ * 表只有两栏：哪一篇、那次解决了什么。第二栏就是答疑笔记自己的 description——
+ * 它本来就是建卡片时问过的那句概述，不另设字段。领域与更新日期 v0.38.0 起不再显示（用户明令）：
+ * 站在客户档案上要回答的是「给他解决过哪些问题」，这两栏都不回答它；日期仍决定先后，新的在上。
+ * 概述是用户的原话，走 richText 而不是我们自己文案的渲染器，里面的双链照样可点。
  */
 const clientAnswers: ViewDefinition = {
     name: '客户答疑',
@@ -458,7 +472,8 @@ const clientAnswers: ViewDefinition = {
             .filter((file) => view.index.frontmatterLinksTo(file, client))
             .map((file) => ({
                 file,
-                domain: answerDomainOf(view, file, client),
+                summary: toText(view.index.fieldOf(file, FIELDS.description)),
+                // 只用来排先后，不再占一栏
                 updated:
                     dayText(view.index.fieldOf(file, FIELDS.updated)) ??
                     dayText(view.index.fieldOf(file, FIELDS.created)) ??
@@ -480,13 +495,12 @@ const clientAnswers: ViewDefinition = {
             view.ctx.app,
             view.el,
             view.sourcePath,
-            ['答疑', '领域', '更新日期'],
+            ['答疑', '概述'],
             answers.map((answer): Cell[] => [
                 noteLink(answer.file),
-                answer.domain ? noteLink(answer.domain) : '—',
-                answer.updated,
+                answer.summary ? richText(answer.summary, answer.file.path) : '—',
             ]),
-            0,
+            1,
         );
     },
 };
@@ -611,17 +625,6 @@ function hasTag(view: ViewContext, file: TFile, expected: string): boolean {
     return toStringList(view.index.fieldOf(file, FIELDS.tags))
         .map((tag) => tag.replace(/^#/, '').toLowerCase())
         .includes(expected);
-}
-
-/** up 里除客户本人之外的第一条链接就是答疑所属领域；没有则如实留空 */
-function answerDomainOf(view: ViewContext, answer: TFile, client: TFile): TFile | null {
-    for (const link of extractLinks(String(view.index.fieldOf(answer, FIELDS.up) ?? ''))) {
-        const target = view.index.resolve(link, answer.path);
-
-        if (target && target.path !== client.path) return target;
-    }
-
-    return null;
 }
 
 function sum(payments: readonly Payment[]): number {

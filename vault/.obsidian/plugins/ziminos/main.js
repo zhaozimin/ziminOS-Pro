@@ -21945,9 +21945,11 @@ var CONTACT_COMMANDS = {
     icon: COMMAND_ICONS.contact,
     group: COMMAND_GROUPS.contacts
   },
+  // 名字 v0.38.0 起由「记人情」改为「礼尚往来」；id 刻意不跟着改——快捷键与边栏勾选都按 id 记，
+  // 改 id 等于让用户绑过的键与勾过的格子一起失效。边栏图标在 Obsidian 那边却是按名字认的，见规格 §71
   favor: {
     id: "record-favor",
-    name: "\u8BB0\u4EBA\u60C5",
+    name: "\u793C\u5C1A\u5F80\u6765",
     icon: COMMAND_ICONS.favor,
     group: COMMAND_GROUPS.contacts
   }
@@ -21959,9 +21961,11 @@ var CLIENT_COMMANDS = {
     icon: COMMAND_ICONS.clients,
     group: COMMAND_GROUPS.clients
   },
+  // v0.38.0 起它补的不止答疑，还有相关项目，名字随之改为「补齐客户档案检索」；
+  // id 不跟着改，理由与「礼尚往来」同一条：勾过、绑过的都认 id
   answers: {
     id: "backfill-client-answer-views",
-    name: "\u8865\u9F50\u5BA2\u6237\u7B54\u7591\u68C0\u7D22",
+    name: "\u8865\u9F50\u5BA2\u6237\u6863\u6848\u68C0\u7D22",
     icon: COMMAND_ICONS.qa,
     group: COMMAND_GROUPS.clients
   },
@@ -23512,16 +23516,38 @@ var TextInputModal = class extends import_obsidian8.Modal {
     var _a2, _b2;
     this.titleEl.setText(this.options.title);
     this.contentEl.empty();
+    if (this.options.hint) renderHint(this.contentEl, this.options.hint);
     const inputEl = this.contentEl.createEl("input", {
       type: "text",
       value: (_a2 = this.options.initial) != null ? _a2 : "",
       placeholder: (_b2 = this.options.placeholder) != null ? _b2 : ""
     });
     inputEl.style.width = "100%";
+    const required = this.options.required;
+    const errorEl = required ? this.contentEl.createEl("p") : null;
+    if (errorEl) {
+      errorEl.style.display = "none";
+      errorEl.style.margin = "8px 0 0";
+      errorEl.style.color = "var(--text-error)";
+    }
+    const attempt = () => {
+      if (required && errorEl && !inputEl.value.trim()) {
+        errorEl.setText(required);
+        errorEl.style.display = "";
+        inputEl.focus();
+        return;
+      }
+      this.submit(inputEl.value);
+    };
+    if (errorEl) {
+      inputEl.addEventListener("input", () => {
+        errorEl.style.display = "none";
+      });
+    }
     inputEl.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.isComposing) return;
       event.preventDefault();
-      this.submit(inputEl.value);
+      attempt();
     });
     const buttonBar = this.contentEl.createDiv();
     buttonBar.style.display = "flex";
@@ -23529,7 +23555,7 @@ var TextInputModal = class extends import_obsidian8.Modal {
     buttonBar.style.gap = "8px";
     buttonBar.style.marginTop = "16px";
     new import_obsidian8.ButtonComponent(buttonBar).setButtonText("\u53D6\u6D88").onClick(() => this.close());
-    new import_obsidian8.ButtonComponent(buttonBar).setButtonText("\u786E\u8BA4").setCta().onClick(() => this.submit(inputEl.value));
+    new import_obsidian8.ButtonComponent(buttonBar).setButtonText("\u786E\u8BA4").setCta().onClick(attempt);
     inputEl.focus();
     inputEl.select();
   }
@@ -23571,12 +23597,7 @@ var TextAreaModal = class extends import_obsidian8.Modal {
     var _a2;
     this.titleEl.setText(this.options.title);
     this.contentEl.empty();
-    if (this.options.hint) {
-      const hintEl = this.contentEl.createEl("p", { text: this.options.hint });
-      hintEl.style.margin = "0 0 10px";
-      hintEl.style.color = "var(--text-muted)";
-      hintEl.style.lineHeight = "1.6";
-    }
+    if (this.options.hint) renderHint(this.contentEl, this.options.hint);
     const textareaEl = this.contentEl.createEl("textarea", {
       placeholder: (_a2 = this.options.placeholder) != null ? _a2 : ""
     });
@@ -23616,6 +23637,12 @@ var TextAreaModal = class extends import_obsidian8.Modal {
     if (resolve) resolve(value);
   }
 };
+function renderHint(container, hint) {
+  const hintEl = container.createEl("p", { text: hint });
+  hintEl.style.margin = "0 0 10px";
+  hintEl.style.color = "var(--text-muted)";
+  hintEl.style.lineHeight = "1.6";
+}
 var ChoiceModal = class extends import_obsidian8.FuzzySuggestModal {
   constructor(app, options) {
     super(app);
@@ -55189,6 +55216,15 @@ function descriptionOf(ctx, file) {
   const value = (_b2 = (_a2 = ctx.app.metadataCache.getFileCache(file)) == null ? void 0 : _a2.frontmatter) == null ? void 0 : _b2[FIELDS.description];
   return String(value != null ? value : "").trim();
 }
+async function askDescription(app) {
+  const answer = await new TextInputModal(app, {
+    title: "\u7528\u4E00\u53E5\u8BDD\u4ECB\u7ECD\u8FD9\u4E2A\u4EBA",
+    hint: "\u53EF\u4EE5\u5199\u4F60\u4EEC\u662F\u600E\u4E48\u8BA4\u8BC6\u7684\uFF0C\u6216\u8005\u8FD9\u4E2A\u4EBA\u5BF9\u4F60\u610F\u5473\u7740\u4EC0\u4E48\u3002\u4E4B\u540E\u6BCF\u6B21\u9009\u4EBA\uFF0C\u5B83\u90FD\u8DDF\u5728\u540D\u5B57\u540E\u9762\u3002",
+    placeholder: "\u4F8B\u5982\uFF1A2024 \u5E74\u8BFB\u4E66\u4F1A\u4E0A\u8BA4\u8BC6\uFF0C\u505A\u72EC\u7ACB\u51FA\u7248\uFF0C\u5E38\u4E00\u8D77\u804A\u9009\u9898",
+    required: "\u8FD9\u4E00\u53E5\u5FC5\u987B\u586B\uFF0C\u586B\u597D\u624D\u80FD\u5EFA\u6863\u3002"
+  }).openAndGetValue();
+  return answer === null ? null : answer.trim();
+}
 async function pickPerson(ctx, title) {
   const candidates = [
     ...liveNotesOfType(ctx, NOTE_TYPES.person),
@@ -55425,7 +55461,7 @@ var balance = {
       balances.set(entry.person.path, current);
     }
     if (!balances.size) {
-      renderEmpty(view.el, "\u6CA1\u6709\u672A\u4E24\u6E05\u7684\u4EBA\u60C5\u3002\u547D\u4EE4\u9762\u677F\u8FD0\u884C\u300C\u8BB0\u4EBA\u60C5\u300D\u8BB0\u4E0B\u4E00\u7B14\u3002");
+      renderEmpty(view.el, "\u6CA1\u6709\u672A\u4E24\u6E05\u7684\u4EBA\u60C5\u3002\u547D\u4EE4\u9762\u677F\u8FD0\u884C\u300C\u793C\u5C1A\u5F80\u6765\u300D\u8BB0\u4E0B\u4E00\u7B14\u3002");
       return;
     }
     const rows = [...balances.values()].sort(
@@ -55750,7 +55786,8 @@ var clientAnswers = {
       var _a2, _b2;
       return {
         file,
-        domain: answerDomainOf(view, file, client),
+        summary: toText(view.index.fieldOf(file, FIELDS.description)),
+        // 只用来排先后，不再占一栏
         updated: (_b2 = (_a2 = dayText(view.index.fieldOf(file, FIELDS.updated))) != null ? _a2 : dayText(view.index.fieldOf(file, FIELDS.created))) != null ? _b2 : dayOfMillis(file.stat.mtime)
       };
     }).sort((left, right) => right.updated.localeCompare(left.updated));
@@ -55766,13 +55803,12 @@ var clientAnswers = {
       view.ctx.app,
       view.el,
       view.sourcePath,
-      ["\u7B54\u7591", "\u9886\u57DF", "\u66F4\u65B0\u65E5\u671F"],
+      ["\u7B54\u7591", "\u6982\u8FF0"],
       answers.map((answer) => [
         noteLink(answer.file),
-        answer.domain ? noteLink(answer.domain) : "\u2014",
-        answer.updated
+        answer.summary ? richText(answer.summary, answer.file.path) : "\u2014"
       ]),
-      0
+      1
     );
   }
 };
@@ -55855,14 +55891,6 @@ function clientProjects(view) {
 }
 function hasTag(view, file, expected) {
   return toStringList(view.index.fieldOf(file, FIELDS.tags)).map((tag) => tag.replace(/^#/, "").toLowerCase()).includes(expected);
-}
-function answerDomainOf(view, answer, client) {
-  var _a2;
-  for (const link of extractLinks(String((_a2 = view.index.fieldOf(answer, FIELDS.up)) != null ? _a2 : ""))) {
-    const target = view.index.resolve(link, answer.path);
-    if (target && target.path !== client.path) return target;
-  }
-  return null;
 }
 function sum(payments) {
   return payments.reduce((total, payment) => total + payment.amount, 0);
@@ -56058,13 +56086,21 @@ function bodyOf(key) {
 }
 
 // src/modules/contacts/templates.ts
-var CLIENT_ANSWER_HEADING = "## \u5BA2\u6237\u7B54\u7591\uFF08\u81EA\u52A8\uFF09";
-var CLIENT_ANSWER_VIEW = viewBlock("\u5BA2\u6237\u7B54\u7591");
+var CLIENT_SECTIONS = [
+  { heading: "## \u4ED8\u8D39\u4E0E\u4EA4\u4ED8", view: "\u4ED8\u8D39\u4E0E\u4EA4\u4ED8" },
+  { heading: "## \u76F8\u5173\u9879\u76EE\uFF08\u81EA\u52A8\uFF09", view: "\u76F8\u5173\u9879\u76EE", since: "v0.38.0" },
+  { heading: "## \u5BA2\u6237\u7B54\u7591\uFF08\u81EA\u52A8\uFF09", view: "\u5BA2\u6237\u7B54\u7591", since: "v0.23.0" },
+  { heading: "## \u5173\u952E\u4E8B\u4EF6\uFF08\u81EA\u52A8\uFF09", view: "\u5173\u952E\u4E8B\u4EF6" },
+  { heading: "## \u5F85\u529E\uFF08\u81EA\u52A8\uFF09", view: "\u5F85\u529E" }
+];
+function quotedField(key, value) {
+  return value ? `${key}: ${JSON.stringify(value)}` : `${key}:`;
+}
 function personNoteContent(values) {
   const frontmatter = [
     "---",
     `${FIELDS.aliases}:`,
-    `${FIELDS.description}:`,
+    quotedField(FIELDS.description, values.description),
     `${FIELDS.created}: ${values.created}`,
     `${FIELDS.updated}:`,
     `${FIELDS.tags}:`,
@@ -56108,68 +56144,70 @@ function personNoteContent(values) {
   ].join("\n");
 }
 function personTemplateFile() {
-  return personNoteContent({ created: "", uid: null, type: "", up: "", tier: "", direction: "" });
+  return personNoteContent({
+    created: "",
+    uid: null,
+    type: "",
+    description: "",
+    up: "",
+    tier: "",
+    direction: ""
+  });
 }
 function clientNoteContent(values) {
   const frontmatter = [
     "---",
     `${FIELDS.aliases}:`,
-    `${FIELDS.description}:`,
+    quotedField(FIELDS.description, values.description),
     `${FIELDS.created}: ${values.created}`,
     `${FIELDS.updated}:`,
     `${FIELDS.tags}:`,
     `${FIELDS.uid}:${values.uid === null ? "" : ` ${values.uid}`}`,
     `${FIELDS.type}:${values.type ? ` ${values.type}` : ""}`,
     `${FIELDS.source}:${values.source ? ` ${values.source}` : ""}`,
-    `${FIELDS.contact}:${values.contact ? ` ${values.contact}` : ""}`,
+    quotedField(FIELDS.contact, values.contact),
     `${FIELDS.homepage}:`,
     "---"
   ].join("\n");
   return [
     frontmatter,
     "",
-    "## \u4ED8\u8D39\u4E0E\u4EA4\u4ED8",
-    "",
-    viewBlock("\u4ED8\u8D39\u4E0E\u4EA4\u4ED8"),
-    "",
-    CLIENT_ANSWER_HEADING,
-    "",
-    CLIENT_ANSWER_VIEW,
-    "",
-    "## \u5173\u952E\u4E8B\u4EF6\uFF08\u81EA\u52A8\uFF09",
-    "",
-    viewBlock("\u5173\u952E\u4E8B\u4EF6"),
-    "",
-    "## \u5F85\u529E\uFF08\u81EA\u52A8\uFF09",
-    "",
-    viewBlock("\u5F85\u529E"),
-    ""
+    ...CLIENT_SECTIONS.flatMap((section2) => [section2.heading, "", viewBlock(section2.view), ""])
   ].join("\n");
 }
 function clientTemplateFile() {
-  return clientNoteContent({ created: "", uid: null, type: "", source: "", contact: "" });
+  return clientNoteContent({
+    created: "",
+    uid: null,
+    type: "",
+    description: "",
+    source: "",
+    contact: ""
+  });
 }
-function ensureClientAnswerView(content) {
+function ensureClientViews(content) {
   const newline = content.includes("\r\n") ? "\r\n" : "\n";
-  const normalized = content.replace(/\r\n/g, "\n");
-  if (normalized.includes(CLIENT_ANSWER_VIEW)) return content;
-  const section2 = `${CLIENT_ANSWER_HEADING}
+  let updated = content.replace(/\r\n/g, "\n");
+  CLIENT_SECTIONS.forEach((section2, index2) => {
+    if (!section2.since) return;
+    const block = viewBlock(section2.view);
+    if (updated.includes(block)) return;
+    if (updated.includes(section2.heading)) {
+      updated = updated.replace(section2.heading, `${section2.heading}
 
-${CLIENT_ANSWER_VIEW}
+${block}`);
+      return;
+    }
+    const whole = `${section2.heading}
+
+${block}
 `;
-  let updated;
-  if (normalized.includes(CLIENT_ANSWER_HEADING)) {
-    updated = normalized.replace(CLIENT_ANSWER_HEADING, `${CLIENT_ANSWER_HEADING}
+    const next = CLIENT_SECTIONS.slice(index2 + 1).find((later) => updated.includes(later.heading));
+    updated = next ? updated.replace(next.heading, `${whole}
+${next.heading}`) : `${updated.replace(/\n*$/, "")}
 
-${CLIENT_ANSWER_VIEW}`);
-  } else if (normalized.includes("## \u5173\u952E\u4E8B\u4EF6\uFF08\u81EA\u52A8\uFF09")) {
-    updated = normalized.replace("## \u5173\u952E\u4E8B\u4EF6\uFF08\u81EA\u52A8\uFF09", `${section2}
-## \u5173\u952E\u4E8B\u4EF6\uFF08\u81EA\u52A8\uFF09`);
-  } else {
-    updated = `${normalized.replace(/\n*$/, "")}
-
-${section2}`;
-  }
+${whole}`;
+  });
   return newline === "\n" ? updated : updated.replace(/\n/g, newline);
 }
 function areaFrontmatter(description, created, uid) {
@@ -56242,7 +56280,7 @@ function contactMocContent(created, uid, clientMocName = basenameOf(CLIENT_MOC))
     "",
     "### \u65E5\u5E38\u4E09\u4E2A\u52A8\u4F5C",
     "",
-    "- **\u5EFA\u6863**\uFF1A\u547D\u4EE4\u9762\u677F\u8FD0\u884C\u300C\u65B0\u5EFA\u4EBA\u8109\u300D\uFF0C\u4E09\u8FDE\u95EE\uFF08\u59D3\u540D \u2192 \u5206\u5C42 \u2192 \u65B9\u5411\uFF09\uFF0C\u5F52\u5C5E\u81EA\u52A8\u6307\u5411\u672C MOC\u3002\u6863\u6848\u5E73\u94FA\u5B58\u653E\uFF0C\u4E0D\u5EFA\u5B50\u76EE\u5F55\u3002",
+    "- **\u5EFA\u6863**\uFF1A\u547D\u4EE4\u9762\u677F\u8FD0\u884C\u300C\u65B0\u5EFA\u4EBA\u8109\u300D\uFF0C\u56DB\u95EE\uFF08\u59D3\u540D \u2192 \u5206\u5C42 \u2192 \u65B9\u5411 \u2192 \u4E00\u53E5\u8BDD\u7B80\u4ECB\uFF09\uFF0C\u5F52\u5C5E\u81EA\u52A8\u6307\u5411\u672C MOC\u3002\u7B80\u4ECB\u5FC5\u586B\uFF1A\u5199\u4F60\u4EEC\u600E\u4E48\u8BA4\u8BC6\u7684\uFF0C\u6216\u8005\u8FD9\u4E2A\u4EBA\u5BF9\u4F60\u610F\u5473\u7740\u4EC0\u4E48\uFF0C\u540D\u5F55\u300C\u4E00\u53E5\u8BDD\u300D\u90A3\u4E00\u680F\u663E\u793A\u7684\u5C31\u662F\u5B83\u3002\u6863\u6848\u5E73\u94FA\u5B58\u653E\uFF0C\u4E0D\u5EFA\u5B50\u76EE\u5F55\u3002",
     `- **\u8FDB\u6295\u5582\u540D\u5355**\uFF1A\u6253\u5F00\u6863\u6848\uFF0C\u5C5E\u6027\u91CC\u628A \`${FIELDS.gift}\` \u5199\u6210 true\u3001\u586B\u597D \`${FIELDS.address}\`\u3002\u5E26\u7279\u4EA7\u56DE\u6765\u65F6\uFF0C\u540D\u5355\u548C\u5730\u5740\u5DF2\u7ECF\u5C31\u4F4D\u3002`,
     "- **\u8BB0\u4E8B\u8BB0\u8D26**\uFF1A\u5168\u90E8\u5199\u8FDB**\u5F53\u5929\u65E5\u8BB0**\uFF0C\u9760\u4E00\u884C\u7684\u5F62\u6001\u81EA\u52A8\u5206\u6D41\u5230\u4ED6\u7684\u6863\u6848\uFF1A",
     "",
@@ -56252,7 +56290,7 @@ function contactMocContent(created, uid, clientMocName = basenameOf(CLIENT_MOC))
     "| `- [ ] \u51FA\u7F51\u5496\u6295\u8D44\u65B9\u6848\u7ED9 [[\u5F20\u4E09]]` | \u5F85\u529E |",
     `| \`- [[\u5F20\u4E09]]${LEDGER.separator}\u53BB${LEDGER.separator}\u9001\u4E86\u534A\u65A4\u751F\u666E${LEDGER.separator}\u4E24\u6E05\` | \u4EBA\u60C5\u8D26\u672C |`,
     "",
-    `\u8D26\u672C\u884C\u4E5F\u53EF\u4EE5\u7528\u547D\u4EE4\u300C\u8BB0\u4EBA\u60C5\u300D\u56DB\u6B65\u70B9\u9009\u5199\u5165\u3002\u624B\u5199\u65F6\u6CE8\u610F\uFF1A\u4EBA\u540D\u5FC5\u987B\u5E26 \`[[ ]]\`\uFF08\u5B83\u662F\u7D22\u5F15\uFF09\uFF0C\u5206\u9694\u7B26\u7528\u5168\u89D2 \`${LEDGER.separator}\`\uFF0C\u72B6\u6001\u53D6 ${LEDGER.statuses.join(" / ")}\uFF0C${LEDGER.defaultStatus}\u53EF\u6574\u6BB5\u7701\u7565\u3002`,
+    `\u8D26\u672C\u884C\u4E5F\u53EF\u4EE5\u7528\u547D\u4EE4\u300C\u793C\u5C1A\u5F80\u6765\u300D\u56DB\u6B65\u70B9\u9009\u5199\u5165\u3002\u624B\u5199\u65F6\u6CE8\u610F\uFF1A\u4EBA\u540D\u5FC5\u987B\u5E26 \`[[ ]]\`\uFF08\u5B83\u662F\u7D22\u5F15\uFF09\uFF0C\u5206\u9694\u7B26\u7528\u5168\u89D2 \`${LEDGER.separator}\`\uFF0C\u72B6\u6001\u53D6 ${LEDGER.statuses.join(" / ")}\uFF0C${LEDGER.defaultStatus}\u53EF\u6574\u6BB5\u7701\u7565\u3002`,
     "",
     "### \u540D\u5F55\u600E\u4E48\u8BFB",
     "",
@@ -56294,7 +56332,7 @@ function clientMocContent(created, uid) {
     "",
     "### \u65E5\u5E38\u4E09\u4E2A\u52A8\u4F5C",
     "",
-    "- **\u5EFA\u6863**\uFF1A\u547D\u4EE4\u9762\u677F\u8FD0\u884C\u300C\u65B0\u5EFA\u5BA2\u6237\u300D\uFF0C\u586B\u5199\u79F0\u547C\u3001\u6E20\u9053\u548C\u8054\u7CFB\u65B9\u5F0F\u3002",
+    "- **\u5EFA\u6863**\uFF1A\u547D\u4EE4\u9762\u677F\u8FD0\u884C\u300C\u65B0\u5EFA\u5BA2\u6237\u300D\uFF0C\u586B\u5199\u79F0\u547C\u3001\u6E20\u9053\u3001\u8054\u7CFB\u65B9\u5F0F\u548C\u4E00\u53E5\u8BDD\u7B80\u4ECB\uFF08\u5FC5\u586B\uFF1A\u600E\u4E48\u8BA4\u8BC6\u7684\u3001\u8FD9\u4E2A\u4EBA\u5BF9\u4F60\u610F\u5473\u7740\u4EC0\u4E48\uFF09\uFF0C\u9009\u5BA2\u6237\u65F6\u5B83\u8DDF\u5728\u540D\u5B57\u540E\u9762\u3002",
     "- **\u8BB0\u4E00\u7B14\u94B1**\uFF1A\u8FD0\u884C\u300C\u589E\u52A0\u4ED8\u8D39\u300D\uFF0C\u9009\u5BA2\u6237\u3001\u4EA7\u54C1\u5E76\u586B\u5199\u91D1\u989D\u3002",
     "- **\u5B8C\u6210\u4EA4\u4ED8**\uFF1A\u6253\u5F00\u5BA2\u6237\u6863\u6848\uFF0C\u5728\u300C\u4ED8\u8D39\u4E0E\u4EA4\u4ED8\u300D\u5C0F\u8282\u52FE\u6389\u5BF9\u5E94\u4EFB\u52A1\uFF1BMOC \u81EA\u52A8\u5237\u65B0\u3002",
     "",
@@ -56320,6 +56358,8 @@ function clientMocContent(created, uid) {
     "### \u4E00\u6761\u6CD5\uFF0C\u4E24\u7C7B\u6863\u6848\u90FD\u5B88",
     "",
     "**\u65E5\u5E38\u53D1\u751F\u7684\u4E8B\u53EA\u5199\u4E00\u5904\uFF1A\u5F53\u5929\u65E5\u8BB0\uFF0C\u53E5\u5B50\u91CC\u5E26 `[[\u5BA2\u6237\u540D]]`\u3002** \u5BA2\u6237\u6863\u6848\u7684\u300C\u5173\u952E\u4E8B\u4EF6\u300D\u548C\u300C\u5F85\u529E\u300D\u4F1A\u81EA\u5DF1\u628A\u5B83\u4EEC\u68C0\u7D22\u8FC7\u6765\uFF0C\u548C\u4EBA\u8109\u6863\u6848\u5B8C\u5168\u540C\u4E00\u5957\u673A\u5236\u3002\u6240\u4EE5\u5BA2\u6237\u6863\u6848\u91CC\u6CA1\u6709\u624B\u5199\u7684\u300C\u4ED6\u7684\u95EE\u9898\u300D\u300C\u4EA4\u4ED8\u8BB0\u5F55\u300D\u5C0F\u8282\u2014\u2014**\u4F60\u4E0D\u7528\u7EF4\u62A4\u4EFB\u4F55\u4E00\u4EFD\u6863\u6848\u7684\u6B63\u6587**\u3002",
+    "",
+    `\u66FF\u4ED6\u505A\u7684\u9879\u76EE\u540C\u6837\u4E0D\u7528\u5F80\u6863\u6848\u91CC\u6284\uFF1A\u300C\u65B0\u5EFA\u9879\u76EE\u300D\u65F6\u9009\u300C\u5BA2\u6237\u59D4\u6258\u7684\u300D\u5E76\u9009\u4E2D\u4ED6\uFF08\u5199\u8FDB\u9879\u76EE\u7684 \`${FIELDS.client}\`\uFF09\uFF0C\u9879\u76EE\u5C31\u51FA\u73B0\u5728\u4ED6\u6863\u6848\u7684\u300C\u76F8\u5173\u9879\u76EE\u300D\u91CC\uFF1B\u9879\u76EE\u505A\u5B8C\u6216\u653E\u5F03\uFF0C\u81EA\u52A8\u79FB\u8FDB\u300C\u5173\u952E\u4E8B\u4EF6\u300D\u3002\u4ECE\u65E7\u7248\u5347\u7EA7\u4E0A\u6765\u7684\u5BA2\u6237\u6863\u6848\u6CA1\u6709\u8FD9\u4E00\u5757\uFF0C\u8FD0\u884C\u4E00\u6B21\u300C\u8865\u9F50\u5BA2\u6237\u6863\u6848\u68C0\u7D22\u300D\u5373\u53EF\u8865\u4E0A\u3002`,
     ""
   ].join("\n");
 }
@@ -56328,7 +56368,7 @@ function clientMocContent(created, uid) {
 var ILLEGAL_NAME = /[\\/:*?"<>|#^[\]]/;
 var MESSAGES7 = {
   setupDone: "\u5BA2\u6237\u6A21\u5757\u5DF2\u8865\u9F50 \u2705",
-  answersDone: "\u5BA2\u6237\u7B54\u7591\u68C0\u7D22\u5DF2\u8865\u9F50",
+  answersDone: "\u5BA2\u6237\u6863\u6848\u68C0\u7D22\u5DF2\u8865\u9F50",
   namePrompt: "\u600E\u4E48\u79F0\u547C\u4ED6\uFF1F\uFF08\u6863\u6848\u5C31\u7528\u5B83\u547D\u540D\uFF09",
   namePlaceholder: "\u4F8B\u5982\uFF1A\u738B\u4E94",
   illegalName: '\u79F0\u547C\u91CC\u4E0D\u80FD\u6709 \\ / : * ? " < > | # ^ [ ] \u8FD9\u4E9B\u5B57\u7B26\u3002',
@@ -56365,7 +56405,7 @@ function registerClientCommands(ctx, applySeed2) {
     void setupClients(ctx, applySeed2);
   });
   ctx.commands.register(CLIENT_COMMANDS.answers, () => {
-    void backfillClientAnswerViews(ctx);
+    void backfillClientViews(ctx);
   });
   ctx.commands.register(CLIENT_COMMANDS.create, () => {
     void createClient(ctx);
@@ -56377,7 +56417,7 @@ function registerClientCommands(ctx, applySeed2) {
     void recordReceipt(ctx);
   });
 }
-async function backfillClientAnswerViews(ctx) {
+async function backfillClientViews(ctx) {
   var _a2, _b2;
   try {
     let updated = 0;
@@ -56386,10 +56426,10 @@ async function backfillClientAnswerViews(ctx) {
       const frontmatter = (_a2 = ctx.app.metadataCache.getFileCache(file)) == null ? void 0 : _a2.frontmatter;
       if (String((_b2 = frontmatter == null ? void 0 : frontmatter[FIELDS.type]) != null ? _b2 : "").trim() !== NOTE_TYPES.client) continue;
       const before = await ctx.app.vault.cachedRead(file);
-      const after = ensureClientAnswerView(before);
+      const after = ensureClientViews(before);
       if (after === before) continue;
       ctx.guard.mark(file.path);
-      await ctx.app.vault.process(file, (current) => ensureClientAnswerView(current));
+      await ctx.app.vault.process(file, (current) => ensureClientViews(current));
       updated += 1;
     }
     new import_obsidian44.Notice(`${MESSAGES7.answersDone}\uFF1A${updated} \u4EFD\u6863\u6848\u3002`);
@@ -56423,6 +56463,14 @@ async function createClient(ctx) {
       new import_obsidian44.Notice(MESSAGES7.illegalName);
       return;
     }
+    const folder = normalizeFolderPath(ctx.settings.clientFolder, CLIENT_FOLDER);
+    const path = `${folder}/${name}.md`;
+    const existing = ctx.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof import_obsidian44.TFile) {
+      new import_obsidian44.Notice(MESSAGES7.existsPrefix + name);
+      await ctx.app.workspace.getLeaf(false).openFile(existing);
+      return;
+    }
     const source = await new ChoiceModal(ctx.app, {
       title: MESSAGES7.sourcePrompt,
       items: optionsOf(ctx.settings.clientSources),
@@ -56439,12 +56487,9 @@ async function createClient(ctx) {
       new import_obsidian44.Notice(MESSAGES7.cancelled);
       return;
     }
-    const folder = normalizeFolderPath(ctx.settings.clientFolder, CLIENT_FOLDER);
-    const path = `${folder}/${name}.md`;
-    const existing = ctx.app.vault.getAbstractFileByPath(path);
-    if (existing instanceof import_obsidian44.TFile) {
-      new import_obsidian44.Notice(MESSAGES7.existsPrefix + name);
-      await ctx.app.workspace.getLeaf(false).openFile(existing);
+    const description = await askDescription(ctx.app);
+    if (description === null) {
+      new import_obsidian44.Notice(MESSAGES7.cancelled);
       return;
     }
     const { stamp, uid } = nowStampAndUid(ctx.settings.dateTimeFormat);
@@ -56452,6 +56497,7 @@ async function createClient(ctx) {
       created: stamp,
       uid,
       type: NOTE_TYPES.client,
+      description,
       source,
       contact: contact.trim()
     });
@@ -56613,6 +56659,14 @@ async function createContact(ctx) {
       new import_obsidian45.Notice(MESSAGES8.illegalName);
       return;
     }
+    const folder = normalizeFolderPath(ctx.settings.contactFolder, CONTACT_FOLDER);
+    const path = `${folder}/${name}.md`;
+    const existing = ctx.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof import_obsidian45.TFile) {
+      new import_obsidian45.Notice(MESSAGES8.existsPrefix + name);
+      await ctx.app.workspace.getLeaf(false).openFile(existing);
+      return;
+    }
     const tier = await new ChoiceModal(ctx.app, {
       title: MESSAGES8.tierPrompt,
       items: CONTACT_TIERS,
@@ -56637,20 +56691,18 @@ async function createContact(ctx) {
       new import_obsidian45.Notice(MESSAGES8.cancelled);
       return;
     }
-    const folder = normalizeFolderPath(ctx.settings.contactFolder, CONTACT_FOLDER);
-    const mocPath = resolveBuiltInMocPath(ctx.app, folder, CONTACT_MOC, LEGACY_CONTACT_MOC);
-    const path = `${folder}/${name}.md`;
-    const existing = ctx.app.vault.getAbstractFileByPath(path);
-    if (existing instanceof import_obsidian45.TFile) {
-      new import_obsidian45.Notice(MESSAGES8.existsPrefix + name);
-      await ctx.app.workspace.getLeaf(false).openFile(existing);
+    const description = await askDescription(ctx.app);
+    if (description === null) {
+      new import_obsidian45.Notice(MESSAGES8.cancelled);
       return;
     }
+    const mocPath = resolveBuiltInMocPath(ctx.app, folder, CONTACT_MOC, LEGACY_CONTACT_MOC);
     const { stamp, uid } = nowStampAndUid(ctx.settings.dateTimeFormat);
     const content = personNoteContent({
       created: stamp,
       uid,
       type: NOTE_TYPES.person,
+      description,
       up: `[[${basenameOf(mocPath)}]]`,
       tier,
       direction
@@ -56740,7 +56792,7 @@ var personLedger = {
     if (!entries2.length) {
       renderEmpty(
         view.el,
-        `\u8FD8\u6CA1\u6709\u8D26\u3002\u547D\u4EE4\u9762\u677F\u8FD0\u884C\u300C\u8BB0\u4EBA\u60C5\u300D\uFF0C\u6216\u5728\u5F53\u5929\u65E5\u8BB0\u91CC\u5199\u4E00\u884C\uFF1A\`- [[${host.basename}]]\uFF5C\u53BB\uFF5C\u4E8B\u9879\uFF5C\u4E24\u6E05\``
+        `\u8FD8\u6CA1\u6709\u8D26\u3002\u547D\u4EE4\u9762\u677F\u8FD0\u884C\u300C\u793C\u5C1A\u5F80\u6765\u300D\uFF0C\u6216\u5728\u5F53\u5929\u65E5\u8BB0\u91CC\u5199\u4E00\u884C\uFF1A\`- [[${host.basename}]]\uFF5C\u53BB\uFF5C\u4E8B\u9879\uFF5C\u4E24\u6E05\``
       );
       return;
     }
@@ -56899,7 +56951,7 @@ var MESSAGES9 = {
   cancelled: "\u5DF2\u53D6\u6D88\uFF0C\u6CA1\u6709\u8BB0\u8D26\u3002",
   noDiary: "\u62FF\u4E0D\u5230\u4ECA\u5929\u7684\u65E5\u8BB0\uFF0C\u6CA1\u6709\u8BB0\u8D26\u3002",
   donePrefix: "\u5DF2\u8BB0\u8FDB\u4ECA\u5929\u7684\u65E5\u8BB0\uFF1A",
-  failedPrefix: "\u8BB0\u4EBA\u60C5\u5931\u8D25\uFF1A"
+  failedPrefix: "\u8BB0\u8D26\u5931\u8D25\uFF1A"
 };
 var KIND_HINTS = {
   \u53BB: "\u6211\u7ED9\u51FA\u53BB\u7684\uFF08\u9001\u793C\u3001\u5E2E\u5FD9\u3001\u8BF7\u5BA2\uFF09",
@@ -60410,7 +60462,7 @@ var ARTWORK = {
   [COMMAND_ICONS.contact]: [
     "M9 15H7C4.79086 15 3 16.7909 3 19C3 20.1046 3.89543 21 5 21H11M15 7C15 9.20914 13.2091 11 11 11C8.79086 11 7 9.20914 7 7C7 4.79086 8.79086 3 11 3C13.2091 3 15 4.79086 15 7ZM17 21C16.6 21 13 19.0556 13 16.3335C13 14.9724 14.2 14.0003 15.4 14.0003C15.9896 14.0003 16.6 14.1947 17 14.778C17.4 14.1947 18 13.9918 18.6 14.0003C19.8 14.0171 21 14.9724 21 16.3335C21 19.0556 17.4 21 17 21Z"
   ],
-  /** 记人情：一份礼。人情账本记的就是「谁送出去、谁欠着」（Pikaicons 原图） */
+  /** 礼尚往来：一份礼。人情账本记的就是「谁送出去、谁欠着」（Pikaicons 原图） */
   [COMMAND_ICONS.favor]: [
     "M4.22222 12H19.7778M4.22222 12V17.5556C4.22222 19.1113 4.22222 19.8891 4.52498 20.4833C4.7913 21.006 5.21624 21.4309 5.73892 21.6972C6.33311 22 7.11097 22 8.66667 22H15.3333C16.889 22 17.6669 22 18.2611 21.6972C18.7838 21.4309 19.2087 21.006 19.475 20.4833C19.7778 19.8891 19.7778 19.1113 19.7778 17.5556V12M4.22222 12C3.91259 12 3.75778 12 3.62793 11.9819C2.7919 11.8653 2.13473 11.2081 2.01811 10.3721C2 10.2422 2 10.0874 2 9.77778C2 9.46815 2 9.31334 2.01811 9.18348C2.13473 8.34746 2.7919 7.69029 3.62793 7.57367C3.75778 7.55556 3.91259 7.55556 4.22222 7.55556H19.7778C20.0874 7.55556 20.2422 7.55556 20.3721 7.57367C21.2081 7.69029 21.8653 8.34746 21.9819 9.18348C22 9.31334 22 9.46815 22 9.77778C22 10.0874 22 10.2422 21.9819 10.3721C21.8653 11.2081 21.2081 11.8653 20.3721 11.9819C20.2422 12 20.0874 12 19.7778 12M12 7.55556H14.7778C16.3119 7.55556 17.5556 6.3119 17.5556 4.77778C17.5556 3.24365 16.3119 2 14.7778 2C13.2437 2 12 3.24365 12 4.77778M12 7.55556V4.77778M12 7.55556L12 22M12 7.55556H9.22222C7.6881 7.55556 6.44444 6.3119 6.44444 4.77778C6.44444 3.24365 7.6881 2 9.22222 2C10.7563 2 12 3.24365 12 4.77778"
   ],
@@ -60918,7 +60970,7 @@ var TABS = [
     label: "\u4EBA\u8109",
     icon: COMMAND_ICONS.contact,
     module: "\u4EBA\u8109\u4E0E\u5BA2\u6237 v1",
-    status: "\u8FD0\u884C\u4E2D \xB7 \u65B0\u5EFA\u4EBA\u8109\u3001\u8BB0\u4EBA\u60C5\uFF0C\u6863\u6848\u4E0E MOC \u5171\u516B\u4E2A\u89C6\u56FE\uFF1B\u5BA2\u6237 MOC \u9ED8\u8BA4\u968F\u5F00\u8352\u751F\u6210\uFF0C\u4EE5\u4EBA\u7269\u3001\u91D1\u989D\u3001\u4EA4\u4ED8\u548C\u521B\u5EFA\u65E5\u671F\u6C47\u603B\u5BA2\u6237"
+    status: "\u8FD0\u884C\u4E2D \xB7 \u65B0\u5EFA\u4EBA\u8109\u3001\u793C\u5C1A\u5F80\u6765\uFF0C\u6863\u6848\u4E0E MOC \u5171\u516B\u4E2A\u89C6\u56FE\uFF1B\u5BA2\u6237 MOC \u9ED8\u8BA4\u968F\u5F00\u8352\u751F\u6210\uFF0C\u4EE5\u4EBA\u7269\u3001\u91D1\u989D\u3001\u4EA4\u4ED8\u548C\u521B\u5EFA\u65E5\u671F\u6C47\u603B\u5BA2\u6237"
   },
   {
     id: "editing",

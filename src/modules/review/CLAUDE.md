@@ -9,7 +9,7 @@
 ## 成员清单
 
 templates.ts: 五级笔记的唯一正文生成器，同时导出 viewBlock。模板只交付标题与留白：天气块因多网络依赖删除，theme 保持空白，方法论提问收进 README，不在每篇笔记里重复。
-periodic.ts: 五级周期的入口与坐标系。「不存在就建，空文件就补骨架，有内容就不动」是它的幂等姿态。openPeriodNote 的 options 同时控制 reveal 与可选 day 锚点：记人情用 reveal=false 静默补日记，日历用 day 打开被点日期所属的日/周/月/季/年记录。它不写 daily-notes.json，避免核心日记插件造出无模板的空白岔路。v0.22.13 起这份幂等不再只挂在入口上：registerPeriodAutoInit 监听 create 与 rename（在文件夹里新建一篇日记根本不是一次 create——Obsidian 先建「未命名」再让人就地改名），把学员手建的、双链点出来的空笔记按名字认级、按 periodFolderOf 归位、再补上骨架。
+periodic.ts: 五级周期的入口与坐标系。「不存在就建，空文件就补骨架，有内容就不动」是它的幂等姿态。openPeriodNote 的 options 同时控制 reveal 与可选 day 锚点：礼尚往来用 reveal=false 静默补日记，日历用 day 打开被点日期所属的日/周/月/季/年记录。它不写 daily-notes.json，避免核心日记插件造出无模板的空白岔路。v0.22.13 起这份幂等不再只挂在入口上：registerPeriodAutoInit 监听 create 与 rename（在文件夹里新建一篇日记根本不是一次 create——Obsidian 先建「未命名」再让人就地改名），把学员手建的、双链点出来的空笔记按名字认级、按 periodFolderOf 归位、再补上骨架。
 theme.ts: 主题链的唯一录入口。promptThemeIfMissing 只在 theme 去空白后仍为空时询问；「写复盘主题」是显式修改入口。日历打开历史日记时，提问使用该日文件名而不伪称「今天」。
 views.ts: 主题链的两个自动视图（今日产出、主题链）。缺记录必须显式留空，不得用 0 伪装成一份已写的结果。
 projectViews.ts: 项目数据汇入复盘的三个视图（项目动态、完成的项目、年度全景）。它们认 CONTAINER_TYPES（project + book），因为一本书也是有终点、可归档的项目。往年数据不把今日 status 伪装成当年快照。

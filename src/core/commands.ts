@@ -452,9 +452,11 @@ export const CONTACT_COMMANDS: Readonly<Record<'create' | 'favor', CommandSpec>>
         icon: COMMAND_ICONS.contact,
         group: COMMAND_GROUPS.contacts,
     },
+    // 名字 v0.38.0 起由「记人情」改为「礼尚往来」；id 刻意不跟着改——快捷键与边栏勾选都按 id 记，
+    // 改 id 等于让用户绑过的键与勾过的格子一起失效。边栏图标在 Obsidian 那边却是按名字认的，见规格 §71
     favor: {
         id: 'record-favor',
-        name: '记人情',
+        name: '礼尚往来',
         icon: COMMAND_ICONS.favor,
         group: COMMAND_GROUPS.contacts,
     },
@@ -470,9 +472,11 @@ export const CLIENT_COMMANDS: Readonly<
         icon: COMMAND_ICONS.clients,
         group: COMMAND_GROUPS.clients,
     },
+    // v0.38.0 起它补的不止答疑，还有相关项目，名字随之改为「补齐客户档案检索」；
+    // id 不跟着改，理由与「礼尚往来」同一条：勾过、绑过的都认 id
     answers: {
         id: 'backfill-client-answer-views',
-        name: '补齐客户答疑检索',
+        name: '补齐客户档案检索',
         icon: COMMAND_ICONS.qa,
         group: COMMAND_GROUPS.clients,
     },
@@ -586,8 +590,8 @@ export const LEGACY_COMMANDS: Readonly<Record<'vault' | 'help' | 'settings', Com
  *
  * 全部命令都摆上去等于把选择的负担丢回给学员——那条边栏会长成一根谁也不看的图标柱。
  * 这七条的判据是「一天里可能按不止一次」：记灵感、开日记、写主题是每天的动作，
- * 新建项目与新建人脉是每周的动作，记人情发生在关系推进的当下，外观开关是刚上手时天天在调的。
- * 其余命令要么一辈子只按一次（初始化笔记库、旧库补齐客户模块、补齐客户答疑检索、升级存量 MOC 数据库），
+ * 新建项目与新建人脉是每周的动作，礼尚往来发生在关系推进的当下，外观开关是刚上手时天天在调的。
+ * 其余命令要么一辈子只按一次（初始化笔记库、旧库补齐客户模块、补齐客户档案检索、升级存量 MOC 数据库），
  * 要么发生在某个具体场景里（新建领域、初始化当前卡片、四条流转、读书三条、
  * 客户建档与流水、导出当前笔记、周月季年四级复盘）——
  * 那些场景里用户本来就停在对的笔记上，命令面板比一根图标柱更快。

@@ -80,7 +80,7 @@ const SAME_GESTURE_MS = 300;
  *
  * 返回值是给设置页用的：设置页只改 ctx.settings 并落盘，它无法让一个已经画在屏幕上的
  * 状态栏按钮自己消失，所以这里交出一个同步函数由 main 转交过去——
- * 与「记人情要日记」「客户要开荒」用的是同一套填洞手法，依赖图仍是一棵树。
+ * 与「礼尚往来要日记」「客户要开荒」用的是同一套填洞手法，依赖图仍是一棵树。
  */
 export function registerAppearanceSwitch(ctx: ZiminosContext): () => void {
     const swi = new AppearanceSwitch(ctx);

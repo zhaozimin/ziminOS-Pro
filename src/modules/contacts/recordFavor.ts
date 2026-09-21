@@ -3,13 +3,16 @@
  *          core/constants 的 DIARY_LOG_HEADING/LEDGER/NOTE_TYPES，
  *          core/modals 的 TextInputModal/ChoiceModal，core/types 的 ZiminosContext；
  *          依赖 ./identity 的 liveNotesOfType/descriptionOf
- * [OUTPUT]: 对外提供 DailyNoteProvider 契约与 registerRecordFavorCommand（注册「记人情」命令）
+ * [OUTPUT]: 对外提供 DailyNoteProvider 契约与 registerRecordFavorCommand（注册「礼尚往来」命令）
  * [POS]: 人情账本的录入口。它把四步点选变成日记里的一行标准账本行，
  *        人物档案的「人情账本」与人脉 MOC 的「人情余额」都从那一行长出来。
  *        它刻意不认识复盘模块：当天日记从构造时注入的 DailyNoteProvider 取，
- *        由 main 在装配点把两者接上——记人情要用日记，但不该因此依赖整个复盘模块。
+ *        由 main 在装配点把两者接上——礼尚往来要用日记，但不该因此依赖整个复盘模块。
  *        事项里的全角竖线会被清洗成半角，否则一句「他给我讲了 A｜B 两种方案」
- *        会把这一行劈成五段，状态段错位成「B 两种方案」，而这不会报错
+ *        会把这一行劈成五段，状态段错位成「B 两种方案」，而这不会报错。
+ *        命令名 v0.38.0 起叫「礼尚往来」（此前叫「记人情」，用户明令改名）：账本本来就只有「去」与「来」
+ *        两个方向，这个名字说的正是它记的东西。改的只是名字——id 仍是 record-favor，
+ *        所以用户绑过的快捷键、设置页里勾过的边栏开关一个都不丢；账本格式、两个视图的名字一字未动
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -39,7 +42,7 @@ const MESSAGES = {
     cancelled: '已取消，没有记账。',
     noDiary: '拿不到今天的日记，没有记账。',
     donePrefix: '已记进今天的日记：',
-    failedPrefix: '记人情失败：',
+    failedPrefix: '记账失败：',
 } as const;
 
 /** 去与来各自的说明，让方向在列表里自带含义 */
@@ -55,7 +58,7 @@ const STATUS_HINTS: Readonly<Record<string, string>> = {
     他欠: '他还欠我一份',
 };
 
-/** 注册「记人情」命令 */
+/** 注册「礼尚往来」命令 */
 export function registerRecordFavorCommand(ctx: ZiminosContext, openDaily: DailyNoteProvider): void {
     ctx.commands.register(CONTACT_COMMANDS.favor, () => {
         void recordFavor(ctx, openDaily);

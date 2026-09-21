@@ -158,7 +158,7 @@ const personLedger: ViewDefinition = {
         if (!entries.length) {
             renderEmpty(
                 view.el,
-                `还没有账。命令面板运行「记人情」，或在当天日记里写一行：\`- [[${host.basename}]]｜去｜事项｜两清\``,
+                `还没有账。命令面板运行「礼尚往来」，或在当天日记里写一行：\`- [[${host.basename}]]｜去｜事项｜两清\``,
             );
 
             return;

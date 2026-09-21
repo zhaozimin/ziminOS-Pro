@@ -3,10 +3,14 @@
  *          core/constants 的 CONTACT_FOLDER/CONTACT_MOC/LEGACY_CONTACT_MOC/CONTACT_TIERS/CONTACT_DIRECTIONS/NOTE_TYPES，
  *          core/folders 的 ensureFolderPath/
  *          normalizeFolderPath，core/modals 的 TextInputModal/ChoiceModal，core/time 的 nowStampAndUid，
- *          core/types 的 ZiminosContext；依赖 ./moc 的新旧 MOC 寻址与 ./templates 的 personNoteContent
+ *          core/types 的 ZiminosContext；依赖 ./identity 的 askDescription、./moc 的新旧 MOC 寻址
+ *          与 ./templates 的 personNoteContent
  * [OUTPUT]: 对外提供 registerCreateContactCommand（注册「新建人脉」命令）
- * [POS]: 人脉档案的诞生处。三连问的顺序是设计过的——姓名是自由文本放最前，
- *        分层与方向都是封闭枚举放在后面：先付出的成本最小，中途反悔损失最少。
+ * [POS]: 人脉档案的诞生处。四问的顺序是设计过的——按付出由小到大排：姓名最便宜放最前，
+ *        分层与方向是点一下的封闭枚举，一句话简介要想一想，放最后，中途反悔损失最少。
+ *        重名在问完姓名的那一刻就查，因为同名直接打开旧档案，后面三问对它毫无意义——
+ *        先让人写完一句简介、再说「已经有了」，是把人的心思当废纸。
+ *        简介必填（v0.38.0），空白留在原窗补，取消才不建档。
  *        两个枚举一律走 ChoiceModal 而非文本输入，这是全模块的纪律：
  *        自由文本会长出「近/较近/比较近」三种写法，而它们在名录里是三个不同的层。
  *        type: person 由本命令填、模板留空——识别身份靠 type 不靠文件夹，
@@ -29,6 +33,7 @@ import { ensureFolderPath, normalizeFolderPath } from '../../core/folders';
 import { ChoiceModal, TextInputModal } from '../../core/modals';
 import { nowStampAndUid } from '../../core/time';
 import type { ZiminosContext } from '../../core/types';
+import { askDescription } from './identity';
 import { basenameOf, resolveBuiltInMocPath } from './moc';
 import { personNoteContent } from './templates';
 
@@ -69,7 +74,7 @@ export function registerCreateContactCommand(ctx: ZiminosContext): void {
     });
 }
 
-/** 三连问 → 建档 → 打开 */
+/** 姓名 → 查重 → 分层 → 方向 → 简介 → 建档 → 打开 */
 async function createContact(ctx: ZiminosContext): Promise<void> {
     try {
         const answer = await new TextInputModal(ctx.app, {
@@ -87,6 +92,19 @@ async function createContact(ctx: ZiminosContext): Promise<void> {
 
         if (ILLEGAL_NAME.test(name)) {
             new Notice(MESSAGES.illegalName);
+
+            return;
+        }
+
+        const folder = normalizeFolderPath(ctx.settings.contactFolder, CONTACT_FOLDER);
+        const path = `${folder}/${name}.md`;
+        const existing = ctx.app.vault.getAbstractFileByPath(path);
+
+        // 重名一律打开而不覆盖：同名的很可能就是同一个人，覆盖会毁掉一份积累多年的档案。
+        // 查在这里而不是落盘前：打开旧档案时后面几问一个都用不上，不该先让人答完
+        if (existing instanceof TFile) {
+            new Notice(MESSAGES.existsPrefix + name);
+            await ctx.app.workspace.getLeaf(false).openFile(existing);
 
             return;
         }
@@ -115,24 +133,21 @@ async function createContact(ctx: ZiminosContext): Promise<void> {
             return;
         }
 
-        const folder = normalizeFolderPath(ctx.settings.contactFolder, CONTACT_FOLDER);
-        const mocPath = resolveBuiltInMocPath(ctx.app, folder, CONTACT_MOC, LEGACY_CONTACT_MOC);
-        const path = `${folder}/${name}.md`;
-        const existing = ctx.app.vault.getAbstractFileByPath(path);
+        const description = await askDescription(ctx.app);
 
-        // 重名一律打开而不覆盖：同名的很可能就是同一个人，覆盖会毁掉一份积累多年的档案
-        if (existing instanceof TFile) {
-            new Notice(MESSAGES.existsPrefix + name);
-            await ctx.app.workspace.getLeaf(false).openFile(existing);
+        if (description === null) {
+            new Notice(MESSAGES.cancelled);
 
             return;
         }
 
+        const mocPath = resolveBuiltInMocPath(ctx.app, folder, CONTACT_MOC, LEGACY_CONTACT_MOC);
         const { stamp, uid } = nowStampAndUid(ctx.settings.dateTimeFormat);
         const content = personNoteContent({
             created: stamp,
             uid,
             type: NOTE_TYPES.person,
+            description,
             up: `[[${basenameOf(mocPath)}]]`,
             tier,
             direction,

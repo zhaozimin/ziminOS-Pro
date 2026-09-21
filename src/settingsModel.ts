@@ -142,7 +142,7 @@ export const TABS: readonly SettingsTab[] = [
         icon: COMMAND_ICONS.contact,
         module: '人脉与客户 v1',
         status:
-            '运行中 · 新建人脉、记人情，档案与 MOC 共八个视图；' +
+            '运行中 · 新建人脉、礼尚往来，档案与 MOC 共八个视图；' +
             '客户 MOC 默认随开荒生成，以人物、金额、交付和创建日期汇总客户',
     },
     {

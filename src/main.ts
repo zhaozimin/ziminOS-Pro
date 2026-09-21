@@ -23,7 +23,7 @@
  *        把它连同 app/plugin/guard 装配成 ZiminosContext、把上下文分发给各模块去自行注册、
  *        再把彼此需要但不该互相认识的能力接上线。
  *        最后这件事是 V2 新增的，也是本文件最有分量的部分：
- *        记人情要往当天日记里写一行，客户模块的补齐命令要复用默认开荒能力，
+ *        礼尚往来要往当天日记里写一行，客户模块的补齐命令要复用默认开荒能力，
  *        建一本书要走项目模块那套「文件夹 + MOC」的流程，
  *        设置页要能开出读书模块那个扫码登录窗口，
  *        还要能让状态栏那两块、左侧边栏那列图标与文件模块画出来的三样东西按新设置重画——
@@ -244,7 +244,7 @@ export default class ZiminosPlugin extends Plugin {
         registerThemeCommand(ctx);
 
         registerCreateContactCommand(ctx);
-        // 记人情要往当天日记里写一行。它不认识复盘模块，只声明了一个「拿到今天的日记」的洞，
+        // 礼尚往来要往当天日记里写一行。它不认识复盘模块，只声明了一个「拿到今天的日记」的洞，
         // 由这里用复盘模块的能力填上；reveal 关掉，顺手记一笔不该顶掉学员正在读的笔记
         registerRecordFavorCommand(ctx, () => openPeriodNote(ctx, PERIODS.daily, { reveal: false }));
         // 客户产物已进默认开荒；这条旧命令仍是老库补齐与误删修复入口，
