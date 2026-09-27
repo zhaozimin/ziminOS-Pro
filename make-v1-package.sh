@@ -4,7 +4,7 @@
 #
 # [INPUT]: 依赖 git（只从 HEAD 取交付物）、npm test、python3 与 pack-zip.py；
 #          依赖 skill/SKILL.md 的两份清单——「装完必须存在的交付物」与「升级时整份替换的程序文件」；
-#          依赖 docs/第一版手动安装指南.html；经 SSH 只取第一版仓库 main 的提交与树（不取文件内容）核对两边一致
+#          依赖 docs/第一版手动安装指南.html；经公开 HTTPS Git 只取第一版仓库 main 的提交与树核对两边一致
 # [OUTPUT]: ziminOS-v{版本}-setup.zip 与同名 .sha256，并打印一段可直接贴进 Gitee 发行版的说明
 # [POS]: 第一版面向「人」的唯一分发出口，与面向智能体的 make-pro-package.sh 并列。
 #        三条判据决定了它的形状：
@@ -32,9 +32,10 @@ cd "$repo_root"
 
 contract="skill/SKILL.md"
 guide="docs/第一版手动安装指南.html"
-# 与 publish-v1.sh 的 V1_REMOTE 是同一个仓库。Gitee 上它已改名为 ziminos-mini，旧名至今仍解析
+# 与 publish-v1.sh 的 Gitee 目标是同一个仓库；这里只读，不用 SSH 密钥也不经限流的 OpenAPI。
+# Gitee 上它已改名为 ziminos-mini，旧名至今仍解析。
 v1_repo="ziminzhao/zimin-os-v1"
-V1_REMOTE="git@gitee.com:$v1_repo.git"
+V1_REMOTE="https://gitee.com/$v1_repo.git"
 
 # ============================================================
 # 一、闸门
@@ -59,8 +60,8 @@ name="ziminOS-v${version}-setup"
 # 二、核对第一版仓库
 # ============================================================
 
-# 走 publish-v1.sh 推送用的同一条 SSH 通道，不走 Gitee 开放接口：它对未登录请求限流（403），
-# 而打包恰恰紧跟在 publish-v1.sh 之后——v0.33.0 发版时这一步就是这样卡住的。
+# 走公开 HTTPS Git 协议，不走 Gitee 开放接口：后者对未登录请求限流（403），
+# SSH 则在已完成推送时仍可能长时间卡在 banner 握手；公开仓库的只读对账不需要密钥。
 # 只取提交与树、不取文件内容（--filter=blob:none）：比的是树对象哈希，一个 blob 都用不着，实测 5 秒、百来 KB
 v1_main_matching_head() {
     local probe commit folder
