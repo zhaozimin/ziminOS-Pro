@@ -23,6 +23,8 @@ export interface EagleSettingActions {
     readonly disconnectEagle: () => Promise<void>;
     readonly describeEagleStatus: () => Promise<string>;
     readonly revealEaglePackage: () => Promise<void>;
+    /** 项目/领域改名流程的可选副作用；两者的附件都归档在 Eagle 的「项目」根目录 */
+    readonly renameEagleProjectFolder: (oldName: string, newName: string) => Promise<'renamed' | 'missing' | 'skipped'>;
 }
 
 export function registerEagleBridge(
@@ -43,6 +45,10 @@ export function registerEagleBridge(
     };
 
     return {
+        renameEagleProjectFolder: async (oldName, newName) => {
+            if (!ctx.settings.eagleEnabled || !isSupportedEagleDesktop() || !client.hasToken()) return 'skipped';
+            return await client.renameProjectFolder(oldName, newName);
+        },
         pairEagle: async () => {
             if (!desktopOnly()) return false;
 

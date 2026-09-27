@@ -8,11 +8,13 @@
 
 ## 成员清单
 
-templates.ts: 五级笔记的唯一正文生成器，同时导出 viewBlock。模板只交付标题与留白：天气块因多网络依赖删除，theme 保持空白，方法论提问收进 README，不在每篇笔记里重复。
+templates.ts: 五级笔记的唯一正文生成器，同时导出 viewBlock。模板只交付标题与留白：天气块因多网络依赖删除，theme 保持空白，方法论提问收进 README；新日记的「今日产出」改为 dailyActivityText 定义的可读 Markdown 托管区。
 periodic.ts: 五级周期的入口与坐标系。「不存在就建，空文件就补骨架，有内容就不动」是它的幂等姿态。openPeriodNote 的 options 同时控制 reveal 与可选 day 锚点：礼尚往来用 reveal=false 静默补日记，日历用 day 打开被点日期所属的日/周/月/季/年记录。它不写 daily-notes.json，避免核心日记插件造出无模板的空白岔路。v0.22.13 起这份幂等不再只挂在入口上：registerPeriodAutoInit 监听 create 与 rename（在文件夹里新建一篇日记根本不是一次 create——Obsidian 先建「未命名」再让人就地改名），把学员手建的、双链点出来的空笔记按名字认级、按 periodFolderOf 归位、再补上骨架。
 theme.ts: 主题链的唯一录入口。promptThemeIfMissing 只在 theme 去空白后仍为空时询问；「写复盘主题」是显式修改入口。日历打开历史日记时，提问使用该日文件名而不伪称「今天」。
-views.ts: 主题链的两个自动视图（今日产出、主题链）。缺记录必须显式留空，不得用 0 伪装成一份已写的结果。
-projectViews.ts: 项目数据汇入复盘的三个视图（项目动态、完成的项目、年度全景）。它们认 CONTAINER_TYPES（project + book），因为一本书也是有终点、可归档的项目。往年数据不把今日 status 伪装成当年快照。
+dailyActivityText.ts: 日记活动的纯文本事实源，用 HTML 注释界定可读 Markdown 区；新建、修改、容器改名三种行均可搜索可同步，同篇同日去重，新建优先于修改，旧 `今日产出` 代码块在首次记账时就地升级。
+dailyActivity.ts: 日记历史编排层，用 core/editDebts 等源笔记离开前台后，把事件直接写进事发日的日记；不建第二套历史目录，项目改名从 main 注入的出口补一条语义事件。
+views.ts: 主题链与旧日记的两个代码块视图（今日产出、主题链）。新日记不再生成「今日产出」代码块，这份实现只为旧笔记保留兼容；缺记录必须显式留空。
+projectViews.ts: 项目数据汇入复盘的三个视图（项目动态、完成的项目、年度全景）。项目动态优先汇总日记已固化的事件，只对没有托管区的旧日记回落最新 created/updated；它们认 CONTAINER_TYPES（project + book）。
 seed.ts: 开荒贡献，只声报日记目录；不预建空日记，避免时间轴出现假记录。
 
 ## 年度口径
@@ -23,7 +25,7 @@ seed.ts: 开荒贡献，只声报日记目录；不预建空日记，避免时�
 
 零字节判据在实际写入时再次成立才有效：`vault.process` 回调只为仍为空且仍在目标路径的正文生成模板；准备目录期间文件已被编辑、改名、移动或替换，自动归位立即放弃旧计划。两个入口同时打开同一日期时复用先创建成功的笔记，两边都拿到同一个 `TFile`，不会把正常竞争误报成打开失败。
 
-对外暴露 reviewSeed、registerPeriodicCommands、registerPeriodAutoInit、registerThemeCommand、promptThemeIfMissing、openPeriodNote 与两个视图数组。main.ts 注入「日记打开后」回调与日历点击，防止 periodic.ts、theme.ts、calendar 互相 import；自动认领不需要任何注入，它只认名字与位置。
+对外暴露 reviewSeed、registerPeriodicCommands、registerPeriodAutoInit、registerThemeCommand、registerDailyActivityRecorder、recordContainerRenameActivity、promptThemeIfMissing、openPeriodNote 与两个视图数组。main.ts 注入「日记打开后」回调、日历点击与「项目改名后记一笔」，防止 review、calendar、projects 互相 import。
 
 **入口不决定结果，名字与位置才决定身份。** 一篇 2026-09-11.md 躺在日记目录里就是一篇日记，与谁把它建出来无关——命令、日历、右键新建、导航行上那条还没有目标的双链，四条路必须交出同一篇笔记。自动认领因此只碰零字节文件（有内容的笔记不是刚诞生的，插件没有改写它的资格）、只碰复盘根目录之内（00-inbox 里一篇叫 2026 的笔记是用户自己的事）、只碰名字严格解析得出周期的（认错一次就会往别人的笔记里写日记骨架）。它不提问也不新增开关：建一篇笔记不是一次复盘，点开明天的日记更不是，主题归「写复盘主题」那条命令。
 

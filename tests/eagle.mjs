@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、内容容器/日记路由注入、Eagle 两级项目目录与单层日记目录归档、当前文件夹打开与附件选中、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、内容容器/日记路由注入、Eagle 两级项目目录的归档/改名与单层日记目录归档、当前文件夹打开与附件选中、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -232,6 +232,7 @@ test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官�
     assert.ok(source.includes("/^[a-f0-9]{64}$/.test(value.token)"));
     assert.ok(source.includes("url.pathname === '/v1/disconnect'"));
     assert.ok(source.includes("url.pathname === '/v1/projects/import'"));
+    assert.ok(source.includes("url.pathname === '/v1/projects/rename'"));
     assert.ok(source.includes("url.pathname === '/v1/diary/import'"));
     assert.ok(source.includes('eagle.item.addFromPath'));
     assert.ok(source.includes('eagle.folder.getAll'));
@@ -354,7 +355,7 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
             open: async (folderId) => openedFolders.push(folderId),
             create: async (options) => {
                 const id = options.name === '日记' ? 'DIARY_ROOT' : 'PROJECT_ROOT';
-                const created = { id, parent: '', children: [], ...options };
+                const created = { id, parent: '', children: [], ...options, save: async () => undefined };
 
                 eagleFolders.push(created);
                 createdFolders.push({ kind: 'root', options });
@@ -364,7 +365,7 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
                 const id = options.name === '以人为本系列课程'
                     ? 'PROJECT_COURSE'
                     : `PROJECT_${createdFolders.length}`;
-                const created = { id, parent, children: [], ...options };
+                const created = { id, parent, children: [], ...options, save: async () => undefined };
 
                 eagleFolders.push(created);
                 createdFolders.push({ kind: 'child', parent, options });
@@ -480,6 +481,25 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
         assert.equal(repeatedProjectImport.status, 200);
         assert.equal(createdFolders.length, 2);
         assert.deepEqual(Array.from(imported[2].options.folders), ['PROJECT_COURSE']);
+
+        const renamedProject = await callBridge(port, 'POST', '/v1/projects/rename', {
+            libraryKey: 'primary',
+            oldName: '以人为本系列课程',
+            newName: '新课程',
+        }, headers);
+
+        assert.equal(renamedProject.status, 200);
+        assert.equal(JSON.parse(renamedProject.body).renamed, true);
+        assert.equal(eagleFolders.find((entry) => entry.id === 'PROJECT_COURSE').name, '新课程');
+
+        const missingRename = await callBridge(port, 'POST', '/v1/projects/rename', {
+            libraryKey: 'primary',
+            oldName: '不存在',
+            newName: '也不存在',
+        }, headers);
+
+        assert.equal(missingRename.status, 200);
+        assert.equal(JSON.parse(missingRename.body).renamed, false);
 
         const invalidProject = await callBridge(port, 'POST', '/v1/projects/import', {
             libraryKey: 'primary',

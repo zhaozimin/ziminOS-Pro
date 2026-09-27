@@ -1,6 +1,7 @@
 /**
  * [INPUT]: 依赖 Eagle 官方 plugin API 的 app/library/item/folder/shell 与生命周期事件，依赖 Node 16 内建 http/fs/path/crypto
- * [OUTPUT]: 在 127.0.0.1 提供配对、按 Obsidian 容器建“项目/容器名”或单层“日记”目录并导入、内容读取与附件当前文件夹打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
+ * [OUTPUT]: 在 127.0.0.1 提供配对、按 Obsidian 容器建“项目/容器名”或单层“日记”目录并导入、
+ *           项目附件文件夹改名、内容读取与附件当前文件夹打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
  * [POS]: 两端架构的 Eagle 执行边界。它只调官方 item/folder API，不修改 metadata.json；服务只绑定回环，
  *        变更/读取端点验令牌与已配对资源库；队列及异步 API 返回后重验库身份，防止处理中切库让后续操作越界
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -138,6 +139,11 @@ class BridgeService {
 
         if (request.method === 'POST' && url.pathname === '/v1/projects/import') {
             await this.importItem(request, response, client, 'project');
+            return;
+        }
+
+        if (request.method === 'POST' && url.pathname === '/v1/projects/rename') {
+            await this.renameProjectFolder(request, response, client);
             return;
         }
 
@@ -290,6 +296,27 @@ class BridgeService {
         this.folderOperation = operation.then(() => undefined, () => undefined);
 
         return operation;
+    }
+
+    async renameProjectFolder(request, response, client) {
+        const body = await readJson(request);
+        const libraryKey = stringField(body, 'libraryKey');
+        const oldName = typeof body.oldName === 'string' ? body.oldName : '';
+        const newName = typeof body.newName === 'string' ? body.newName : '';
+
+        if (!this.ensureLibrary(response, client, libraryKey)) return;
+        if (!validFolderName(oldName) || !validFolderName(newName) || oldName === newName) {
+            this.json(response, 400, { ok: false, error: 'Obsidian 项目名称格式无效' });
+            return;
+        }
+
+        const assertLibrary = () => this.assertLibrary(client, libraryKey);
+        const operation = this.folderOperation.then(() =>
+            renameExistingRoutedFolder(PROJECT_ROOT_NAME, oldName, newName, assertLibrary));
+        this.folderOperation = operation.then(() => undefined, () => undefined);
+        const renamed = await operation;
+
+        this.json(response, 200, { ok: true, renamed });
     }
 
     async sendContent(request, response, client, itemId, libraryKey) {
@@ -620,6 +647,37 @@ async function createOrFindRoutedFolder(rootName, childName, assertLibrary) {
     return project.id;
 }
 
+/** 只改名唯一命中的「项目/旧名」；重名、多根或 API 不足时拒绝猜测。 */
+async function renameExistingRoutedFolder(rootName, oldName, newName, assertLibrary) {
+    assertLibrary();
+    if (typeof eagle.folder?.getAll !== 'function') {
+        throw new Error('当前 Eagle 版本不支持附件文件夹改名，请升级到 4.0 Build 18 或更高');
+    }
+
+    const all = flattenFolders(await eagle.folder.getAll());
+    assertLibrary();
+    const roots = all.filter((folder) => folder.name === rootName && !parentId(folder));
+    if (roots.length > 1) throw new BridgeConflictError(`Eagle 根目录存在多个同名“${rootName}”文件夹，请先合并`);
+    if (!roots.length) return false;
+
+    const root = roots[0];
+    const children = all.filter((folder) => parentId(folder) === root.id);
+    const oldFolders = children.filter((folder) => folder.name === oldName);
+    const newFolders = children.filter((folder) => folder.name === newName);
+    if (oldFolders.length > 1) throw new BridgeConflictError(`Eagle 的“${rootName}”下存在多个“${oldName}”文件夹，请先合并`);
+    if (newFolders.length) throw new BridgeConflictError(`Eagle 的“${rootName}”下已存在“${newName}”文件夹`);
+    if (!oldFolders.length) return false;
+
+    const folder = oldFolders[0];
+    if (typeof folder.save !== 'function') {
+        throw new Error('当前 Eagle 版本不支持附件文件夹改名，请升级到 4.0 Build 18 或更高');
+    }
+    folder.name = newName;
+    await folder.save();
+    assertLibrary();
+    return true;
+}
+
 /** getAll 在不同构建中可能给平铺表或带 children 的树；统一摊平并按 id 去重。 */
 function flattenFolders(values) {
     const found = new Map();
@@ -663,7 +721,6 @@ function validClient(value) {
         typeof value.libraryPath === 'string' && value.libraryPath.length > 0 &&
         typeof value.libraryName === 'string';
 }
-
 function safeEqual(left, right) {
     const a = Buffer.from(left);
     const b = Buffer.from(right);

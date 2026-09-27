@@ -1,8 +1,10 @@
 /**
  * [INPUT]: 依赖 obsidian 的 MarkdownView/TFile 与 App/TAbstractFile 类型；依赖 ./types 的 ZiminosContext 类型
- * [OUTPUT]: 对外提供 isNoteInFront（「开在用户眼前的那一篇」的唯一定义）、registerEditDebts（编辑欠账），
+ * [OUTPUT]: 对外提供 isNoteInFront（「开在用户眼前的那一篇」的唯一定义）、saveDisplayedMarkdownViews（分栏缓冲区落盘）、
+ *           registerEditDebts（编辑欠账），
  *           以及 EditDebts / EditDebtOptions 两个类型
- * [POS]: core 的后台补写调度层。updatedMaintainer 与 formatter 两个常驻编辑监听，都要在用户改完一篇之后替他补一笔写入，
+ * [POS]: core 的后台补写调度层。updatedMaintainer、formatter 与 dailyActivity 三个常驻编辑监听，
+ *        都要在用户改完一篇之后替他补一笔写入，
  *        而「什么时候补才不伤人」这件事原本各写了一份——一份修好了关标签页、另一份没有，两份都不认改名，
  *        都活不过一次退出。这里把它收成一处：没开着的笔记防抖、开着的等走开、走开包含关掉、
  *        结算前让仍显示着它的分栏先存盘、账跟着改名走、删掉即作废；给了 storageKey 的还把欠账存进本机本库的
@@ -49,7 +51,7 @@ export function isNoteInFront(app: App, path: string): boolean {
  * 先存盘，缓冲区就是干净的，随后那次写入只引起一次静默重载，分栏的视口由 markdownViewState 保住。
  * `save()` 在内容未变时什么都不写，所以对干净的分栏它是空操作。
  */
-async function flushDisplayedViews(app: App, path: string): Promise<void> {
+export async function saveDisplayedMarkdownViews(app: App, path: string): Promise<void> {
     const saves: Promise<void>[] = [];
 
     app.workspace.iterateAllLeaves((leaf) => {
@@ -78,7 +80,8 @@ export interface EditDebtOptions {
     /**
      * 给了就把欠账存进本机本库的 localStorage（公开 API `App.saveLocalStorage`）。
      * 不进 data.json 也不落成文件：它说的是「这台机器上还没补的那几笔」，同步到另一台机器就是在替别人补账。
-     * 只有补不回来的事实才需要它——updated 记的时刻错过就没了；排版任何时候都能从内容重新算出来，不必存。
+     * 只有补不回来的事实才需要它——updated 的时刻与当天日记的编辑事件错过就没了；
+     * 排版任何时候都能从内容重新算出来，不必存。
      */
     readonly storageKey?: string;
 }
@@ -178,7 +181,7 @@ export function registerEditDebts(ctx: ZiminosContext, options: EditDebtOptions)
         let recorded = debt.version;
 
         try {
-            await flushDisplayedViews(app, debt.path);
+            await saveDisplayedMarkdownViews(app, debt.path);
 
             // 存盘那一刻它自己会发 modify 并记一笔新账——那正是用户最后敲下的字，按新的时刻结算
             recorded = debt.version;

@@ -3,8 +3,9 @@
  *          core/constants 的 FIELDS/FOLDERS/PERIODS，core/folders 的 isInFolder/normalizeFolderPath，
  *          core/table 的五个渲染原语，core/time 的 dayText/dayOfMillis/dayOfTitle/shiftDay/titleOfDay，
  *          core/vaultIndex 的 toText；依赖 ./periodic 的 periodOfFile/periodStartOfNote
- * [OUTPUT]: 对外提供 reviewThemeViews（今日产出、主题链两个视图定义）
- * [POS]: 主题链的自动侧。日记写一句 theme，其余四级全是它的投影——本文件就是那个投影仪。
+ * [OUTPUT]: 对外提供 reviewThemeViews（旧日记的今日产出兼容视图、主题链视图）
+ * [POS]: 主题链的自动侧，并为尚未升级为持久 Markdown 活动区的旧日记保留查询投影。
+ *        日记写一句 theme，其余四级全是它的投影——本文件就是那个投影仪。
  *        两个视图共守一条纪律：缺记录必须显式留空，绝不兜底成 0。
  *        实测日记覆盖密度只有 16%，把空结果说成零值，等于把「本月没记录」
  *        伪装成「本月跑了 0 公里」——那是最容易骗人的画面，也是复盘失真的起点。

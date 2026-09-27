@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 obsidian 的 Plugin 基类；依赖 core 的 SelfWriteGuard、CommandRegistry、
  *          INIT_VAULT_COMMAND、DEFAULT_SETTINGS/normalizeSettings、
  *          ZiminosSettings/ZiminosContext/VaultSeed 契约、PERIODS 与 registerViewCodeBlock；
- *          依赖 modules/setup 的 initializeVault/applySeed，以及项目管理（含存量 Bases 迁移）、读书笔记、灵感收集、
+ *          依赖 modules/setup 的 initializeVault/applySeed，以及项目管理（含容器改名与存量 Bases 迁移）、读书笔记、灵感收集、
  *          日历、复盘、人脉与客户等业务模块各自的 seed、register 函数与视图数组，
  *          其中读书笔记那三条命令还要 modules/projects/createContainer 的 createContainer/BOOK_KIND
  *          来填「建一个书籍容器」那个洞，设置页那颗「扫码连接」还要 modules/books/sourceWeread
@@ -11,7 +11,7 @@
  *          registerPeriodAutoInit 则不需要任何注入——它只认名字与位置；
  *          再加 modules/format 的 registerFormatter、modules/appearance 的 registerAppearanceSwitch、
  *          modules/ribbon 的 registerRibbon、
- *          modules/eagle 的 registerEagleBridge（附件粘贴/呈现与 Eagle 配对），并由
+ *          modules/eagle 的 registerEagleBridge（附件粘贴/呈现、容器附件夹改名与 Eagle 配对），并由
  *          modules/projects/location 向它注入“当前笔记应归入哪个容器/日记”的唯一判定、
  *          modules/editing 的 registerPasteLink/registerCursorMemory、
  *          modules/export 的 registerExportCommand、
@@ -25,6 +25,7 @@
  *        最后这件事是 V2 新增的，也是本文件最有分量的部分：
  *        礼尚往来要往当天日记里写一行，客户模块的补齐命令要复用默认开荒能力，
  *        建一本书要走项目模块那套「文件夹 + MOC」的流程，
+ *        项目/领域改名要让 Eagle 同步附件夹、再让复盘模块把语义事件记入当日日记，
  *        设置页要能开出读书模块那个扫码登录窗口，
  *        还要能让状态栏那两块、左侧边栏那列图标与文件模块画出来的三样东西按新设置重画——
  *        它们分别需要复盘模块、开荒模块、项目模块、读书模块、外观模块、ribbon 模块
@@ -96,6 +97,8 @@ import { registerBaseMigrationCommand } from './modules/projects/migrateBases';
 import { projectsSeed } from './modules/projects/seed';
 import { registerTransitionCommands } from './modules/projects/transitions';
 import { registerUpdatedMaintainer } from './modules/projects/updatedMaintainer';
+import { registerContainerRenameCommand } from './modules/projects/renameContainer';
+import type { EagleContainerRenamer } from './modules/projects/renameContainer';
 import {
     openPeriodNote,
     periodFolderOf,
@@ -104,6 +107,7 @@ import {
 } from './modules/review/periodic';
 import { reviewProjectViews } from './modules/review/projectViews';
 import { reviewSeed } from './modules/review/seed';
+import { recordContainerRenameActivity, registerDailyActivityRecorder } from './modules/review/dailyActivity';
 import { promptThemeIfMissing, registerThemeCommand } from './modules/review/theme';
 import { reviewThemeViews } from './modules/review/views';
 import { registerRibbon } from './modules/ribbon/dock';
@@ -180,6 +184,11 @@ export default class ZiminosPlugin extends Plugin {
         // 建项目要问「这是谁委托的」，候选人住在人脉模块——用同一套注入把两者接上
         registerCreateProjectCommand(ctx, (title) => pickPerson(ctx, title));
         registerCreateAreaCommand(ctx);
+        let renameEagleContainer: EagleContainerRenamer | undefined;
+        registerContainerRenameCommand(ctx, (oldName, newName) =>
+            renameEagleContainer ? renameEagleContainer(oldName, newName) : Promise.resolve('skipped'),
+            (oldName, newName, newMocPath) => recordContainerRenameActivity(ctx, oldName, newName, newMocPath),
+        );
         registerCardInitCommand(ctx);
         registerBaseMigrationCommand(ctx);
         registerCardAutoInit(ctx);
@@ -191,6 +200,7 @@ export default class ZiminosPlugin extends Plugin {
             ctx.edition.role === 'human' ? createExportHook(ctx) : undefined,
         );
         registerUpdatedMaintainer(ctx);
+        registerDailyActivityRecorder(ctx);
 
         // 一本书就是一个项目：建书要的「一个文件夹 + 一篇 MOC」正是 createContainer 那套流程，
         // 而 books 模块不认识 projects——它只声明了一个「建一个书籍容器」的洞，由这里填上。
@@ -271,6 +281,7 @@ export default class ZiminosPlugin extends Plugin {
             ctx,
             (notePath) => attachmentRouteOfNotePath(ctx.settings, notePath),
         );
+        renameEagleContainer = eagleActions.renameEagleProjectFolder;
         // 下面两个不交回同步函数：监听与记忆每次触发都现读设置对象，天然看得见新值。
         // 需要有人去推一把的，永远只是「已经画在屏幕上」的东西
         registerPasteLink(ctx);

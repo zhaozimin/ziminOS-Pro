@@ -1,6 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian/requestUrl 访问仅回环监听的 Eagle 伴侣，桌面端伴侣不在线时按需使用 Electron shell 打开 Eagle 原生深链，依赖 core/types 与本模块 platform/protocol
- * [OUTPUT]: 对外提供 EagleImportRoute/EagleBridgeClient，封装配对、项目/日记分类导入、内容读取、当前文件夹精确打开、退出后有界唤起重连与本机令牌生命周期
+ * [OUTPUT]: 对外提供 EagleImportRoute/EagleBridgeClient，封装配对、项目/日记分类导入、
+ *           项目附件文件夹改名、内容读取、当前文件夹精确打开、退出后有界唤起重连与本机令牌生命周期
  * [POS]: Obsidian 半边唯一的 HTTP 出境口。认证令牌只进 Obsidian SecretStorage，不进 data.json、笔记或日志；
  *        上层只看业务结果，不自行拼端口、请求头或错误语义
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -121,6 +122,29 @@ export class EagleBridgeClient {
             name: stringField(result, 'name') || name,
             folderPath: stringField(result, 'folderPath'),
         };
+    }
+
+    /** 项目/领域改名后同步 Eagle 中「项目/容器名」文件夹；不存在不是错误 */
+    async renameProjectFolder(oldName: string, newName: string): Promise<'renamed' | 'missing'> {
+        try {
+            const result = await this.requestJson({
+                url: `${this.baseUrl()}/v1/projects/rename`,
+                method: 'POST',
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    libraryKey: this.libraryKey(),
+                    oldName,
+                    newName,
+                }),
+            });
+
+            return result.renamed === true ? 'renamed' : 'missing';
+        } catch (error) {
+            if (error instanceof EagleBridgeResponseError && error.status === 404) {
+                throw new Error('Eagle 伴侣版本过旧，请覆盖安装本次更新随附的伴侣');
+            }
+            throw error;
+        }
     }
 
     async content(reference: EagleReference): Promise<EagleItemContent> {

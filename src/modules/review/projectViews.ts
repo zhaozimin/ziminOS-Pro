@@ -1,12 +1,13 @@
 /**
  * [INPUT]: 依赖 obsidian 的 TFile 类型；依赖 core/codeblock 的 ViewContext/ViewDefinition，
  *          core/constants 的 FIELDS/FOLDERS/CONTAINER_TYPES，core/folders 的 isInFolder/normalizeFolderPath，
- *          core/table 的渲染原语，core/time 的 dayText/dayOfMillis/daysBetween/today，
- *          core/vaultIndex 的 toText；依赖 ./periodic 的 resolveScope
+ *          core/table 的渲染原语，core/time 的 dayText/dayOfMillis/dayOfTitle/daysBetween/today，
+ *          core/vaultIndex 的 toText；依赖 ./dailyActivityText 的日记事件读取与 ./periodic 的 resolveScope
  * [OUTPUT]: 对外提供 reviewProjectViews（项目动态、完成的项目、年度全景三个视图定义）
  * [POS]: 主题链是纵向的，项目数据是横向汇入的那一支——本文件是那一支。
  *        三个视图对应三种周期长度下该问的问题，这个分工本身就是复盘方法论：
- *        周看「哪些项目在动」（周期短，动作即信号），
+ *        周看「哪些项目在动」（周期短，动作即信号），数据优先取每天日记已固化的事件，
+ *        只对尚无托管区的旧日记回落 created/updated，避免「第二天修改就把第一天从历史里抹掉」；
  *        月与季看「完成了哪些」（周期长，新建只说明起了念头，完成才说明真推进了），
  *        年看格局（四态分布与月度节奏，事件被折叠成计数）。
  *        「完成」的判定一律以 MOC 的 archived 为准——那是状态流转命令与 status 同一次写入落的
@@ -20,12 +21,13 @@
 
 import type { TFile } from 'obsidian';
 import type { ViewContext, ViewDefinition } from '../../core/codeblock';
-import { CONTAINER_TYPES, FIELDS, FOLDERS } from '../../core/constants';
+import { CONTAINER_TYPES, FIELDS, FOLDERS, PERIODS } from '../../core/constants';
 import { isInFolder, normalizeFolderPath } from '../../core/folders';
 import { noteLink, renderEmpty, renderHeading, renderNote, renderSummary, renderTable } from '../../core/table';
 import type { Cell } from '../../core/table';
-import { dayOfMillis, dayText, daysBetween, today } from '../../core/time';
+import { dayOfMillis, dayOfTitle, dayText, daysBetween, today } from '../../core/time';
 import { toText } from '../../core/vaultIndex';
+import { readDailyActivities } from './dailyActivityText';
 import { resolveScope } from './periodic';
 
 /** 一张表最多列多少行 */
@@ -67,6 +69,14 @@ interface ActivityEntry {
     born: number;
     touched: number;
     last: string;
+    bornPaths: Set<string>;
+    touchedPaths: Set<string>;
+}
+
+interface RecordedActivity {
+    readonly created: boolean;
+    readonly modified: boolean;
+    readonly last: string;
 }
 
 /**
@@ -92,6 +102,7 @@ const projectActivity: ViewDefinition = {
         const entries = new Map<string, ActivityEntry>();
         const within = (day: string | null): boolean =>
             !!day && day >= scope.start && day < scope.end;
+        const { byPath: recorded, ledgerDays } = await recordedActivities(view, scope.start, scope.end);
 
         for (const file of view.index.allNotes()) {
             const folder = file.parent?.path ?? '';
@@ -106,6 +117,8 @@ const projectActivity: ViewDefinition = {
                 born: 0,
                 touched: 0,
                 last: '',
+                bornPaths: new Set<string>(),
+                touchedPaths: new Set<string>(),
             };
 
             // 项目与书都是住在这个目录里的容器，两种 MOC 都算数。
@@ -116,18 +129,27 @@ const projectActivity: ViewDefinition = {
                 entry.status = toText(view.index.fieldOf(file, FIELDS.status));
             }
 
+            const fileKey = file.path.endsWith('.md') ? file.path.slice(0, -3) : file.path;
+            const history = recorded.get(fileKey);
             const created = dayText(view.index.fieldOf(file, FIELDS.created)) ?? dayOfMillis(file.stat.ctime);
             const updated = dayText(view.index.fieldOf(file, FIELDS.updated)) ?? dayOfMillis(file.stat.mtime);
 
-            if (within(created)) {
-                entry.born += 1;
-
+            if (history?.created) {
+                entry.bornPaths.add(fileKey);
+                if (history.last > entry.last) entry.last = history.last;
+            } else if (history?.modified) {
+                entry.touchedPaths.add(fileKey);
+                if (history.last > entry.last) entry.last = history.last;
+            } else if (within(created) && !ledgerDays.has(created)) {
+                entry.bornPaths.add(fileKey);
                 if (created > entry.last) entry.last = created;
-            } else if (within(updated)) {
-                entry.touched += 1;
-
+            } else if (within(updated) && !ledgerDays.has(updated)) {
+                entry.touchedPaths.add(fileKey);
                 if (updated > entry.last) entry.last = updated;
             }
+
+            entry.born = entry.bornPaths.size;
+            entry.touched = entry.touchedPaths.size;
 
             entries.set(name, entry);
         }
@@ -175,6 +197,37 @@ const projectActivity: ViewDefinition = {
         warnOrphans(view, orphans);
     },
 };
+
+/** 读出区间内每篇日记已落盘的笔记事件；改名行是身份变更，不虚增「改动一篇」 */
+async function recordedActivities(
+    view: ViewContext,
+    start: string,
+    end: string,
+): Promise<{ byPath: ReadonlyMap<string, RecordedActivity>; ledgerDays: ReadonlySet<string> }> {
+    const byPath = new Map<string, RecordedActivity>();
+    const ledgerDays = new Set<string>();
+
+    for (const daily of view.index.notesOfType(PERIODS.daily.type)) {
+        const day = dayOfTitle(daily.basename);
+        if (!day || day < start || day >= end) continue;
+
+        const activities = readDailyActivities(await view.ctx.app.vault.cachedRead(daily));
+        if (activities === null) continue;
+        ledgerDays.add(day);
+
+        for (const activity of activities) {
+            if (activity.kind === 'renamed') continue;
+            const previous = byPath.get(activity.path);
+            byPath.set(activity.path, {
+                created: previous?.created === true || activity.kind === 'created',
+                modified: previous?.modified === true || activity.kind === 'modified',
+                last: previous && previous.last > day ? previous.last : day,
+            });
+        }
+    }
+
+    return { byPath, ledgerDays };
+}
 
 /** 有改动却没有同名 MOC 的文件夹要显式点名：不点名它们就是一批静默漏掉的数据 */
 function warnOrphans(view: ViewContext, orphans: readonly ActivityEntry[]): void {

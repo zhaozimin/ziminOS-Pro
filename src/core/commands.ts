@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian 的 Plugin 类型；依赖 ./constants 的 PeriodKey 与 TransitionAction 两个类型
  * [OUTPUT]: 对外提供命令身份契约 CommandSpec、分组名 COMMAND_GROUPS、图标名 COMMAND_ICONS，
- *           四十二条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
+ *           四十三条命令的规格 INIT_VAULT_COMMAND/PROJECT_COMMANDS/TRANSITION_COMMANDS（含类型
  *           TransitionCommand）/BOOK_COMMANDS/INSPIRATION_COMMAND/PERIOD_COMMANDS/THEME_COMMAND/
  *           OPEN_CALENDAR_COMMAND/CONTACT_COMMANDS/CLIENT_COMMANDS/APPEARANCE_COMMAND/FORMAT_COMMAND/
  *           RECENT_FILES_COMMAND/COPY_PATH_COMMAND/EXPORT_COMMAND/LEGACY_COMMANDS，
@@ -108,11 +108,11 @@ export const GROUP_COLORS: Readonly<Record<CommandGroup, string>> = {
 };
 
 /**
- * 四十三个图标名：四十二条命令，加设置页那三张没有命令与之对应的标签页（边栏、文件、编辑）。
+ * 四十三个图标名服务四十三条命令与设置页的三张非命令标签页（边栏、文件、编辑）。
  *
  * 不是一一对应：三条整架导入命令共用 importLibrary 一枚。它们做的是**同一件事**——
  * 把一个来源里全部有划线的书端进来，只是来源不同，而那也正是它们共用同一个内核的原因。
- * 给它们各画一枚，图标就开始讲一个代码里不存在的区别。
+ * 容器改名则复用 project 旗帜：它改的仍是当前项目/领域的身份，新画一枚反而会虚构第二种容器。
  *
  * 一律带 `ziminos-` 前缀：图标名是 Obsidian 全局共享的命名空间，
  * 不加前缀就可能盖掉 lucide 里的同名图标，或者被后装的插件盖掉。
@@ -177,12 +177,12 @@ export const COMMAND_ICONS = {
 } as const;
 
 // ============================================================
-// 四十二条命令：顺序即它们在左侧边栏里的先后
+// 四十三条命令：顺序即它们在左侧边栏里的先后
 // ============================================================
 
 /**
  * 开荒命令。它是唯一不属于任何功能模块的命令——开荒横跨全库骨架并要收齐各模块的诉求，
- * 因此由 main.ts 直接注册；其余二十条都由各自模块自行注册。
+ * 因此由 main.ts 直接注册；其余四十二条都由各自模块自行注册。
  */
 export const INIT_VAULT_COMMAND: CommandSpec = {
     id: 'init-vault',
@@ -191,8 +191,8 @@ export const INIT_VAULT_COMMAND: CommandSpec = {
     group: COMMAND_GROUPS.setup,
 };
 
-/** 项目模块的四个入口（含一次性迁移）；四条状态流转另见 TRANSITION_COMMANDS */
-export const PROJECT_COMMANDS: Readonly<Record<'create' | 'area' | 'card' | 'migrate', CommandSpec>> = {
+/** 项目模块的五个入口（含改名与一次性迁移）；四条状态流转另见 TRANSITION_COMMANDS */
+export const PROJECT_COMMANDS: Readonly<Record<'create' | 'area' | 'rename' | 'card' | 'migrate', CommandSpec>> = {
     create: {
         id: 'create-project',
         name: '新建项目',
@@ -207,6 +207,12 @@ export const PROJECT_COMMANDS: Readonly<Record<'create' | 'area' | 'card' | 'mig
         id: 'create-area',
         name: '新建领域',
         icon: COMMAND_ICONS.area,
+        group: COMMAND_GROUPS.projects,
+    },
+    rename: {
+        id: 'rename-container',
+        name: '修改当前项目或领域名称',
+        icon: COMMAND_ICONS.project,
         group: COMMAND_GROUPS.projects,
     },
     card: {

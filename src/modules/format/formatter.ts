@@ -10,7 +10,8 @@
  *        v0.33.0 只修好了那一边的「关标签页」，这一边一直在拿「最近活动过」当「开着」。
  *        它替代的是学员原本要自己装的 Linter 插件，但刻意只做那一件最基础的事：
  *        标准 Markdown 的写法，而不是一百条可配置的重排。
- *        全插件第二个常驻编辑监听（第一个是 updatedMaintainer），两者共处一室的规矩写在下面 shouldSkip 那一段
+ *        它与 updatedMaintainer 是两个会回写触发源笔记的常驻监听，共处一室的规矩写在下面 shouldSkip 那一段；
+ *        dailyActivity 是第三个 core/editDebts 消费者，但它只写另一篇当天日记
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 

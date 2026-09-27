@@ -1,7 +1,8 @@
 /**
  * [INPUT]: 依赖 core/constants 的 PERIODS/FIELDS/NOTE_TYPES/VIEW_BLOCK_LANG 与 PeriodDefinition/PeriodKey，
  *          依赖 core/time 的 nowStampAndUid 与 periodNeighbours
- * [OUTPUT]: 对外提供 periodNoteContent（生成某一级复盘笔记的完整正文）与 viewBlock（生成视图代码块）
+ * [OUTPUT]: 对外提供 periodNoteContent（生成某一级复盘笔记的完整正文）与 viewBlock（生成视图代码块）；
+ *           日记的今日产出改由 dailyActivityText 生成可持久 Markdown 托管区
  * [POS]: 复盘模块唯一生成文本的地方，纯函数无副作用。五级模板逐字承接课程里已实跑验证的
  *        Templater 版本，只做三处刻意删改：其一，天气块整体删除——它要 fetch 三个外部接口，
  *        而「插件内零网络请求」是红线，location/weather/temperature 三个字段一并移除不留空键；
@@ -16,6 +17,7 @@
 import { DIARY_LOG_HEADING, FIELDS, PERIODS, VIEW_BLOCK_LANG } from '../../core/constants';
 import type { PeriodDefinition, PeriodKey } from '../../core/constants';
 import { nowStampAndUid, periodNeighbours, periodStartOf } from '../../core/time';
+import { emptyDailyActivityBlock } from './dailyActivityText';
 
 /** 代码块围栏。写在单引号里，免得与 TypeScript 模板字符串的反引号打架 */
 const FENCE = '```';
@@ -93,7 +95,7 @@ function bodyOf(key: PeriodKey): string {
             '',
             '## 今日产出（自动）',
             '',
-            viewBlock('今日产出'),
+            emptyDailyActivityBlock(),
         ].join('\n');
     }
 
