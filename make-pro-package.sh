@@ -198,10 +198,12 @@ if (new Set(seen).size !== 1) { console.error("edition.json 的 vaults 不一致
     echo "vault/ 里混进了 edition.json —— 那会让第一版的库被当成第二版" >&2; exit 1; }
 
 # 私有状态一个都不许出门：这个包挂在公开的发行版上，谁都能下载。
-# 唯一允许的 data.json 是 Style Settings 的默认配色——契约要求它随库分发
+# 两个精确例外都是受 Git 跟踪的公共种子：Style Settings 的默认配色，以及只含
+# left-ribbon 的 workspace.json。workspace-mobile.json 与其他 workspace*.json 仍一律拒绝。
 leaks="$(cd "$stage" && find . -type f \( -name 'workspace*.json' -o -name holiday-cache.json \
     -o -name recent-files.json -o -name cursor-positions.json -o -name data.json \) \
-    ! -path './vault/.obsidian/plugins/obsidian-style-settings/data.json')"
+    ! -path './vault/.obsidian/plugins/obsidian-style-settings/data.json' \
+    ! -path './vault/.obsidian/workspace.json')"
 [ -z "$leaks" ] || { printf '包里混进了私有状态，拒绝出包：\n%s\n' "$leaks" >&2; exit 1; }
 
 echo "==> 打包"

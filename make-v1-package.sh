@@ -213,15 +213,17 @@ manifest = json.load(open(stage_path(VAULT, ".obsidian/plugins/ziminos/manifest.
 expect(manifest.get("version") == version, "插件 manifest 的版本 %s 与 package.json 的 %s 不一致" % (manifest.get("version"), version))
 expect(os.path.isfile(stage_path(GUIDE)), "缺少安装说明")
 
-# 私有状态与开发文件一个都不许出门。唯一的 data.json 是 Style Settings 的默认配色——契约要求它随新库交付，
-# 而升级文件里一份 data.json 都不许有
+# 私有状态与开发文件一个都不许出门。两个精确例外都是受 Git 跟踪的公共种子：
+# Style Settings 的默认配色，以及只含 left-ribbon 的 workspace.json。升级文件不带两者，
+# workspace-mobile.json 与其他 workspace*.json 仍一律拒绝
 allowed_data = os.path.join(VAULT, ".obsidian/plugins/obsidian-style-settings/data.json")
+allowed_workspace = os.path.join(VAULT, ".obsidian/workspace.json")
 private = {"holiday-cache.json", "recent-files.json", "cursor-positions.json", "edition.json", "CLAUDE.md", "AGENTS.md"}
 for folder, dirs, files in os.walk(stage):
     for filename in files:
         rel = os.path.relpath(os.path.join(folder, filename), stage)
         expect(filename not in private, "包里混进了不该出门的文件：" + rel)
-        expect(not (filename.startswith("workspace") and filename.endswith(".json")), "包里混进了工作区状态：" + rel)
+        expect(not (filename.startswith("workspace") and filename.endswith(".json")) or rel == allowed_workspace, "包里混进了工作区状态：" + rel)
         expect(filename != "data.json" or rel == allowed_data, "包里混进了一份设置：" + rel)
 
 if problems:

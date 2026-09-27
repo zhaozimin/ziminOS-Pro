@@ -4,7 +4,8 @@
  * [OUTPUT]: 为 npm test 提供分发包的跨产物回归：zip 的 UTF-8 标志位与确定性，手动安装包的包内名字与安装说明同名，
  *           说明让人替换的程序文件与契约升级分支一致，说明引用的插件文案与版本要求真实存在，首页指得到这条路；
  *           以及两份契约「取法一」按打包脚本产出的 ASCII 包名去各自仓库的发行版取包、写明 Windows 真机上撞过的墙，
- *           第二版验收清单与交付物一致（两份版次标记、随库分发的配色），第二版分发包只从 HEAD 取料
+ *           第二版验收清单与交付物一致（两份版次标记、随库分发的配色），两种分发包
+ *           精确放行受 Git 跟踪的 workspace.json 左栏种子而仍拒绝其他工作区状态，第二版分发包只从 HEAD 取料
  * [POS]: tests 的分发专项。它不测插件行为，测的是「人拿到的那个包、那份说明，和契约、代码说的是不是同一件事」——
  *        这类错都不在写错的那一行报错，只在某个学员照着说明找不到那个按钮时报错。
  *        打包工具与学员指南只住在第二版仓库，publish-v1.sh 却会把 tests/ 同步过去，
@@ -174,6 +175,8 @@ test('手动安装包只从 HEAD 取交付物，并先与第一版仓库对账',
     assert.match(script, /fetch --quiet --depth 1 --filter=blob:none "\$V1_REMOTE" main/);
     assert.equal(script.includes('api/v5'), false, 'make-v1-package.sh 又去调被限流的开放接口了');
     assert.ok(script.includes('pack-zip.py'));
+    assert.ok(script.includes('rel == allowed_workspace'), '第一版打包闸没有精确放行左栏种子');
+    assert.ok(script.includes('filename.startswith("workspace")'), '第一版打包闸不再拦截其他 workspace 状态');
 });
 
 test('首页给第一版指出不用智能体的那条路', { skip: !IS_PRO_REPO }, () => {
@@ -276,5 +279,7 @@ test('第二版分发包只从 HEAD 取料并断言私有状态不出门', { ski
     assert.match(script, /git archive --format=tar HEAD vault vault-pro skill-pro fonts/);
     assert.doesNotMatch(script, /cp -R "\$repo_root\/\$item"/);
     assert.ok(script.includes('包里混进了私有状态'));
+    assert.ok(script.includes("! -path './vault/.obsidian/workspace.json'"), '第二版打包闸没有精确放行左栏种子');
+    assert.ok(script.includes("-name 'workspace*.json'"), '第二版打包闸不再拦截其他 workspace 状态');
     assert.ok(script.includes('pack-zip.py'));
 });
