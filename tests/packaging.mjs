@@ -173,7 +173,7 @@ test('手动安装包只从 HEAD 取交付物，并先与第一版仓库对账',
     assert.doesNotMatch(script, /cp -R "\$repo_root\/vault"/);
     // 对账走公开 HTTPS Git、只取树不取文件；开放接口限流，SSH 又可能卡在 banner 握手
     assert.match(script, /fetch --quiet --depth 1 --filter=blob:none "\$V1_REMOTE" main/);
-    assert.ok(script.includes('V1_REMOTE="https://gitee.com/$v1_repo.git"'));
+    assert.ok(script.includes('V1_REMOTE="https://github.com/zhaozimin/ziminOS.git"'));
     assert.equal(script.includes('api/v5'), false, 'make-v1-package.sh 又去调被限流的开放接口了');
     assert.ok(script.includes('pack-zip.py'));
     assert.ok(script.includes('rel == allowed_workspace'), '第一版打包闸没有精确放行左栏种子');

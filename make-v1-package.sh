@@ -32,10 +32,10 @@ cd "$repo_root"
 
 contract="skill/SKILL.md"
 guide="docs/第一版手动安装指南.html"
-# 与 publish-v1.sh 的 Gitee 目标是同一个仓库；这里只读，不用 SSH 密钥也不经限流的 OpenAPI。
-# Gitee 上它已改名为 ziminos-mini，旧名至今仍解析。
+# 发行附件仍挂 Gitee；树对账只读两端已推进同一提交的 GitHub 镜像，
+# 避开 Gitee Git 通道在发版时长时间卡在 banner/TLS 握手；不用密钥，也不经限流 OpenAPI。
 v1_repo="ziminzhao/zimin-os-v1"
-V1_REMOTE="https://gitee.com/$v1_repo.git"
+V1_REMOTE="https://github.com/zhaozimin/ziminOS.git"
 
 # ============================================================
 # 一、闸门
@@ -60,8 +60,8 @@ name="ziminOS-v${version}-setup"
 # 二、核对第一版仓库
 # ============================================================
 
-# 走公开 HTTPS Git 协议，不走 Gitee 开放接口：后者对未登录请求限流（403），
-# SSH 则在已完成推送时仍可能长时间卡在 banner 握手；公开仓库的只读对账不需要密钥。
+# 走 GitHub 公开 HTTPS Git 协议，不走 Gitee 开放接口：后者对未登录请求限流（403），
+# Gitee 的 Git 通道则在已完成推送时仍可能长时间卡在握手；只读对账不该被发行平台拖住。
 # 只取提交与树、不取文件内容（--filter=blob:none）：比的是树对象哈希，一个 blob 都用不着，实测 5 秒、百来 KB
 v1_main_matching_head() {
     local probe commit folder
