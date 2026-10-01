@@ -24,7 +24,7 @@ TypeScript 7.0 + esbuild 0.28 + Obsidian API 1.13（manifest minAppVersion 1.13.
 
 两版的隔离不是配置开关而是**装配期开关**：第二版安装器写下一个第一版永远没有的版次标记 `edition.json`，`src/core/edition.ts` 在 onload 最前面读它，main 拿到 free 就根本不接第二版那条线——没有命令、没有视图、没有监听，免费库的行为与第二版出现之前逐字节相同。标记可删，删了就退回第一版。失败方向是刻意的：文件缺席、读不动、JSON 坏了、字段不认识，一律回落 free，因为坏标记把付费功能塞进免费库（用户看不见）比坏标记让付费库退化（用户会来问）严重得多。`skill/SKILL.md` 与 `vault/` 的既有内容一个字都不许**因为第二版**而改动——这条护的是第一版用户，不是把那两处冻成化石。v0.17.0 改过 `skill/SKILL.md` 里的克隆地址，理由与第二版无关：GitHub 的 `zhaozimin/ziminOS` 在当时因账号封禁返回 403，那行指令对谁都不成立；v0.35.2 账号解封后又按事实恢复为双镜像。判据因此是**动机**而不是文件名：为第二版让路 = 违规，为「这行字已经不是事实了」= 必须改。
 
-**v0.39.1 的审计把最新状态与历史事实分开。** updated 回写仍只保留最后时刻并核对 mtime；每日活动以事发日归并，跨日欠账与落盘失败都保留。容器改名只改元数据证明的引用，Markdown 保持移动后的相对坐标；确认同时核对正文、文件对象、名称占用，回滚逐项尝试并报告残留。两条依赖安全公告由 package.json overrides 锁到修复版，Moment 仅改变开发/测试环境，Obsidian 的运行时仍由宿主提供。实现与验收见规格 §75。
+**v0.39.1 的审计把最新状态与历史事实分开。** updated 回写仍只保留最后时刻并核对 mtime；每日活动以事发日归并，跨日欠账与落盘失败都保留。容器改名只改元数据证明的引用，Markdown 保持移动后的相对坐标；确认同时核对正文、文件对象、名称占用，回滚逐项尝试并报告残留。两条依赖安全公告由 package.json overrides 锁到修复版，Moment 仅改变开发/测试环境，Obsidian 的运行时仍由宿主提供。构建链按 esbuild 输入身份归一依赖来源注释与模块键，跨目录中文路径也得到同一份生产产物。实现与验收见规格 §75。
 
 <directory>
 docs/ - 设计规格与第三方组件锁定记录；代码、交付物与规格必须同步
@@ -162,7 +162,7 @@ docs/插件代码审计修复报告-2026-08-18.html - 对外交付的单文件�
 </config>
 
 <delivery>
-esbuild.config.mjs - Obsidian 构建出口；打包前把 package.json 版本同步到 Obsidian 与 Eagle 两份 manifest，主产物直接写入 vault 插件目录，再由 package-eagle.sh 生成伴侣包。产物里的依赖路径一律归一成 `node_modules/` 开头：esbuild 写的是相对工作目录的路径，在 git worktree 里构建会得到 `../../../node_modules/`，代码一字不差、main.js 却差出几百行，publish-v1.sh 的「构建后 main.js 不许再变」就随构建地点时红时绿
+esbuild.config.mjs - Obsidian 构建出口；打包前把 package.json 版本同步到 Obsidian 与 Eagle 两份 manifest，主产物直接写入 vault 插件目录，再由 package-eagle.sh 生成伴侣包。按 esbuild metafile 的真实输入身份，将依赖来源注释与 CommonJS 模块键归一成 `node_modules/` 开头；兼容跨目录、中文/空格与 ASCII 转义，不改依赖自己的运行时字符串。tests/build-location.mjs 用真实构建入口核对本地与借用依赖的逐字节一致性，避免 publish-v1.sh 闸门随构建位置变色
 .gitignore - 忽略依赖、系统杂项、历史发布压缩包、常见凭据、开发库私有状态与发布/Eagle 打包暂存；main.js、`.eagleplugin` 与公共 vault 资产不忽略，学员浅克隆即可用
 .gitattributes - 锁定 Dataview、Minimal、Style Settings、fonts/ 字体及 Eagle 图标/安装包等二进制发布资产的原始字节，防止 Git 换行/格式化破坏 SHA-256
 docs/第三方组件.md - 运行依赖、独立交付资产与外部设计参照的版本/上游/许可真源；v0.23.0 增加 dom-to-image-more、jsPDF 及两款导出参考插件边界
