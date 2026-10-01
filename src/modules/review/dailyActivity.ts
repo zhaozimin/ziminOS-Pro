@@ -7,7 +7,8 @@
  *           recordContainerRenameActivity（项目/领域改名的显式记录口）
  * [POS]: review 的历史记账编排层。DataviewJS 只能查「现在」，无法保留「当时」；
  *        本文件在 vault 事件发生时先记欠账，等源笔记离开前台后，把事件直接写入当天日记。
- *        日记本身就是持久事件源，不产生第二套「修改历史」文件，也不在用户正编辑时写盘
+ *        日记本身就是持久事件源，不产生第二套「修改历史」文件，也不在用户正编辑时写盘；
+ *        欠账按事发日分组，跨午夜不互相覆盖，日记不可写时保留到下一次事件或启动
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -32,7 +33,7 @@ export function registerDailyActivityRecorder(ctx: ZiminosContext): void {
 
         const day = dayOfMillis(changedAt);
         const daily = await openPeriodNote(ctx, PERIODS.daily, { day, reveal: false });
-        if (!daily) return true;
+        if (!daily) return false;
 
         if (isNoteInFront(ctx.app, daily.path)) return false;
         await saveDisplayedMarkdownViews(ctx.app, daily.path);
@@ -53,6 +54,7 @@ export function registerDailyActivityRecorder(ctx: ZiminosContext): void {
     const debts = registerEditDebts(ctx, {
         debounceMs: ACTIVITY_DEBOUNCE_MS,
         storageKey: ACTIVITY_DEBTS_KEY,
+        historyGroup: dayOfMillis,
         settle,
     });
 

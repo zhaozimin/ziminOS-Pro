@@ -9,7 +9,8 @@
  *        都活不过一次退出。这里把它收成一处：没开着的笔记防抖、开着的等走开、走开包含关掉、
  *        结算前让仍显示着它的分栏先存盘、账跟着改名走、删掉即作废；给了 storageKey 的还把欠账存进本机本库的
  *        localStorage，退出、崩溃、重载插件之后照样补上。模块只回答两件事：哪一次变化算人改的（record），
- *        以及到点之后写什么（settle）
+ *        以及到点之后写什么（settle）。历史消费者可以指定分组：组内归并、组间保留，
+ *        已发生的事实不因源文件后来改动而作废，落盘失败保留到下一次事件或启动，不轮询重试
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -74,7 +75,7 @@ export interface EditDebtOptions {
      * 结算一笔。调用时这一篇保证不在用户眼前，且显示着它的分栏都已存盘。
      * `changedAt` 是它最后一次被人改动时磁盘上的修改时间。
      * 返回 false 表示落盘前最后一刻它又被点回眼前，这笔账原样留着等下一次走开；
-     * 抛错视同结算完毕——背景动作，文件在等待期间被删改而失败属于常态，不重试。
+     * 默认抛错视同结算完毕；历史模式保留失败项，等下一次事件或启动再结算。
      */
     readonly settle: (file: TFile, changedAt: number) => Promise<boolean>;
     /**
@@ -84,6 +85,8 @@ export interface EditDebtOptions {
      * 排版任何时候都能从内容重新算出来，不必存。
      */
     readonly storageKey?: string;
+    /** 历史事实的归并键；同组只留最后时刻，不同组逐笔结算。与最新状态回写的过期规则分开 */
+    readonly historyGroup?: (changedAt: number) => string;
 }
 
 export interface EditDebts {
@@ -98,6 +101,8 @@ interface Debt {
     path: string;
     /** 最后一次被人改动时磁盘上的修改时间 */
     changedAt: number;
+    /** 历史模式的一组事实时刻；默认模式只保留最新值 */
+    changes: number[];
     /** 每记一次递增；结算途中又被改过，结算完就不能把新的那一程一起勾销 */
     version: number;
     /** 没开着的那一篇在等防抖；为 null 表示在等走开 */
@@ -123,9 +128,9 @@ export function registerEditDebts(ctx: ZiminosContext, options: EditDebtOptions)
     const persist = (): void => {
         if (!options.storageKey) return;
 
-        const stored: Record<string, number> = {};
+        const stored: Record<string, number | number[]> = {};
 
-        for (const debt of debts.values()) stored[debt.path] = debt.changedAt;
+        for (const debt of debts.values()) stored[debt.path] = options.historyGroup ? debt.changes : debt.changedAt;
 
         app.saveLocalStorage(options.storageKey, debts.size > 0 ? stored : null);
     };
@@ -190,10 +195,18 @@ export function registerEditDebts(ctx: ZiminosContext, options: EditDebtOptions)
             if (isNoteInFront(app, debt.path)) {
                 settled = false;
             } else {
-                settled = await options.settle(file, debt.changedAt);
+                for (const changedAt of [...debt.changes]) {
+                    if (isNoteInFront(app, debt.path)) { settled = false; break; }
+                    if (!await options.settle(file, changedAt)) { settled = false; break; }
+                    if (options.historyGroup) {
+                        debt.changes = debt.changes.filter((time) => time !== changedAt);
+                        persist();
+                    }
+                }
             }
         } catch {
-            // 背景动作：失败不弹 Notice、不重试，这一笔就此勾销
+            // 历史无法从下一版源文件重算；写失败时保留，既不丢账也不后台轮询
+            settled = !options.historyGroup;
         } finally {
             debt.settling = false;
         }
@@ -215,9 +228,10 @@ export function registerEditDebts(ctx: ZiminosContext, options: EditDebtOptions)
     };
 
     /**
-     * 上一次运行留下的欠账。
+     * 上一次运行留下的欠账。最新状态回写核对 mtime；历史事实按原来的时刻恢复。
      * 补记有一个前提：磁盘上的那一篇还是用户离开时的样子——修改时间对不上，说明 Obsidian 关着的时候
-     * 别的设备同步过来一版、或者别的程序改过它，这笔旧账就不再成立，拿旧时间盖上去等于让 updated 倒退。
+     * 别的设备同步过来一版、或者别的程序改过它，旧的 updated 回写就不再成立。
+     * 历史事件没有这个限制：它记录那天已发生的编辑，不会拿旧时间覆盖源笔记的新状态。
      */
     const restore = (): void => {
         if (!options.storageKey) return;
@@ -229,15 +243,19 @@ export function registerEditDebts(ctx: ZiminosContext, options: EditDebtOptions)
             return;
         }
 
-        for (const [path, changedAt] of Object.entries(stored)) {
-            if (typeof changedAt !== 'number' || !Number.isFinite(changedAt)) continue;
+        for (const [path, value] of Object.entries(stored)) {
+            const changes = (Array.isArray(value) ? value : [value])
+                .filter((time): time is number => typeof time === 'number' && Number.isFinite(time))
+                .sort((left, right) => left - right);
+            const changedAt = changes[changes.length - 1];
+            if (changedAt === undefined) continue;
 
             const file = app.vault.getAbstractFileByPath(path);
 
-            if (!(file instanceof TFile) || file.stat.mtime !== changedAt) continue;
+            if (!(file instanceof TFile) || (!options.historyGroup && file.stat.mtime !== changedAt)) continue;
 
             version += 1;
-            debts.set(path, { path, changedAt, version, timer: null, settling: false });
+            debts.set(path, { path, changedAt, changes: options.historyGroup ? changes : [changedAt], version, timer: null, settling: false });
         }
 
         // 作废的那几笔顺手从存储里清掉
@@ -286,6 +304,7 @@ export function registerEditDebts(ctx: ZiminosContext, options: EditDebtOptions)
             const debt: Debt = debts.get(file.path) ?? {
                 path: file.path,
                 changedAt: 0,
+                changes: [],
                 version: 0,
                 timer: null,
                 settling: false,
@@ -294,6 +313,14 @@ export function registerEditDebts(ctx: ZiminosContext, options: EditDebtOptions)
             version += 1;
             // modify 事件发出之前 Obsidian 已经换上了新的 stat，所以这就是这次保存落盘的时刻
             debt.changedAt = file.stat.mtime;
+            if (options.historyGroup) {
+                const group = options.historyGroup(debt.changedAt);
+                debt.changes = debt.changes.filter((time) => options.historyGroup?.(time) !== group);
+                debt.changes.push(debt.changedAt);
+                debt.changes.sort((left, right) => left - right);
+            } else {
+                debt.changes = [debt.changedAt];
+            }
             debt.version = version;
             debts.set(debt.path, debt);
 

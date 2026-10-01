@@ -4,7 +4,8 @@
  *           upsertDailyActivity 幂等写入与 readDailyActivities 历史读取
  * [POS]: review 的每日活动纯文本内核。它把「当天做过什么」直接固化为日记里可读、
  *        可搜索、可同步的 Markdown；同篇同日只留一条，新建优先于修改，既有日记的
- *        旧「今日产出」代码块在第一次记账时就地升级，不需要独立修改历史目录
+ *        旧「今日产出」代码块在第一次记账时就地升级；未识别的用户行原样保留，
+ *        活动种类只读取行首图标，不从用户的文件名或别名推断
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -93,7 +94,7 @@ function mergeActivityLines(current: readonly string[], event: DailyActivity): s
 
     if (event.kind === 'modified') {
         const created = parsed.find((item) => item.kind === 'created' && item.path === event.path);
-        if (created) return parsed.map(formatActivityLine);
+        if (created) return [...current];
     }
 
     if (event.kind === 'created') {
@@ -104,7 +105,19 @@ function mergeActivityLines(current: readonly string[], event: DailyActivity): s
 
     others.push(event);
     others.sort((left, right) => left.time.localeCompare(right.time));
-    return others.map(formatActivityLine);
+    const formatted = others.map(formatActivityLine);
+    const result: string[] = [];
+    let next = 0;
+    for (const line of current) {
+        if (line === '- 今天还没有笔记产出。') continue;
+        if (parseActivityLine(line)) {
+            if (next < formatted.length) result.push(formatted[next++]);
+        } else {
+            result.push(line);
+        }
+    }
+    result.push(...formatted.slice(next));
+    return result;
 }
 
 function sameActivity(left: DailyActivity, right: DailyActivity): boolean {
@@ -119,17 +132,17 @@ function formatActivityLine(event: DailyActivity): string {
 }
 
 function parseActivityLine(line: string): DailyActivity | null {
-    const match = /^- (?:🆕|✏️|🏷️) (\d{2}:\d{2}) \[\[([^\]|]+)\|([^\]]+)\]\]$/.exec(line.trim());
+    const match = /^- (🆕|✏️|🏷️) (\d{2}:\d{2}) \[\[([^\]|]+)\|([^\]]+)\]\]$/.exec(line.trim());
     if (!match) return null;
 
-    const icon = line.includes('🆕') ? 'created' : line.includes('✏️') ? 'modified' : 'renamed';
-    const label = match[3];
+    const icon = match[1] === '🆕' ? 'created' : match[1] === '✏️' ? 'modified' : 'renamed';
+    const label = match[4];
     const rename = icon === 'renamed' ? /^(.*?) → (.*)$/.exec(label) : null;
 
     return {
         kind: icon,
-        time: match[1],
-        path: match[2],
+        time: match[2],
+        path: match[3],
         label,
         ...(rename ? { oldName: rename[1] } : {}),
     };

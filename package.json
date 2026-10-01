@@ -1,6 +1,6 @@
 {
   "name": "ziminos",
-  "version": "0.39.0",
+  "version": "0.39.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,6 +20,10 @@
     "obsidian": "^1.13.1",
     "tslib": "^2.8.1",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "dompurify": "3.4.16",
+    "moment": "2.31.0"
   },
   "dependencies": {
     "dom-to-image-more": "3.10.2",
