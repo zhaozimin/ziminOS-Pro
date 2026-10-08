@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/path/url 与 esbuild，直接编译 Eagle 协议事实源并审计两端边界
- * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、内容容器/日记路由注入、Eagle 两级项目目录的归档/改名与单层日记目录归档、当前文件夹打开与附件选中、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
+ * [OUTPUT]: 覆盖稳定 URI 往返、Markdown/YAML 编辑命中、图片排除分流、视频嵌入与 Range 媒体票据、内容容器/日记路由注入、Eagle 两级项目目录的归档/改名与单层日记目录归档、当前文件夹打开与附件选中、原生唤起深链、端口回落、版本/平台镜像、回环绑定、令牌、fail-closed、可复现安装包、学员 HTML 指南与服务路由
  * [POS]: tests 的 Eagle 专项回归入口；纯函数跑真实源码，平台边界读产物结构，服务在伪造 Eagle 官方运行时中走真实 HTTP，不复制第二份实现
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -39,6 +39,7 @@ const {
     buildEagleUri,
     eagleReferenceAtText,
     isImageAttachment,
+    isVideoAttachment,
     normalizeEaglePort,
     parseEagleUri,
     singleEagleReferenceInText,
@@ -89,7 +90,7 @@ test('文本命中不从损坏 URI 截前缀，也不在多附件控件里猜测
     assert.equal(singleEagleReferenceInText(`${uri} ${uri.replace('ABC123', 'OTHER')}`), null);
 });
 
-test('图片生成嵌入，其他附件生成普通链接', () => {
+test('图片与视频生成嵌入，其他附件生成普通链接', () => {
     const reference = { libraryKey: 'primary', itemId: 'ABC123' };
 
     assert.equal(
@@ -97,9 +98,21 @@ test('图片生成嵌入，其他附件生成普通链接', () => {
         '![截图\\[1\\].png](ziminos-eagle://v1/primary/ABC123)',
     );
     assert.equal(
+        buildEagleMarkdown(reference, '课程.mp4', 'video/mp4'),
+        '![课程.mp4](ziminos-eagle://v1/primary/ABC123)',
+    );
+    assert.equal(
         buildEagleMarkdown(reference, '合同.pdf', 'application/pdf'),
         '[合同.pdf](ziminos-eagle://v1/primary/ABC123)',
     );
+});
+
+test('视频嵌入同时识别 MIME 与常见扩展名', () => {
+    assert.equal(isVideoAttachment('clipboard', 'video/mp4'), true);
+    assert.equal(isVideoAttachment('演示.MOV', ''), true);
+    assert.equal(isVideoAttachment('网页录屏.webm', 'application/octet-stream'), true);
+    assert.equal(isVideoAttachment('声音.mp3', 'audio/mpeg'), false);
+    assert.equal(isVideoAttachment('合同.pdf', 'application/pdf'), false);
 });
 
 test('图片排除同时识别 MIME 与扩展名，不误伤普通附件', () => {
@@ -172,7 +185,7 @@ test('容器与日记归属只由上游模块判定，再由 main 注入 Eagle',
 test('Eagle 安装包可解压，根层交付物齐全', () => {
     const artifact = path.join(ROOT, 'vault/.obsidian/plugins/ziminos/ziminOS-Eagle-Bridge.eagleplugin');
     const listing = execFileSync('unzip', ['-Z1', artifact], { encoding: 'utf8' }).trim().split('\n').sort();
-    const expected = ['manifest.json', 'index.html', 'styles.css', 'logo.png', 'README.md', 'LICENSE', 'js/service.js'].sort();
+    const expected = ['manifest.json', 'index.html', 'styles.css', 'logo.png', 'README.md', 'LICENSE', 'js/media.js', 'js/service.js'].sort();
 
     assert.deepEqual(listing, expected);
 
@@ -216,6 +229,9 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
     assert.ok(guide.includes('伴侣版本过旧'));
     assert.ok(guide.includes('覆盖安装同版 Eagle 伴侣'));
     assert.ok(guide.includes('同一 Eagle 库里换文件夹'));
+    assert.ok(guide.includes('Array buffer allocation failed'));
+    assert.ok(guide.includes('浏览器按需从本机伴侣读取区间'));
+    assert.ok(guide.includes('普通单击播放'));
     assert.ok(guide.includes('打开附件当前所在的文件夹并选中该附件'));
     assert.ok(guide.includes('只有未归类附件才会留在“全部”'));
     assert.ok(guide.includes('不要手动编辑或分享配对令牌'));
@@ -224,6 +240,7 @@ test('学员 HTML 指南覆盖升级、安装、配对、验收与排障，不�
 
 test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官方 API', () => {
     const source = readFileSync(path.join(ROOT, 'eagle-companion/js/service.js'), 'utf8');
+    const media = readFileSync(path.join(ROOT, 'eagle-companion/js/media.js'), 'utf8');
     const client = readFileSync(path.join(ROOT, 'src/modules/eagle/client.ts'), 'utf8');
 
     assert.ok(source.includes("server.listen(port, '127.0.0.1')"));
@@ -239,7 +256,7 @@ test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官�
     assert.ok(source.includes('eagle.folder.create'));
     assert.ok(source.includes('eagle.folder.createSubfolder'));
     assert.ok(source.includes('eagle.folder.open'));
-    assert.ok(source.includes('eagle.item.getById'));
+    assert.ok(media.includes('eagle.item.getById'));
     assert.ok(source.includes('eagle.item.open'));
     assert.ok(source.includes('eagle.item.select'));
     assert.ok(source.includes('eagle.app.show'));
@@ -251,6 +268,7 @@ test('Eagle 伴侣只开回环、变更端点验令牌，资源操作只调官�
     assert.ok(client.includes('EAGLE_WAKE_RETRY_DELAYS_MS'));
     assert.ok(client.includes('await this.retryOpenAfterNative(reference, error)'));
     assert.ok(client.includes('暂时只能在“全部”中显示附件'));
+    assert.ok(client.includes("error.message === '不存在的伴侣端点'"));
     assert.equal(client.includes('setInterval('), false);
     assert.equal(source.includes('Access-Control-Allow-Origin'), false);
     assert.equal(/writeFile[^\n]*metadata\.json/.test(source), false);
@@ -280,13 +298,15 @@ test('编辑设置页对用户暴露图片分流开关与边界说明', () => {
     assert.ok(panels.includes("'eagleExcludeImages'"));
 });
 
-test('Eagle 图片离开 DOM 即释放 blob，浏览多篇笔记不累积内存', () => {
+test('Eagle 媒体离开 DOM 即撤销单附件票据，不把大文件缓冲成 blob', () => {
     const source = readFileSync(path.join(ROOT, 'src/modules/eagle/render.ts'), 'utf8');
 
     assert.ok(source.includes('record.removedNodes'));
-    assert.ok(source.includes('URL.revokeObjectURL(url)'));
+    assert.ok(source.includes('client.revokeMedia(sessionId)'));
+    assert.ok(source.includes("video.preload = 'metadata'"));
     assert.ok(source.includes('release(doc)'));
-    assert.equal(source.includes('contentCache'), false);
+    assert.equal(source.includes('response.arrayBuffer'), false);
+    assert.equal(source.includes('createObjectURL'), false);
 });
 
 test('内存附件临时文件名兼容 Windows 保留设备名', () => {
@@ -311,6 +331,7 @@ test('认证令牌不进可同步的设置契约', () => {
 
 test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读取与打开', async () => {
     const source = readFileSync(path.join(ROOT, 'eagle-companion/js/service.js'), 'utf8');
+    const media = readFileSync(path.join(ROOT, 'eagle-companion/js/media.js'), 'utf8');
     const storage = new Map();
     const module = { exports: {} };
     const context = createContext({
@@ -326,10 +347,12 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
         },
     });
 
+    runInContext(media, context, { filename: 'eagle-companion/js/media.js' });
     runInContext(source, context, { filename: 'eagle-companion/js/service.js' });
 
     const folder = mkdtempSync(path.join(tmpdir(), 'ziminos-eagle-test-'));
     const attachment = path.join(folder, 'sample.txt');
+    const videoAttachment = path.join(folder, 'sample.mp4');
     const opened = [];
     const openedFolders = [];
     const imported = [];
@@ -341,6 +364,7 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
     let itemFolders = ['PROJECT_COURSE'];
 
     writeFileSync(attachment, 'hello-eagle');
+    writeFileSync(videoAttachment, '0123456789-video-data');
     context.document = { getElementById: () => ({ textContent: '' }) };
     context.eagle = {
         app: {
@@ -377,7 +401,12 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
                 imported.push({ filePath, options });
                 return 'ITEM123';
             },
-            getById: async () => ({ filePath: attachment, isDeleted: false, folders: itemFolders }),
+            getById: async (itemId) => ({
+                filePath: itemId === 'VIDEO123' ? videoAttachment : attachment,
+                name: itemId === 'VIDEO123' ? '课程视频.mp4' : '样例.txt',
+                isDeleted: false,
+                folders: itemFolders,
+            }),
             open: async (itemId) => {
                 opened.push(itemId);
                 return true;
@@ -574,6 +603,37 @@ test('Eagle 回环服务在伪造官方运行时中完成鉴权、导入、读�
         assert.equal(content.status, 200);
         assert.equal(content.body, 'hello-eagle');
 
+        const media = await callBridge(port, 'POST', '/v1/items/VIDEO123/media', {
+            libraryKey: 'primary',
+        }, headers);
+        const mediaResult = JSON.parse(media.body);
+
+        assert.equal(media.status, 200);
+        assert.equal(mediaResult.kind, 'video');
+        assert.equal(mediaResult.contentType, 'video/mp4');
+        assert.match(mediaResult.sessionId, /^[a-f0-9]{64}$/);
+        assert.equal(mediaResult.token, undefined);
+
+        const mediaRange = await callBridge(port, 'GET', `/v1/media/${mediaResult.sessionId}`, null, {
+            Range: 'bytes=3-8',
+        });
+
+        assert.equal(mediaRange.status, 206);
+        assert.equal(mediaRange.headers['content-range'], 'bytes 3-8/21');
+        assert.equal(mediaRange.body, '345678');
+
+        const mediaSuffix = await callBridge(port, 'GET', `/v1/media/${mediaResult.sessionId}`, null, {
+            Range: 'bytes=-4',
+        });
+
+        assert.equal(mediaSuffix.status, 206);
+        assert.equal(mediaSuffix.body, 'data');
+
+        const revokedMedia = await callBridge(port, 'POST', `/v1/media/${mediaResult.sessionId}/revoke`, {}, headers);
+
+        assert.equal(revokedMedia.status, 200);
+        assert.equal((await callBridge(port, 'GET', `/v1/media/${mediaResult.sessionId}`)).status, 404);
+
         const openedResponse = await callBridge(port, 'POST', '/v1/items/ITEM123/open', {
             libraryKey: 'primary',
         }, headers);
@@ -656,6 +716,7 @@ function callBridge(port, method, requestPath, body = null, headers = {}, raw = 
             response.on('data', (chunk) => chunks.push(chunk));
             response.on('end', () => resolve({
                 status: response.statusCode,
+                headers: response.headers,
                 body: Buffer.concat(chunks).toString('utf8'),
             }));
         });

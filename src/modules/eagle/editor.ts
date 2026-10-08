@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 @codemirror/view 的公开 DOM 事件扩展、obsidian Notice、EagleBridgeClient 的稳定身份打开能力，依赖 protocol 的文本命中规则
- * [OUTPUT]: 对外提供 createEagleEditorExtension 与 eagleReferenceFromTarget，让实时预览、源码模式与 YAML 属性值按 Obsidian 标准修饰键手势打开 Eagle
+ * [OUTPUT]: 对外提供 createEagleEditorExtension 与 eagleReferenceFromTarget，让实时预览、源码模式与深层 YAML 属性控件按 Obsidian 标准修饰键手势打开 Eagle
  * [POS]: Eagle 模块的 CodeMirror 适配层。它只把鼠标坐标还原成笔记里的稳定身份，不接触 Eagle 路径、端口或认证状态
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -52,9 +52,7 @@ export function eagleReferenceFromTarget(target: EventTarget | null): EagleRefer
     // 弹出窗口有自己的 DOM realm，`instanceof Element` 会对另一个窗口的真实节点返回 false。
     let element = target && 'nodeType' in target && target.nodeType === 1 ? target as Element : null;
 
-    for (let depth = 0; element && depth < 4; depth += 1, element = element.parentElement) {
-        if (element.classList.contains('cm-editor')) break;
-
+    for (let depth = 0; element && depth < 12; depth += 1, element = element.parentElement) {
         const text = controlText(element);
 
         if (text.length <= 512) {
@@ -62,9 +60,31 @@ export function eagleReferenceFromTarget(target: EventTarget | null): EagleRefer
 
             if (reference) return reference;
         }
+
+        // Properties 视图会把一个值拆成多层 pill/contenteditable；到达值容器时统一收拢一次，
+        // 但绝不继续向上读取整份 frontmatter 或整篇编辑器。
+        if (element.classList.contains('metadata-property-value')) {
+            return singleEagleReferenceInText(propertyValueText(element));
+        }
+
+        if (element.classList.contains('cm-editor')) break;
     }
 
     return null;
+}
+
+function propertyValueText(element: Element): string {
+    const values = [element.textContent ?? ''];
+
+    for (const control of element.querySelectorAll('input, textarea, [contenteditable="true"]')) {
+        if ((control.tagName === 'INPUT' || control.tagName === 'TEXTAREA') && 'value' in control) {
+            values.push(String(control.value));
+        } else {
+            values.push(control.textContent ?? '');
+        }
+    }
+
+    return values.join('\n');
 }
 
 function controlText(element: Element): string {

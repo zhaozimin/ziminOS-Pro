@@ -1,5 +1,8 @@
 /*
- * ziminOS 视图样式
+ * [INPUT]: 依赖 Obsidian 语义颜色/排版变量、ziminOS 视图类名与 Eagle 媒体状态属性
+ * [OUTPUT]: 为插件视图、设置页、导出预览、Eagle 图片/视频和少量宿主挂载点提供隔离样式
+ * [POS]: ziminOS 插件唯一交付样式表。选择器以 ziminos- 收口，不改用户正文与主题事实
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  *
  * 服务插件自渲染的二十四个笔记内视图、中国日历与最近文件两个 ItemView、外观开关浮层、
  * 文件浏览器里那串文件夹计数、状态栏那一块当前路径、导出预览弹窗（连同会被拍进 PNG/PDF 的
@@ -1194,13 +1197,22 @@ div.ziminos-table-wrap > table.ziminos-table tbody tr:hover {
 /* ── Eagle 身份附件 ── */
 
 /*
- * Markdown 里留的始终是 ziminos-eagle:// 身份链接，渲染层只把图片 src
- * 暂时换成 blob URL。光标因此是这层唯一需要的视觉信号：点它会去 Eagle，
- * 不是在 Obsidian 里打开一份本地副本。尺寸、居中和边框仍交给主题与用户片段。
+ * Markdown 里留的始终是 ziminos-eagle:// 身份链接。图片与视频只在 DOM 层换成
+ * 临时媒体会话 URL。图片点击去 Eagle；视频普通点击留给播放器，修饰键点击去 Eagle。
+ * 它们都不是 Obsidian 本地副本。
  */
-.ziminos-eagle-attachment,
+img.ziminos-eagle-attachment,
 a[href^="ziminos-eagle://"] {
     cursor: pointer;
+}
+
+.ziminos-eagle-video {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    max-height: 70vh;
+    background: #000;
+    cursor: default;
 }
 
 .ziminos-eagle-attachment[data-ziminos-eagle-state="error"] {

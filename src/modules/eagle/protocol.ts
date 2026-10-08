@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 core/device 的 Eagle 端口默认值/范围，不依赖 Obsidian 或 Eagle 运行时
- * [OUTPUT]: 对外提供 EagleReference 契约、稳定 URI 的构建/严格解析/文本命中、Eagle 原生项目深链、Markdown 附件链接生成与图片判定
+ * [OUTPUT]: 对外提供 EagleReference 契约、稳定 URI 的构建/严格解析/文本命中、Eagle 原生项目深链、Markdown 附件链接生成与图片/视频判定
  * [POS]: Eagle 模块的协议事实层。笔记只记 libraryKey + itemId，端口、路径与文件夹一概不进 Markdown；
  *        因此在 Eagle 库内移动附件时链接天然不变，这个文件就是两个运行时共同遵守的身份语法
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -25,6 +25,7 @@ const EAGLE_URI_SOURCE = 'ziminos-eagle:\\/\\/v1\\/[A-Za-z0-9_-]{1,128}\\/[A-Za-
 const IMAGE_EXTENSIONS = new Set([
     'avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp',
 ]);
+const VIDEO_EXTENSIONS = new Set(['m4v', 'mov', 'mp4', 'ogv', 'webm']);
 
 /** 端口是设备层配置；损坏或手改值只回落，不让它进入请求 URL */
 export function normalizeEaglePort(value: unknown): number {
@@ -90,14 +91,14 @@ export function singleEagleReferenceInText(value: string): EagleReference | null
     return matches.length === 1 ? matches[0].reference : null;
 }
 
-/** 图片保留 Markdown 嵌入语义，其余附件生成可点击的普通链接 */
+/** 图片与视频保留 Markdown 嵌入语义，其余附件生成可点击的普通链接 */
 export function buildEagleMarkdown(
     reference: EagleReference,
     fileName: string,
     mimeType: string,
 ): string {
     const label = escapeMarkdownLabel(fileName.trim() || '附件');
-    const prefix = isImageAttachment(fileName, mimeType) ? '!' : '';
+    const prefix = isImageAttachment(fileName, mimeType) || isVideoAttachment(fileName, mimeType) ? '!' : '';
 
     return `${prefix}[${label}](${buildEagleUri(reference)})`;
 }
@@ -108,6 +109,15 @@ export function isImageAttachment(fileName: string, mimeType: string): boolean {
     const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
 
     return IMAGE_EXTENSIONS.has(extension);
+}
+
+/** 只把 Chromium 可直接播放的常见视频写成嵌入；其他格式仍保留普通 Eagle 链接。 */
+export function isVideoAttachment(fileName: string, mimeType: string): boolean {
+    if (mimeType.toLowerCase().startsWith('video/')) return true;
+
+    const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
+
+    return VIDEO_EXTENSIONS.has(extension);
 }
 
 function escapeMarkdownLabel(value: string): string {

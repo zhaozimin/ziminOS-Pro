@@ -1,8 +1,8 @@
 /**
- * [INPUT]: 依赖 obsidian 公开 Markdown 后处理器、CodeMirror 扩展注册、弹出窗口事件与 Menu/Notice，依赖本模块 platform 的桌面闸门、editor 的编辑器适配与 EagleBridgeClient 取内容/打开项目
+ * [INPUT]: 依赖 obsidian 公开 Markdown 后处理器、CodeMirror 扩展注册、弹出窗口事件与 Menu/Notice，依赖本模块 platform 的桌面闸门、editor 的编辑器适配与 EagleBridgeClient 临时媒体会话/打开项目
  * [OUTPUT]: 对外提供 registerEagleRenderer，返回可在重新配对后重试渲染的 refresh 函数
- * [POS]: Eagle 模块的呈现边界。Markdown 始终保留稳定语义链接，阅读视图/实时预览只在 DOM 层换成临时 blob URL；
- *        只管理带 Eagle 身份的图片；移除/复用节点先释放再水合，blob 随插件卸载统一撤销，不触碰普通图片
+ * [POS]: Eagle 模块的呈现边界。Markdown 始终保留稳定语义链接；图片与视频只在 DOM 层领取单附件临时票据，
+ *        浏览器按 Range 直连伴侣，绝不让 Obsidian 主进程缓冲整段视频；节点离开即撤销票据，不触碰普通媒体
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -17,6 +17,7 @@ import type { EagleReference } from './protocol';
 const SELECTOR = [
     'img[src^="ziminos-eagle://"]',
     'img[data-ziminos-eagle-uri]',
+    'video[data-ziminos-eagle-uri]',
     'a[href^="ziminos-eagle://"]',
     '[data-href^="ziminos-eagle://"]',
 ].join(',');
@@ -28,19 +29,9 @@ export function registerEagleRenderer(
     if (!isSupportedEagleDesktop()) return () => undefined;
 
     const observers = new Map<Document, MutationObserver>();
-    const objectUrls = new Set<string>();
-    const imageUrls = new Map<HTMLImageElement, string>();
+    const mediaSessions = new Map<Element, string>();
     let loadGeneration = 0;
     let disposed = false;
-
-    const objectUrl = async (reference: EagleReference): Promise<string> => {
-        const { bytes, contentType } = await client.content(reference);
-        const value = URL.createObjectURL(new Blob([bytes], { type: contentType }));
-
-        objectUrls.add(value);
-
-        return value;
-    };
 
     const hydrate = async (element: Element): Promise<void> => {
         if (element.tagName !== 'IMG') return;
@@ -60,17 +51,43 @@ export function registerEagleRenderer(
         image.classList.add('ziminos-eagle-attachment');
 
         try {
-            const url = await objectUrl(reference);
+            const media = await client.media(reference);
 
             if (disposed || image.dataset.ziminosEagleLoad !== generation) {
-                // 同一节点在请求期间被移除/复用；这份 blob 已没有宿主，立即释放
-                URL.revokeObjectURL(url);
-                objectUrls.delete(url);
+                if (media.sessionId) void client.revokeMedia(media.sessionId).catch(() => undefined);
                 return;
             }
 
-            imageUrls.set(image, url);
-            image.src = url;
+            if (media.kind === 'video') {
+                const video = image.ownerDocument.createElement('video');
+
+                video.controls = true;
+                video.preload = 'metadata';
+                video.playsInline = true;
+                video.src = media.url;
+                video.dataset.ziminosEagleUri = original;
+                video.dataset.ziminosEagleState = 'ready';
+                video.classList.add('ziminos-eagle-attachment', 'ziminos-eagle-video');
+                video.title = '可直接播放；按 ⌘/Ctrl + 单击或右键可在 Eagle 中打开';
+                video.setAttribute('aria-label', media.name);
+                mediaSessions.set(video, media.sessionId);
+                image.replaceWith(video);
+                return;
+            }
+
+            if (media.kind === 'file') {
+                const link = image.ownerDocument.createElement('a');
+
+                link.href = original;
+                link.textContent = media.name;
+                link.dataset.ziminosEagleUri = original;
+                link.title = '点击在 Eagle 中打开';
+                image.replaceWith(link);
+                return;
+            }
+
+            mediaSessions.set(image, media.sessionId);
+            image.src = media.url;
             image.dataset.ziminosEagleState = 'ready';
             delete image.dataset.ziminosEagleLoad;
             image.title = '点击在 Eagle 中打开；编辑模式请按 ⌘/Ctrl';
@@ -86,26 +103,38 @@ export function registerEagleRenderer(
         for (const element of root.querySelectorAll(SELECTOR)) void hydrate(element);
     };
 
-    const releaseImage = (image: HTMLImageElement): void => {
-        if (!image.dataset.ziminosEagleUri) return;
+    const releaseMedia = (element: HTMLImageElement | HTMLVideoElement): void => {
+        if (!element.dataset.ziminosEagleUri) return;
 
-        const url = imageUrls.get(image);
+        const sessionId = mediaSessions.get(element);
 
-        if (url) {
-            imageUrls.delete(image);
-            URL.revokeObjectURL(url);
-            objectUrls.delete(url);
+        if (sessionId) {
+            mediaSessions.delete(element);
+            void client.revokeMedia(sessionId).catch(() => undefined);
         }
 
-        // Obsidian 偶尔会把同一 DOM 节点移走再复用；清状态后重新插入时会按身份再水合
-        image.removeAttribute('src');
-        image.dataset.ziminosEagleState = '';
-        delete image.dataset.ziminosEagleLoad;
+        if (element.tagName === 'VIDEO') {
+            const video = element as HTMLVideoElement;
+
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+        } else {
+            element.removeAttribute('src');
+        }
+        element.dataset.ziminosEagleState = '';
+        delete element.dataset.ziminosEagleLoad;
     };
 
     const release = (root: ParentNode): void => {
-        if ((root as Element).tagName === 'IMG') releaseImage(root as HTMLImageElement);
-        for (const image of root.querySelectorAll<HTMLImageElement>('img[data-ziminos-eagle-uri]')) releaseImage(image);
+        const element = root as Element;
+
+        if (element.tagName === 'IMG' || element.tagName === 'VIDEO') {
+            releaseMedia(element as HTMLImageElement | HTMLVideoElement);
+        }
+        for (const media of root.querySelectorAll<HTMLImageElement | HTMLVideoElement>(
+            'img[data-ziminos-eagle-uri], video[data-ziminos-eagle-uri]',
+        )) releaseMedia(media);
     };
 
     const observe = (doc: Document): void => {
@@ -135,8 +164,12 @@ export function registerEagleRenderer(
     };
 
     const openAt = (event: MouseEvent): void => {
+        const target = event.target as Element | null;
+
+        // 视频普通单击属于播放器控制；修饰键单击和右键仍交给 Eagle。
+        if (target?.closest?.('video[data-ziminos-eagle-uri]') && !event.metaKey && !event.ctrlKey) return;
         // 编辑器里的单击必须留给放置光标；已渲染出身份属性时，在捕获阶段先于通用外链处理精确打开。
-        if ((event.target as Element | null)?.closest?.('.cm-editor') && !event.metaKey && !event.ctrlKey) return;
+        if (target?.closest?.('.cm-editor') && !event.metaKey && !event.ctrlKey) return;
 
         const reference = eagleReferenceFromTarget(event.target);
 
@@ -181,7 +214,7 @@ export function registerEagleRenderer(
     };
 
     const unbindDocument = (doc: Document): void => {
-        // 弹出窗口关闭后它的 DOM 不再产生 removedNodes；必须在解绑时主动收掉该窗口的 blob。
+        // 弹出窗口关闭后它的 DOM 不再产生 removedNodes；必须在解绑时主动撤销该窗口的媒体票据。
         release(doc);
         observers.get(doc)?.disconnect();
         observers.delete(doc);
@@ -197,13 +230,12 @@ export function registerEagleRenderer(
     ctx.plugin.register(() => {
         disposed = true;
         for (const doc of observers.keys()) unbindDocument(doc);
-        for (const image of [...imageUrls.keys()]) releaseImage(image);
-        for (const url of objectUrls) URL.revokeObjectURL(url);
-        objectUrls.clear();
+        for (const media of [...mediaSessions.keys()]) releaseMedia(media as HTMLImageElement | HTMLVideoElement);
+        mediaSessions.clear();
     });
 
     return () => {
-        // 配对成功后只重试之前失败的节点；已成功的 blob 不重复下载
+        // 配对成功后只重试失败节点；已成功的临时媒体会话不重复领取
         for (const doc of observers.keys()) {
             for (const element of doc.querySelectorAll<HTMLImageElement>('img[data-ziminos-eagle-state="error"]')) {
                 element.dataset.ziminosEagleState = '';

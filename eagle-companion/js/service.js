@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖 Eagle 官方 plugin API 的 app/library/item/folder/shell 与生命周期事件，依赖 Node 16 内建 http/fs/path/crypto
+ * [INPUT]: 依赖 Eagle 官方 plugin API 的 app/library/item/folder/shell 与生命周期事件，依赖 js/media.js 的流式媒体会话，依赖 Node 16 内建 http/fs/path/crypto
  * [OUTPUT]: 在 127.0.0.1 提供配对、按 Obsidian 容器建“项目/容器名”或单层“日记”目录并导入、
- *           项目附件文件夹改名、内容读取与附件当前文件夹打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
+ *           项目附件文件夹改名、单附件票据与 Range 预览、附件当前文件夹打开/主窗口唤起 API，并提供 Eagle → Obsidian 反向搜索界面
  * [POS]: 两端架构的 Eagle 执行边界。它只调官方 item/folder API，不修改 metadata.json；服务只绑定回环，
  *        变更/读取端点验令牌与已配对资源库；队列及异步 API 返回后重验库身份，防止处理中切库让后续操作越界
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -13,6 +13,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { EagleMediaSessions } = globalThis.ZiminosEagleMedia;
 
 const DEFAULT_PORT = 23119;
 const PORT_MIN = 1024;
@@ -35,6 +36,16 @@ class BridgeService {
         this.pairCodeExpiresAt = 0;
         this.pairFailures = [];
         this.selectedItem = null;
+        this.media = new EagleMediaSessions({
+            clients: () => this.clients(),
+            libraryPath,
+            samePath,
+            ensureLibrary: (response, client, libraryKey) => this.ensureLibrary(response, client, libraryKey),
+            assertLibrary: (client, libraryKey) => this.assertLibrary(client, libraryKey),
+            readJson,
+            json: (response, status, body) => this.json(response, status, body),
+            isRegularFile,
+        });
         // 所有建目录操作串行化：并发上传时也只能有一个请求创建“项目”或“日记”根目录。
         this.folderOperation = Promise.resolve();
         this.refreshPairCode();
@@ -102,6 +113,13 @@ class BridgeService {
 
         const url = new URL(request.url || '/', 'http://127.0.0.1');
 
+        // 媒体元素不能携带自定义认证头；这里只接受 256 位随机、单附件、短寿命票据。
+        const mediaStreamMatch = url.pathname.match(/^\/v1\/media\/([a-f0-9]{64})$/);
+        if ((request.method === 'GET' || request.method === 'HEAD') && mediaStreamMatch) {
+            await this.media.send(request, response, mediaStreamMatch[1]);
+            return;
+        }
+
         if (request.method === 'POST' && !isJsonRequest(request)) {
             this.json(response, 415, { ok: false, error: '只接受 application/json 请求' });
             return;
@@ -120,6 +138,7 @@ class BridgeService {
         }
 
         if (request.method === 'POST' && url.pathname === '/v1/disconnect') {
+            this.media.revokeClient(client.token);
             this.saveClients(this.clients().filter((item) => item.token !== client.token));
             this.render();
             this.json(response, 200, { ok: true });
@@ -154,7 +173,19 @@ class BridgeService {
 
         const contentMatch = url.pathname.match(/^\/v1\/items\/([A-Za-z0-9_-]{1,128})\/content$/);
         if (request.method === 'GET' && contentMatch) {
-            await this.sendContent(request, response, client, contentMatch[1], url.searchParams.get('library') || '');
+            await this.media.sendContent(request, response, client, contentMatch[1], url.searchParams.get('library') || '');
+            return;
+        }
+
+        const mediaMatch = url.pathname.match(/^\/v1\/items\/([A-Za-z0-9_-]{1,128})\/media$/);
+        if (request.method === 'POST' && mediaMatch) {
+            await this.media.create(request, response, client, mediaMatch[1]);
+            return;
+        }
+
+        const mediaRevokeMatch = url.pathname.match(/^\/v1\/media\/([a-f0-9]{64})\/revoke$/);
+        if (request.method === 'POST' && mediaRevokeMatch) {
+            this.media.revoke(response, client, mediaRevokeMatch[1]);
             return;
         }
 
@@ -319,37 +350,6 @@ class BridgeService {
         this.json(response, 200, { ok: true, renamed });
     }
 
-    async sendContent(request, response, client, itemId, libraryKey) {
-        if (!this.ensureLibrary(response, client, libraryKey)) return;
-
-        const item = await eagle.item.getById(itemId);
-        this.assertLibrary(client, libraryKey);
-        if (!item || item.isDeleted || !item.filePath || !isRegularFile(item.filePath)) {
-            this.json(response, 404, { ok: false, error: 'Eagle 中找不到这个附件' });
-            return;
-        }
-
-        const stat = fs.statSync(item.filePath);
-        const range = parseRange(request.headers.range, stat.size);
-        const start = range ? range.start : 0;
-        const end = range ? range.end : stat.size - 1;
-
-        response.statusCode = range ? 206 : 200;
-        response.setHeader('Content-Type', contentType(item.filePath));
-        response.setHeader('Accept-Ranges', 'bytes');
-        response.setHeader('Content-Length', Math.max(0, end - start + 1));
-        if (range) response.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
-
-        if (stat.size === 0) {
-            response.end();
-            return;
-        }
-
-        fs.createReadStream(item.filePath, { start, end })
-            .on('error', () => response.destroy())
-            .pipe(response);
-    }
-
     async openItem(request, response, client, itemId) {
         const body = await readJson(request);
         const libraryKey = stringField(body, 'libraryKey');
@@ -503,6 +503,7 @@ class BridgeService {
             const remove = document.createElement('button');
             remove.textContent = '移除';
             remove.addEventListener('click', () => {
+                this.media.revokeClient(client.token);
                 this.saveClients(this.clients().filter((item) => item.token !== client.token));
                 this.render();
             });
@@ -535,6 +536,7 @@ class BridgeService {
     }
 
     async stop() {
+        this.media.clear();
         await this.closeServer();
     }
 
@@ -576,27 +578,6 @@ function readJson(request) {
         });
         request.on('error', reject);
     });
-}
-
-function parseRange(value, size) {
-    if (!value) return null;
-    const match = /^bytes=(\d+)-(\d*)$/.exec(value);
-    if (!match) return null;
-    const start = Number(match[1]);
-    const end = match[2] ? Number(match[2]) : size - 1;
-    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || end >= size) return null;
-    return { start, end };
-}
-
-function contentType(filePath) {
-    const types = {
-        avif: 'image/avif', bmp: 'image/bmp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif',
-        ico: 'image/x-icon', jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', svg: 'image/svg+xml',
-        tif: 'image/tiff', tiff: 'image/tiff', webp: 'image/webp', pdf: 'application/pdf',
-        mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', mp4: 'video/mp4', webm: 'video/webm',
-        txt: 'text/plain; charset=utf-8', md: 'text/markdown; charset=utf-8', json: 'application/json',
-    };
-    return types[path.extname(filePath).slice(1).toLowerCase()] || 'application/octet-stream';
 }
 
 /**

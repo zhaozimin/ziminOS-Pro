@@ -21518,10 +21518,10 @@ function renderTable(app, el, sourcePath, headers, rows, grow) {
   const table = wrapper.createEl("table", { cls: "ziminos-table" });
   const headRow = table.createEl("thead").createEl("tr");
   const classOf = (index2) => grow === void 0 ? void 0 : index2 === grow ? "ziminos-grow" : "ziminos-tight";
-  headers.forEach((header2, index2) => {
+  headers.forEach((header, index2) => {
     headRow.createEl("th", {
       cls: classOf(index2),
-      text: index2 === 0 && rows.length ? `${header2} (${rows.length})` : header2
+      text: index2 === 0 && rows.length ? `${header} (${rows.length})` : header
     });
   });
   const body = table.createEl("tbody");
@@ -23749,9 +23749,9 @@ var AppearanceSwitch = class {
   // ============================================================
   /** 画标题、分组与每一行。分组名来自用户自己的【】命名习惯，不是我们发明的分类 */
   render(panel, snippets) {
-    const header2 = panel.createDiv({ cls: "ziminos-appearance-header" });
-    header2.createSpan({ text: TEXTS.title });
-    header2.createSpan({
+    const header = panel.createDiv({ cls: "ziminos-appearance-header" });
+    header.createSpan({ text: TEXTS.title });
+    header.createSpan({
       cls: "ziminos-appearance-count",
       text: `${snippets.length}${TEXTS.countSuffix}`
     });
@@ -27285,6 +27285,7 @@ var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([
   "tiff",
   "webp"
 ]);
+var VIDEO_EXTENSIONS = /* @__PURE__ */ new Set(["m4v", "mov", "mp4", "ogv", "webm"]);
 function normalizeEaglePort(value) {
   return typeof value === "number" && Number.isInteger(value) && value >= EAGLE_PORT_RANGE.min && value <= EAGLE_PORT_RANGE.max ? value : EAGLE_DEFAULT_PORT;
 }
@@ -27319,7 +27320,7 @@ function singleEagleReferenceInText(value) {
 }
 function buildEagleMarkdown(reference, fileName, mimeType) {
   const label = escapeMarkdownLabel(fileName.trim() || "\u9644\u4EF6");
-  const prefix = isImageAttachment(fileName, mimeType) ? "!" : "";
+  const prefix = isImageAttachment(fileName, mimeType) || isVideoAttachment(fileName, mimeType) ? "!" : "";
   return `${prefix}[${label}](${buildEagleUri(reference)})`;
 }
 function isImageAttachment(fileName, mimeType) {
@@ -27327,6 +27328,12 @@ function isImageAttachment(fileName, mimeType) {
   if (mimeType.toLowerCase().startsWith("image/")) return true;
   const extension = (_b2 = (_a2 = fileName.split(".").pop()) == null ? void 0 : _a2.toLowerCase()) != null ? _b2 : "";
   return IMAGE_EXTENSIONS.has(extension);
+}
+function isVideoAttachment(fileName, mimeType) {
+  var _a2, _b2;
+  if (mimeType.toLowerCase().startsWith("video/")) return true;
+  const extension = (_b2 = (_a2 = fileName.split(".").pop()) == null ? void 0 : _a2.toLowerCase()) != null ? _b2 : "";
+  return VIDEO_EXTENSIONS.has(extension);
 }
 function escapeMarkdownLabel(value) {
   return value.replace(/([\\[\]])/g, "\\$1").replace(/[\r\n]+/g, " ");
@@ -27452,22 +27459,61 @@ var EagleBridgeClient = class {
       });
       return result.renamed === true ? "renamed" : "missing";
     } catch (error) {
-      if (error instanceof EagleBridgeResponseError && error.status === 404) {
+      if (error instanceof EagleBridgeResponseError && error.status === 404 && error.message === "\u4E0D\u5B58\u5728\u7684\u4F34\u4FA3\u7AEF\u70B9") {
         throw new Error("Eagle \u4F34\u4FA3\u7248\u672C\u8FC7\u65E7\uFF0C\u8BF7\u8986\u76D6\u5B89\u88C5\u672C\u6B21\u66F4\u65B0\u968F\u9644\u7684\u4F34\u4FA3");
       }
       throw error;
     }
   }
-  async content(reference) {
-    const response = await this.request({
-      url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/content?library=${encodeURIComponent(reference.libraryKey)}`,
-      method: "GET"
-    });
-    if (response.status < 200 || response.status >= 300) throw responseError(response);
+  /**
+   * 只经 requestUrl 领取小型会话描述；媒体字节由浏览器元素按 Range 直连伴侣，
+   * 避免 Electron 主进程把整段大视频复制进一个 ArrayBuffer。
+   */
+  async media(reference) {
+    let result;
+    try {
+      result = await this.requestJson({
+        url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/media`,
+        method: "POST",
+        contentType: "application/json",
+        body: JSON.stringify({ libraryKey: reference.libraryKey })
+      });
+    } catch (error) {
+      if (error instanceof EagleBridgeResponseError && error.status === 404 && error.message === "\u4E0D\u5B58\u5728\u7684\u4F34\u4FA3\u7AEF\u70B9") {
+        throw new Error("Eagle \u4F34\u4FA3\u7248\u672C\u8FC7\u65E7\uFF0C\u8BF7\u8986\u76D6\u5B89\u88C5\u672C\u6B21\u66F4\u65B0\u968F\u9644\u7684\u4F34\u4FA3");
+      }
+      throw error;
+    }
+    const kind = stringField(result, "kind");
+    const sessionId = stringField(result, "sessionId");
+    const size = result.size;
+    if (kind !== "image" && kind !== "video" && kind !== "file") {
+      throw new Error("Eagle \u4F34\u4FA3\u8FD4\u56DE\u4E86\u672A\u77E5\u9644\u4EF6\u7C7B\u578B");
+    }
+    if (kind !== "file" && !/^[a-f0-9]{64}$/.test(sessionId)) {
+      throw new Error("Eagle \u4F34\u4FA3\u6CA1\u6709\u8FD4\u56DE\u6709\u6548\u5A92\u4F53\u4F1A\u8BDD");
+    }
+    if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) {
+      throw new Error("Eagle \u4F34\u4FA3\u8FD4\u56DE\u4E86\u65E0\u6548\u9644\u4EF6\u5927\u5C0F");
+    }
     return {
-      bytes: response.arrayBuffer,
-      contentType: header(response.headers, "content-type") || "application/octet-stream"
+      kind,
+      name: stringField(result, "name") || "Eagle \u9644\u4EF6",
+      contentType: stringField(result, "contentType") || "application/octet-stream",
+      size,
+      sessionId,
+      url: sessionId ? `${this.baseUrl()}/v1/media/${sessionId}` : ""
     };
+  }
+  /** DOM 离开后主动撤销单附件票据；伴侣离线时仍会由服务端到期清理。 */
+  async revokeMedia(sessionId) {
+    if (!/^[a-f0-9]{64}$/.test(sessionId)) return;
+    await this.requestJson({
+      url: `${this.baseUrl()}/v1/media/${sessionId}/revoke`,
+      method: "POST",
+      contentType: "application/json",
+      body: "{}"
+    });
   }
   async open(reference) {
     try {
@@ -27592,11 +27638,6 @@ function responseError(response, data) {
   const message2 = stringField(parsed, "error") || stringField(parsed, "message");
   return new EagleBridgeResponseError(response.status, message2 || `Eagle \u4F34\u4FA3\u8FD4\u56DE ${response.status}`);
 }
-function header(headers, name) {
-  var _a2;
-  const found = Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase());
-  return (_a2 = found == null ? void 0 : found[1]) != null ? _a2 : "";
-}
 function stringField(record, key) {
   return typeof record[key] === "string" ? record[key].trim() : "";
 }
@@ -27641,15 +27682,30 @@ function referenceFromPosition(event, view) {
 }
 function eagleReferenceFromTarget(target) {
   let element = target && "nodeType" in target && target.nodeType === 1 ? target : null;
-  for (let depth = 0; element && depth < 4; depth += 1, element = element.parentElement) {
-    if (element.classList.contains("cm-editor")) break;
+  for (let depth = 0; element && depth < 12; depth += 1, element = element.parentElement) {
     const text6 = controlText(element);
     if (text6.length <= 512) {
       const reference = singleEagleReferenceInText(text6);
       if (reference) return reference;
     }
+    if (element.classList.contains("metadata-property-value")) {
+      return singleEagleReferenceInText(propertyValueText(element));
+    }
+    if (element.classList.contains("cm-editor")) break;
   }
   return null;
+}
+function propertyValueText(element) {
+  var _a2, _b2;
+  const values = [(_a2 = element.textContent) != null ? _a2 : ""];
+  for (const control of element.querySelectorAll('input, textarea, [contenteditable="true"]')) {
+    if ((control.tagName === "INPUT" || control.tagName === "TEXTAREA") && "value" in control) {
+      values.push(String(control.value));
+    } else {
+      values.push((_b2 = control.textContent) != null ? _b2 : "");
+    }
+  }
+  return values.join("\n");
 }
 function controlText(element) {
   var _a2, _b2, _c, _d, _e2;
@@ -27666,22 +27722,16 @@ function errorMessage2(error) {
 var SELECTOR = [
   'img[src^="ziminos-eagle://"]',
   "img[data-ziminos-eagle-uri]",
+  "video[data-ziminos-eagle-uri]",
   'a[href^="ziminos-eagle://"]',
   '[data-href^="ziminos-eagle://"]'
 ].join(",");
 function registerEagleRenderer(ctx, client) {
   if (!isSupportedEagleDesktop()) return () => void 0;
   const observers = /* @__PURE__ */ new Map();
-  const objectUrls = /* @__PURE__ */ new Set();
-  const imageUrls = /* @__PURE__ */ new Map();
+  const mediaSessions = /* @__PURE__ */ new Map();
   let loadGeneration = 0;
   let disposed = false;
-  const objectUrl = async (reference) => {
-    const { bytes, contentType } = await client.content(reference);
-    const value = URL.createObjectURL(new Blob([bytes], { type: contentType }));
-    objectUrls.add(value);
-    return value;
-  };
   const hydrate = async (element) => {
     if (element.tagName !== "IMG") return;
     const image = element;
@@ -27695,14 +27745,37 @@ function registerEagleRenderer(ctx, client) {
     image.dataset.ziminosEagleLoad = generation;
     image.classList.add("ziminos-eagle-attachment");
     try {
-      const url = await objectUrl(reference);
+      const media = await client.media(reference);
       if (disposed || image.dataset.ziminosEagleLoad !== generation) {
-        URL.revokeObjectURL(url);
-        objectUrls.delete(url);
+        if (media.sessionId) void client.revokeMedia(media.sessionId).catch(() => void 0);
         return;
       }
-      imageUrls.set(image, url);
-      image.src = url;
+      if (media.kind === "video") {
+        const video = image.ownerDocument.createElement("video");
+        video.controls = true;
+        video.preload = "metadata";
+        video.playsInline = true;
+        video.src = media.url;
+        video.dataset.ziminosEagleUri = original;
+        video.dataset.ziminosEagleState = "ready";
+        video.classList.add("ziminos-eagle-attachment", "ziminos-eagle-video");
+        video.title = "\u53EF\u76F4\u63A5\u64AD\u653E\uFF1B\u6309 \u2318/Ctrl + \u5355\u51FB\u6216\u53F3\u952E\u53EF\u5728 Eagle \u4E2D\u6253\u5F00";
+        video.setAttribute("aria-label", media.name);
+        mediaSessions.set(video, media.sessionId);
+        image.replaceWith(video);
+        return;
+      }
+      if (media.kind === "file") {
+        const link = image.ownerDocument.createElement("a");
+        link.href = original;
+        link.textContent = media.name;
+        link.dataset.ziminosEagleUri = original;
+        link.title = "\u70B9\u51FB\u5728 Eagle \u4E2D\u6253\u5F00";
+        image.replaceWith(link);
+        return;
+      }
+      mediaSessions.set(image, media.sessionId);
+      image.src = media.url;
       image.dataset.ziminosEagleState = "ready";
       delete image.dataset.ziminosEagleLoad;
       image.title = "\u70B9\u51FB\u5728 Eagle \u4E2D\u6253\u5F00\uFF1B\u7F16\u8F91\u6A21\u5F0F\u8BF7\u6309 \u2318/Ctrl";
@@ -27716,21 +27789,32 @@ function registerEagleRenderer(ctx, client) {
   const scan = (root) => {
     for (const element of root.querySelectorAll(SELECTOR)) void hydrate(element);
   };
-  const releaseImage = (image) => {
-    if (!image.dataset.ziminosEagleUri) return;
-    const url = imageUrls.get(image);
-    if (url) {
-      imageUrls.delete(image);
-      URL.revokeObjectURL(url);
-      objectUrls.delete(url);
+  const releaseMedia = (element) => {
+    if (!element.dataset.ziminosEagleUri) return;
+    const sessionId = mediaSessions.get(element);
+    if (sessionId) {
+      mediaSessions.delete(element);
+      void client.revokeMedia(sessionId).catch(() => void 0);
     }
-    image.removeAttribute("src");
-    image.dataset.ziminosEagleState = "";
-    delete image.dataset.ziminosEagleLoad;
+    if (element.tagName === "VIDEO") {
+      const video = element;
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    } else {
+      element.removeAttribute("src");
+    }
+    element.dataset.ziminosEagleState = "";
+    delete element.dataset.ziminosEagleLoad;
   };
   const release = (root) => {
-    if (root.tagName === "IMG") releaseImage(root);
-    for (const image of root.querySelectorAll("img[data-ziminos-eagle-uri]")) releaseImage(image);
+    const element = root;
+    if (element.tagName === "IMG" || element.tagName === "VIDEO") {
+      releaseMedia(element);
+    }
+    for (const media of root.querySelectorAll(
+      "img[data-ziminos-eagle-uri], video[data-ziminos-eagle-uri]"
+    )) releaseMedia(media);
   };
   const observe = (doc) => {
     var _a2, _b2;
@@ -27757,7 +27841,9 @@ function registerEagleRenderer(ctx, client) {
   };
   const openAt = (event) => {
     var _a2, _b2;
-    if (((_b2 = (_a2 = event.target) == null ? void 0 : _a2.closest) == null ? void 0 : _b2.call(_a2, ".cm-editor")) && !event.metaKey && !event.ctrlKey) return;
+    const target = event.target;
+    if (((_a2 = target == null ? void 0 : target.closest) == null ? void 0 : _a2.call(target, "video[data-ziminos-eagle-uri]")) && !event.metaKey && !event.ctrlKey) return;
+    if (((_b2 = target == null ? void 0 : target.closest) == null ? void 0 : _b2.call(target, ".cm-editor")) && !event.metaKey && !event.ctrlKey) return;
     const reference = eagleReferenceFromTarget(event.target);
     if (!reference) return;
     event.preventDefault();
@@ -27801,9 +27887,8 @@ function registerEagleRenderer(ctx, client) {
   ctx.plugin.register(() => {
     disposed = true;
     for (const doc of observers.keys()) unbindDocument(doc);
-    for (const image of [...imageUrls.keys()]) releaseImage(image);
-    for (const url of objectUrls) URL.revokeObjectURL(url);
-    objectUrls.clear();
+    for (const media of [...mediaSessions.keys()]) releaseMedia(media);
+    mediaSessions.clear();
   });
   return () => {
     for (const doc of observers.keys()) {
@@ -31405,7 +31490,7 @@ var deflate$2 = (strm, flush) => {
     s3.status = BUSY_STATE;
   }
   if (s3.status === INIT_STATE) {
-    let header2 = Z_DEFLATED$2 + (s3.w_bits - 8 << 4) << 8;
+    let header = Z_DEFLATED$2 + (s3.w_bits - 8 << 4) << 8;
     let level_flags = -1;
     if (s3.strategy >= Z_HUFFMAN_ONLY || s3.level < 2) {
       level_flags = 0;
@@ -31416,12 +31501,12 @@ var deflate$2 = (strm, flush) => {
     } else {
       level_flags = 3;
     }
-    header2 |= level_flags << 6;
+    header |= level_flags << 6;
     if (s3.strstart !== 0) {
-      header2 |= PRESET_DICT;
+      header |= PRESET_DICT;
     }
-    header2 += 31 - header2 % 31;
-    putShortMSB(s3, header2);
+    header += 31 - header % 31;
+    putShortMSB(s3, header);
     if (s3.strstart !== 0) {
       putShortMSB(s3, strm.adler >>> 16);
       putShortMSB(s3, strm.adler & 65535);
@@ -42224,7 +42309,7 @@ function applyDecorations(article, style, context, logo) {
   if (!content) return;
   article.querySelectorAll(DECORATION_SELECTOR).forEach((node2) => node2.remove());
   article.addClass("ziminos-export-guides");
-  const header2 = buildLine(content, "ziminos-export-header", {
+  const header = buildLine(content, "ziminos-export-header", {
     enabled: style.headerEnabled,
     text: resolveExportText(style.header.trim(), context),
     align: style.headerAlign,
@@ -42234,9 +42319,9 @@ function applyDecorations(article, style, context, logo) {
     logo,
     logoSize: style.headerLogoSize
   });
-  if (header2) {
-    header2.style.marginBottom = `${style.headerGap}px`;
-    content.prepend(header2);
+  if (header) {
+    header.style.marginBottom = `${style.headerGap}px`;
+    content.prepend(header);
   }
   const footer = buildLine(content, "ziminos-export-footer", {
     enabled: style.footerEnabled,
@@ -55419,8 +55504,8 @@ var ZiminosCalendarView = class extends import_obsidian42.ItemView {
    * 标题点击创建对应复盘，左右箭头只导航，两种意图因此不会相互猜测。
    */
   renderHeader(parent) {
-    const header2 = parent.createDiv({ cls: "ziminos-calendar-header" });
-    const firstRow = header2.createDiv({ cls: "ziminos-calendar-header-row" });
+    const header = parent.createDiv({ cls: "ziminos-calendar-header" });
+    const firstRow = header.createDiv({ cls: "ziminos-calendar-header-row" });
     const quarter = Math.ceil(this.month / 3);
     const quarterMonth = (quarter - 1) * 3 + 1;
     this.renderCoordinate(
@@ -55447,7 +55532,7 @@ var ZiminosCalendarView = class extends import_obsidian42.ItemView {
       "\u4E0B\u4E00\u5B63\u5EA6",
       (direction) => this.shiftVisibleMonth(direction * 3)
     );
-    const secondRow = header2.createDiv({ cls: "ziminos-calendar-header-row" });
+    const secondRow = header.createDiv({ cls: "ziminos-calendar-header-row" });
     const monthAnchor = `${this.year}-${String(this.month).padStart(2, "0")}-01`;
     this.renderCoordinate(
       secondRow,
@@ -62750,8 +62835,8 @@ var ZiminosSettingTab = class extends import_obsidian66.PluginSettingTab {
    */
   renderPanel(body) {
     const tab = this.activeTab;
-    const header2 = new import_obsidian66.Setting(body).setDesc(tab.status).setHeading();
-    const title = header2.nameEl.createSpan({ cls: "ziminos-settings-page-title" });
+    const header = new import_obsidian66.Setting(body).setDesc(tab.status).setHeading();
+    const title = header.nameEl.createSpan({ cls: "ziminos-settings-page-title" });
     (0, import_obsidian66.setIcon)(title.createSpan({ cls: "ziminos-settings-page-icon" }), tab.icon);
     title.createSpan({ text: tab.module });
     this.renderTextFields(body, tab.id, false);

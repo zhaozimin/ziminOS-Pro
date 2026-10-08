@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert/fs/vm/stream 与 esbuild，编译真实 Eagle 传输和呈现模块并在隔离宿主中执行伴侣源码
- * [OUTPUT]: 验证导入失败保留选中文本、原路径保留空白、普通图片不被清空、Eagle 节点复用后重新水合，以及异步切库时停止后续读取/写入
+ * [OUTPUT]: 验证导入失败保留选中文本、原路径保留空白、普通图片不被清空、Eagle 媒体节点复用后重领票据、视频生成原生播放器，以及异步切库时停止后续读取/写入
  * [POS]: tests 的 Eagle 数据完整性回归；用可控异步边界复现用户操作时序，不连接真实 Eagle、不读取设备凭据
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -105,26 +105,59 @@ test('桌面拖入路径逐字传给伴侣，不裁掉合法文件名末尾的�
     assert.deepEqual(importedPaths, ['/tmp/附件.pdf ']);
 });
 
+test('深层 YAML 属性控件仍能从值容器命中唯一 Eagle 身份', async () => {
+    const { eagleReferenceFromTarget } = await loadModule('src/modules/eagle/editor.ts');
+    const uri = 'ziminos-eagle://v1/primary/VIDEO123';
+    const value = {
+        nodeType: 1, tagName: 'DIV', textContent: '', parentElement: null,
+        classList: { contains: (name) => name === 'metadata-property-value' },
+        getAttribute: () => null,
+        querySelectorAll: () => [{ tagName: 'INPUT', value: uri, textContent: '' }],
+    };
+    let target = value;
+
+    for (let depth = 0; depth < 7; depth += 1) {
+        target = {
+            nodeType: 1, tagName: 'SPAN', textContent: '', parentElement: target,
+            classList: { contains: () => false }, getAttribute: () => null, querySelectorAll: () => [],
+        };
+    }
+
+    const reference = eagleReferenceFromTarget(target);
+
+    assert.equal(reference?.libraryKey, 'primary');
+    assert.equal(reference?.itemId, 'VIDEO123');
+});
+
 function imageElement(src) {
-    return {
+    const image = {
         tagName: 'IMG', nodeType: 1, src, dataset: {}, classList: { add: () => undefined },
         getAttribute(name) { return name === 'src' ? this.src : null; },
         removeAttribute(name) { if (name === 'src') this.src = ''; },
         querySelectorAll: () => [],
         matches() { return this.src.startsWith('ziminos-eagle://') || !!this.dataset.ziminosEagleUri; },
+        replaceWith(value) { this.replacedWith = value; },
     };
+    image.ownerDocument = {
+        createElement(tagName) {
+            return {
+                tagName: tagName.toUpperCase(), nodeType: 1, src: '', href: '', textContent: '', dataset: {},
+                classList: { add: () => undefined }, controls: false, preload: '', playsInline: false,
+                title: '', setAttribute: () => undefined, querySelectorAll: () => [], pause: () => undefined,
+                load: () => undefined, removeAttribute(name) { if (name === 'src') this.src = ''; },
+                matches() { return !!this.dataset.ziminosEagleUri; },
+            };
+        },
+    };
+    return image;
 }
 
-async function rendererHarness(initialImages = []) {
+async function rendererHarness(initialImages = [], kind = 'image') {
     let observer;
     let dispose;
     let serial = 0;
     const revoked = [];
     const { registerEagleRenderer } = await loadModule('src/modules/eagle/render.ts', {
-        URL: {
-            createObjectURL: () => `blob:test-${++serial}`,
-            revokeObjectURL: (value) => revoked.push(value),
-        },
         MutationObserver: class {
             constructor(callback) { observer = callback; }
             observe() {}
@@ -141,7 +174,17 @@ async function rendererHarness(initialImages = []) {
             registerEditorExtension() {}, registerMarkdownPostProcessor() {}, registerEvent() {},
             register(callback) { dispose = callback; },
         },
-    }, { content: async () => ({ bytes: new ArrayBuffer(1), contentType: 'image/png' }) });
+    }, {
+        media: async () => {
+            const sessionId = String(++serial).padStart(64, '0');
+            return {
+                kind, name: kind === 'video' ? '课程.mp4' : '图片.png',
+                contentType: kind === 'video' ? 'video/mp4' : 'image/png', size: 1024,
+                sessionId, url: `http://127.0.0.1/media/${sessionId}`,
+            };
+        },
+        revokeMedia: async (sessionId) => { revoked.push(sessionId); },
+    });
     await flush();
     return { mutate: (records) => observer(records), dispose: () => dispose(), revoked };
 }
@@ -160,23 +203,36 @@ test('同批 DOM 记录先插入后移除时，Eagle 复用图片仍能重新水
     const image = imageElement('ziminos-eagle://v1/primary/ITEM123');
     const harness = await rendererHarness([image]);
     try {
-        assert.equal(image.src, 'blob:test-1');
+        assert.equal(image.src, `http://127.0.0.1/media/${'1'.padStart(64, '0')}`);
         harness.mutate([
             { addedNodes: [image], removedNodes: [] },
             { addedNodes: [], removedNodes: [image] },
         ]);
         await flush();
-        assert.equal(image.src, 'blob:test-2');
+        assert.equal(image.src, `http://127.0.0.1/media/${'2'.padStart(64, '0')}`);
         assert.equal(image.dataset.ziminosEagleState, 'ready');
-        assert.deepEqual(harness.revoked, ['blob:test-1']);
+        assert.deepEqual(harness.revoked, ['1'.padStart(64, '0')]);
     } finally { harness.dispose(); }
-    assert.deepEqual(harness.revoked, ['blob:test-1', 'blob:test-2']);
+    assert.deepEqual(harness.revoked, ['1'.padStart(64, '0'), '2'.padStart(64, '0')]);
+});
+
+test('Eagle 视频嵌入替换为原生播放器，不创建整文件 ArrayBuffer', async () => {
+    const image = imageElement('ziminos-eagle://v1/primary/VIDEO123');
+    const harness = await rendererHarness([image], 'video');
+    try {
+        assert.equal(image.replacedWith.tagName, 'VIDEO');
+        assert.equal(image.replacedWith.controls, true);
+        assert.equal(image.replacedWith.preload, 'metadata');
+        assert.match(image.replacedWith.src, /^http:\/\/127\.0\.0\.1\/media\/[a-f0-9]{64}$/);
+    } finally { harness.dispose(); }
 });
 
 function companionHarness() {
     const source = readFileSync(path.join(ROOT, 'eagle-companion/js/service.js'), 'utf8');
+    const media = readFileSync(path.join(ROOT, 'eagle-companion/js/media.js'), 'utf8');
     const module = { exports: {} };
     const context = createContext({ Buffer, URL, module, process, require: nodeRequire });
+    runInContext(media, context);
     runInContext(source, context);
     const directory = mkdtempSync(path.join(tmpdir(), 'ziminos-eagle-integrity-'));
     const attachment = path.join(directory, 'sample.txt');
@@ -266,7 +322,7 @@ test('读取附件等待 getById 时切库，在打开文件内容前拒绝旧�
             harness.changeLibrary();
             return item;
         };
-        await assert.rejects(harness.service.sendContent({ headers: {} }, {}, harness.client, 'ITEM123', 'primary'), /资源库与配对时不同/);
+        await assert.rejects(harness.service.media.sendContent({ headers: {} }, {}, harness.client, 'ITEM123', 'primary'), /资源库与配对时不同/);
     } finally { harness.cleanup(); }
 });
 

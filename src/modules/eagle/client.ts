@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 obsidian/requestUrl 访问仅回环监听的 Eagle 伴侣，桌面端伴侣不在线时按需使用 Electron shell 打开 Eagle 原生深链，依赖 core/types 与本模块 platform/protocol
  * [OUTPUT]: 对外提供 EagleImportRoute/EagleBridgeClient，封装配对、项目/日记分类导入、
- *           项目附件文件夹改名、内容读取、当前文件夹精确打开、退出后有界唤起重连与本机令牌生命周期
+ *           项目附件文件夹改名、临时媒体会话、当前文件夹精确打开、退出后有界唤起重连与本机令牌生命周期
  * [POS]: Obsidian 半边唯一的 HTTP 出境口。认证令牌只进 Obsidian SecretStorage，不进 data.json、笔记或日志；
  *        上层只看业务结果，不自行拼端口、请求头或错误语义
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -31,9 +31,13 @@ export type EagleImportRoute =
     | { readonly kind: 'project'; readonly name: string }
     | { readonly kind: 'diary' };
 
-export interface EagleItemContent {
-    readonly bytes: ArrayBuffer;
+export interface EagleMediaPresentation {
+    readonly kind: 'image' | 'video' | 'file';
+    readonly name: string;
     readonly contentType: string;
+    readonly size: number;
+    readonly sessionId: string;
+    readonly url: string;
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -140,25 +144,68 @@ export class EagleBridgeClient {
 
             return result.renamed === true ? 'renamed' : 'missing';
         } catch (error) {
-            if (error instanceof EagleBridgeResponseError && error.status === 404) {
+            if (error instanceof EagleBridgeResponseError && error.status === 404 && error.message === '不存在的伴侣端点') {
                 throw new Error('Eagle 伴侣版本过旧，请覆盖安装本次更新随附的伴侣');
             }
             throw error;
         }
     }
 
-    async content(reference: EagleReference): Promise<EagleItemContent> {
-        const response = await this.request({
-            url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/content?library=${encodeURIComponent(reference.libraryKey)}`,
-            method: 'GET',
-        });
+    /**
+     * 只经 requestUrl 领取小型会话描述；媒体字节由浏览器元素按 Range 直连伴侣，
+     * 避免 Electron 主进程把整段大视频复制进一个 ArrayBuffer。
+     */
+    async media(reference: EagleReference): Promise<EagleMediaPresentation> {
+        let result: JsonRecord;
 
-        if (response.status < 200 || response.status >= 300) throw responseError(response);
+        try {
+            result = await this.requestJson({
+                url: `${this.baseUrl()}/v1/items/${encodeURIComponent(reference.itemId)}/media`,
+                method: 'POST',
+                contentType: 'application/json',
+                body: JSON.stringify({ libraryKey: reference.libraryKey }),
+            });
+        } catch (error) {
+            if (error instanceof EagleBridgeResponseError && error.status === 404 && error.message === '不存在的伴侣端点') {
+                throw new Error('Eagle 伴侣版本过旧，请覆盖安装本次更新随附的伴侣');
+            }
+            throw error;
+        }
+
+        const kind = stringField(result, 'kind');
+        const sessionId = stringField(result, 'sessionId');
+        const size = result.size;
+
+        if (kind !== 'image' && kind !== 'video' && kind !== 'file') {
+            throw new Error('Eagle 伴侣返回了未知附件类型');
+        }
+        if (kind !== 'file' && !/^[a-f0-9]{64}$/.test(sessionId)) {
+            throw new Error('Eagle 伴侣没有返回有效媒体会话');
+        }
+        if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) {
+            throw new Error('Eagle 伴侣返回了无效附件大小');
+        }
 
         return {
-            bytes: response.arrayBuffer,
-            contentType: header(response.headers, 'content-type') || 'application/octet-stream',
+            kind,
+            name: stringField(result, 'name') || 'Eagle 附件',
+            contentType: stringField(result, 'contentType') || 'application/octet-stream',
+            size,
+            sessionId,
+            url: sessionId ? `${this.baseUrl()}/v1/media/${sessionId}` : '',
         };
+    }
+
+    /** DOM 离开后主动撤销单附件票据；伴侣离线时仍会由服务端到期清理。 */
+    async revokeMedia(sessionId: string): Promise<void> {
+        if (!/^[a-f0-9]{64}$/.test(sessionId)) return;
+
+        await this.requestJson({
+            url: `${this.baseUrl()}/v1/media/${sessionId}/revoke`,
+            method: 'POST',
+            contentType: 'application/json',
+            body: '{}',
+        });
     }
 
     async open(reference: EagleReference): Promise<void> {
@@ -321,12 +368,6 @@ function responseError(response: RequestUrlResponse, data?: JsonRecord): Error {
     const message = stringField(parsed, 'error') || stringField(parsed, 'message');
 
     return new EagleBridgeResponseError(response.status, message || `Eagle 伴侣返回 ${response.status}`);
-}
-
-function header(headers: Record<string, string>, name: string): string {
-    const found = Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase());
-
-    return found?.[1] ?? '';
 }
 
 function stringField(record: JsonRecord, key: string): string {
