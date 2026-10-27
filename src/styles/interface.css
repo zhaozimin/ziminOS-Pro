@@ -1,0 +1,673 @@
+/*
+ * [INPUT]: 依赖 Obsidian 语义变量与插件挂载的界面节点。
+ * [OUTPUT]: 提供外观、边栏、设置页与文件入口样式。
+ * [POS]: 正式界面样式事实源，由构建合并交付。
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+/* ── 外观开关：右下角状态栏按钮与它弹出的浮层 ── */
+
+.ziminos-appearance-switch {
+    display: flex;
+    align-items: center;
+}
+
+/*
+ * 浮层挂在 body 上而不是状态栏里：状态栏会裁掉溢出内容，
+ * 挂在里面的面板一长就被切一半。位置由 JS 按按钮的实际矩形算出，
+ * 这里只负责「浮起来」和长高之后自己滚。
+ */
+.ziminos-appearance-panel {
+    position: fixed;
+    /* 带兜底值：变量万一没了，z-index 会整条失效退回 auto，浮层就被状态栏压住了 */
+    z-index: var(--layer-menu, 65);
+    width: 300px;
+    max-width: calc(100vw - 24px);
+    max-height: min(60vh, 460px);
+    overflow-y: auto;
+    padding: 10px 4px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background-color: var(--background-secondary);
+    box-shadow: var(--shadow-s);
+    font-size: var(--font-ui-small);
+}
+
+.ziminos-appearance-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0 12px 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    font-weight: 600;
+}
+
+.ziminos-appearance-count {
+    color: var(--text-faint);
+    font-weight: 400;
+    font-size: var(--font-ui-smaller);
+}
+
+.ziminos-appearance-empty {
+    padding: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.ziminos-appearance-group {
+    padding: 10px 12px 2px;
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+}
+
+.ziminos-appearance-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 12px;
+    border-radius: var(--radius-s);
+}
+
+.ziminos-appearance-row:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+/*
+ * 片段名可能很长，让它自己截断，绝不把开关挤出浮层。
+ * flex 与 min-width 是行里有了第三个孩子（出门按钮）之后必须的：
+ * 只靠 space-between 会把三个孩子均匀摊开，按钮飘到行中间；
+ * min-width:0 则是 flex 子项能真正截断的前提——不写它，
+ * 子项的最小宽度是内容宽度，长名字会把两个控件顶出浮层。
+ */
+.ziminos-appearance-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-normal);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/*
+ * 每行开关左边那个「打开这个 CSS 文件」。
+ * 常驻可见而非悬停才现：它是这个面板的一半用途，藏起来等于没做。
+ * 但常驻十二个图标会跟片段名抢眼睛，所以静默时压到 --text-faint，
+ * 只有指到它那一行才提亮——看得见、但不喊。
+ */
+.ziminos-appearance-open {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-s);
+    color: var(--text-faint);
+    cursor: pointer;
+}
+
+.ziminos-appearance-open svg {
+    width: 15px;
+    height: 15px;
+}
+
+.ziminos-appearance-row:hover .ziminos-appearance-open {
+    color: var(--text-muted);
+}
+
+.ziminos-appearance-open:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+}
+
+/*
+ * 页脚：右下角那个「片段文件夹」。
+ * 一道分隔线把它与片段清单隔开——它不是第十三个片段，是这张面板的出口。
+ *
+ * sticky 是必须的而不是讲究：浮层有 460px 的高度上限，十二个片段一定滚动，
+ * 页脚若随内容走，「右下角那个按钮」就变成了「滚到底才看得见的按钮」。
+ * 三个负数各有各的活：左右 -4px 抵掉浮层的横向内衬，让分隔线画到面板两边、
+ * 与页眉那道线对齐；下方的 -8px 与 bottom: -8px 一起抵掉浮层的底部内衬，
+ * 让页脚真正贴住底边——否则它会悬在离底 8px 处，片段从那道缝里穿过去。
+ * 底色不能省：sticky 元素默认透明，滚动的片段会从字底下爬过去。
+ */
+.ziminos-appearance-footer {
+    position: sticky;
+    bottom: -8px;
+    display: flex;
+    justify-content: flex-end;
+    margin: 8px -4px -8px;
+    padding: 8px;
+    border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+}
+
+.ziminos-appearance-folder {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: var(--radius-s);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.ziminos-appearance-folder:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+}
+
+.ziminos-appearance-folder svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* ── 左侧边栏：本次会话内被取消勾选的图标 ── */
+
+/*
+ * 这是全文件唯一一处 !important，值得写清楚为什么。
+ *
+ * 它不是在跟主题抢表现（表格撑满那处刻意用 min-width 绕开了那场竞争）。
+ * 这里要压住的是一个不确定的对手：Obsidian 核心给 .side-dock-ribbon-action 的规则，
+ * 加上任何主题可能追加的更高特异性选择器。而这条声明没有任何商量余地——
+ * 用户在设置里取消了勾选，这个图标就必须消失，输掉这场竞争等于功能不存在。
+ *
+ * inline display 这条通道不能用：Obsidian 的边栏重排会无条件覆写它（见 dock.ts）。
+ */
+.ziminos-ribbon-item.ziminos-ribbon-hidden {
+    display: none !important;
+}
+
+/* ── 左侧边栏：设置页里那二十九行的分组标签、图标与行距 ── */
+
+/*
+ * 分组标签。它不是 Obsidian 的 setting heading，因为它比页头矮一级——
+ * 「左侧边栏」是一整页，「项目」「复盘」是页里的组，两者不该长得一样。
+ */
+.ziminos-ribbon-group {
+    margin: 14px 0 2px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.04em;
+}
+
+/*
+ * 二十九行挨着排，用 Obsidian 默认的行距会把这一区拉出两屏。
+ * 只收紧上下内边距，不动左右，行与页面其他设置项仍然对齐。
+ */
+.setting-item.ziminos-ribbon-row {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-top: none;
+}
+
+/*
+ * 命令名前面那个图标：它就是这条命令在边栏上的样子，勾之前先让人看见。
+ * 尺寸取 --icon-s 而非写死像素，跟着 Obsidian 的图标标度走。
+ */
+.ziminos-ribbon-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 8px;
+    color: var(--text-muted);
+    vertical-align: -0.2em;
+}
+
+.ziminos-ribbon-icon .svg-icon {
+    width: var(--icon-s, 16px);
+    height: var(--icon-s, 16px);
+}
+
+/* ── 关于作者：首页导航尾部与设置页开荒页尾共用的同一张名片（v0.9.4 版式） ── */
+
+/* 磁贴在上、两个频道分区在下，块间距一致 */
+.ziminos-about {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 0.6em 0 1.2em;
+}
+
+.ziminos-about-region {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 区名比页内小节标题矮一级：它是名片里的分组，不是页面的一节 */
+.ziminos-about-region-title {
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.04em;
+}
+
+/* 站点磁贴两枚并排，窄容器自动落成单列 */
+.ziminos-about-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+/* 一枚磁贴一个站：头部是身份，下面国内外两个域名各自成行。hairline 描边、无底色、无阴影 */
+.ziminos-about-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+}
+
+.ziminos-about-tile-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/*
+ * 头像是背景图 div 而不是 <img>：外观包的「图片居中」片段给一切 img 加
+ * margin:auto !important，flex 行里的头像会被推到中间、文字挤到边上。
+ * 背景图不吃任何针对 img 的规则，名片在任何主题任何片段下都站得稳。
+ */
+.ziminos-about-logo-round {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+}
+
+.ziminos-about-logo-square {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    display: block;
+    flex-shrink: 0;
+}
+
+.ziminos-about-tile-name {
+    color: var(--text-normal);
+    font-weight: var(--font-semibold);
+    line-height: 1.4;
+}
+
+.ziminos-about-tile-sub {
+    color: var(--text-faint);
+    font-size: var(--font-smaller, 0.875em);
+    line-height: 1.4;
+}
+
+.ziminos-about-domains {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 域名一行：域名靠左、部署地靠右，链接灰阶、悬停升正文色 */
+.ziminos-about-domain {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.ziminos-about-domain:hover {
+    color: var(--text-normal);
+    text-decoration: none;
+}
+
+.ziminos-about-domain-region {
+    color: var(--text-faint);
+    font-size: var(--font-smaller, 0.875em);
+}
+
+/* 频道胶囊一排，窄容器自动换行 */
+.ziminos-about-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/*
+ * 频道胶囊：hairline 描边、无底色。文字取弱化色而非链接色——
+ * 身份已经由品牌原色的 logo 说明了，一排下划线蓝字反而谁都认不出。
+ */
+.ziminos-about-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: var(--font-smaller, 0.875em);
+}
+
+.ziminos-about-pill:hover {
+    color: var(--text-normal);
+    border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
+    text-decoration: none;
+}
+
+/* 品牌图标：YouTube/B站/小红书的官方色由数据写在元素上；GitHub 与 X 官方即黑白，随 currentColor */
+.ziminos-about-pill-icon {
+    width: 15px;
+    height: 15px;
+    display: block;
+    flex-shrink: 0;
+}
+
+/*
+ * 字标（小红书）：它是三个汉字组成的文字标，没有色块打底，15px 根本认不清。
+ * 放大到 26px，负外边距抵掉多出的高度——字形只占方框中段约三分之一，
+ * 画出来的像素仍落在胶囊里，胶囊高度因此与同排其他胶囊分毫不差。
+ */
+.ziminos-about-pill-icon.is-wordmark {
+    width: 26px;
+    height: 26px;
+    margin: -6px 0;
+}
+
+/*
+ * 致谢：名片的最后一段，留给别人。
+ *
+ * 整块压到弱化色与小一号字，与上方作者自己的入口拉开层级——
+ * 这一段是署名不是入口，它该被读到，不该被点着走。
+ * 上方一条细线，与设置页落款那条同一画法：分节，不分页。
+ */
+.ziminos-about-credits {
+    margin-top: 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--background-modifier-border);
+    font-size: var(--font-smaller, 0.875em);
+    line-height: 1.6;
+}
+
+.ziminos-about-credits-title {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    letter-spacing: 0.04em;
+}
+
+.ziminos-about-credits-intro {
+    margin-bottom: 10px;
+    color: var(--text-faint);
+}
+
+/* 一条致谢：项目名一行，学到了什么另起一行缩进——名字要认得出，句子要读得下去 */
+.ziminos-about-credit {
+    margin-bottom: 8px;
+}
+
+.ziminos-about-credit-name {
+    color: var(--text-normal);
+    font-weight: var(--font-semibold);
+    text-decoration: none;
+}
+
+.ziminos-about-credit-name:hover {
+    color: var(--text-accent);
+    text-decoration: underline;
+}
+
+.ziminos-about-credit-what {
+    padding-left: 10px;
+    color: var(--text-muted);
+}
+
+/*
+ * 随库交付的署名：一段连排的文字而不是又一列条目。
+ * 它回答的是「这里面有谁的东西」，不是「我们学到了什么」，
+ * 排成清单会让它看起来和上面一样重要，而它只是许可要求的一行字。
+ */
+.ziminos-about-bundled {
+    margin-top: 12px;
+    color: var(--text-faint);
+}
+
+.ziminos-about-bundled-link {
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.ziminos-about-bundled-link:hover {
+    color: var(--text-accent);
+    text-decoration: underline;
+}
+
+/* ── 设置页：顶上那排标签，一页一个系统模块 ── */
+
+/*
+ * 标签栏吸顶。边栏那一页有二十九行，翻到第十八行时标签栏早已滚出视野，
+ * 想换一页就得先滚回顶部——吸顶让「换页」随时可做，这是分页值不值的关键一环。
+ *
+ * 背景必须是实心的，否则下面的行会从字缝里透上来；取 --background-primary，
+ * 那正是设置弹窗内容区自己的底色，因此吸住时看不出接缝。
+ */
+/*
+ * 标签栏随内容滚动，不吸顶。
+ * 吸顶版在真机上与 Obsidian 设置容器自身的内边距与滚动结构打架：
+ * 页头文字会从标签栏上方钻出来、被裁一半（v0.9.4 实测截图为证）。
+ * 换页本就是低频动作，滚回顶部的代价远小于一条永远错位的悬浮条。
+ */
+.ziminos-settings .ziminos-settings-tabs {
+    padding: 8px 0 12px;
+}
+
+/*
+ * 标签行踩在一条通到底的基线上：细线属于整行，不属于哪一枚标签。
+ * 这条线把「导航」与「内容」分成上下两个世界——标签自然宽度、左对齐，
+ * 八枚两字标签一行排下，永远不换行（flex-wrap 只是极窄窗口下的保险）。
+ */
+.ziminos-settings .ziminos-settings-tabrail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/*
+ * 一枚标签。它是真的 <button>，所以得先把浏览器与 Obsidian 给按钮的立体外观卸干净——
+ * 八个自带底色投影的立体按钮排成一行，看着像八个待按的动作，而它们其实只是八个位置。
+ *
+ * 选择器写成两级，与本文件里表格那处同理：主题也会给内容区里的 button 定规矩，
+ * 单一个类名跟它打平手时，胜负就取决于谁的样式表后加载，那不是可以依赖的东西。
+ */
+.ziminos-settings .ziminos-settings-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: auto;
+    padding: 5px 12px;
+    border: none;
+    border-radius: var(--radius-m);
+    background-color: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    font-weight: var(--font-normal);
+    line-height: 1.3;
+    cursor: pointer;
+    transition: color 120ms ease-out, background-color 120ms ease-out;
+}
+
+.ziminos-settings .ziminos-settings-tab:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: none;
+    color: var(--text-normal);
+}
+
+/* 键盘走到哪一枚，哪一枚亮圈；鼠标点按不画圈（focus-visible 的本职） */
+.ziminos-settings .ziminos-settings-tab:focus-visible {
+    box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+}
+
+/*
+ * 当前页：填充成一枚实底胶囊，字重加粗，图标着强调色。
+ * 三个信号叠加而不只靠颜色——低对比度主题与色觉差异下也认得出。
+ */
+.ziminos-settings .ziminos-settings-tab.is-active {
+    background-color: var(--background-modifier-active-hover, var(--background-modifier-hover));
+    color: var(--text-normal);
+    font-weight: var(--font-semibold);
+}
+
+/* 标签上的笔画图标：与左侧边栏同一套图形，同一条描边变量 */
+.ziminos-settings-tab-icon {
+    display: inline-flex;
+    align-items: center;
+    color: currentColor;
+}
+
+.ziminos-settings-tab-icon .svg-icon {
+    width: var(--icon-xs, 14px);
+    height: var(--icon-xs, 14px);
+}
+
+.ziminos-settings .ziminos-settings-tab.is-active .ziminos-settings-tab-icon {
+    color: var(--text-accent);
+}
+
+/* 页头：同一枚图标大一号、着强调色，是整页唯一的强调色锚点 */
+.ziminos-settings-page-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ziminos-settings-page-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-accent);
+}
+
+.ziminos-settings-page-icon .svg-icon {
+    width: var(--icon-m, 18px);
+    height: var(--icon-m, 18px);
+}
+
+/* 页头与标签栏之间留一口气，第一条设置项不必顶着标签栏 */
+.ziminos-settings-body .setting-item-heading {
+    padding-top: 18px;
+}
+
+/* ── 设置页：每页末尾那个「高级设置（一般不用改）」折叠区 ── */
+
+/*
+ * 各页共用同一个折叠区样式，位置也一律在页尾。
+ * 它比页头轻（muted + 小一号），因为它是「一般不用改」的东西，不该与页头抢注意力。
+ */
+.ziminos-advanced > summary {
+    padding: 12px 0;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+}
+
+/* ── 文件浏览器：文件夹右侧那个计数 ── */
+
+/*
+ * 挂在 .nav-folder-title 里的最后一个子元素上，所以它天然排在文件夹名之后。
+ * 靠右不靠 position/float，靠 margin-left:auto——那一行是 flex（Obsidian 的 .tree-item-self
+ * 就是 flex），auto 外边距会把余量全吃到左边，数字于是贴着右缘；
+ * 而主题若把文件夹名设成 flex:1，数字同样落在右缘，两种情形结果一致。
+ * flex-shrink:0 是为了让挤压发生在文件夹名上而不是数字上：名字可以省略号，数字不能只剩一半。
+ */
+.ziminos-folder-count {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding-left: 6px;
+    color: var(--text-faint);
+    font-size: var(--font-ui-smaller);
+
+    /* 等宽数字：1 和 8 一样宽，一列数字的右缘才对得齐，翻看时不会左右跳 */
+    font-variant-numeric: tabular-nums;
+}
+
+/* 鼠标停在那一行上时抬一档：正在看的那一行把数字说清楚，其余的继续退到背景里 */
+.nav-folder-title:hover .ziminos-folder-count,
+.nav-folder-title.is-active .ziminos-folder-count {
+    color: var(--text-muted);
+}
+
+/* ── 最近文件：右侧栏那张清单 ── */
+
+.workspace-leaf-content[data-type="ziminos-recent-files"] .view-content {
+    padding: 0;
+}
+
+.ziminos-recent {
+    overflow: auto;
+    padding: 8px 6px 12px;
+}
+
+.ziminos-recent-empty {
+    padding: 12px 10px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.6;
+}
+
+.ziminos-recent-list {
+    display: flex;
+    flex-direction: column;
+}
+
+/*
+ * 一行一篇，只有名字——与文件树里的一行长一个样。
+ *
+ * 「长一个样」不是靠抄一遍主题的规则，而是取它自己给出的那套 --nav-item-* 变量：
+ * 行高、字号、字重、颜色、悬停底色全从那里来，于是换主题、在 Style Settings 里
+ * 调过侧栏字号之后，这张清单跟着一起变，不会变成侧栏里唯一一块「别人家的控件」。
+ * 变量取不到时每条都回落到语义变量，两头都不会出错。
+ */
+.ziminos-recent-row {
+    padding: var(--nav-item-padding, 4px 8px);
+    overflow: hidden;
+    border-radius: var(--radius-s);
+    color: var(--nav-item-color, var(--text-muted));
+    font-size: var(--nav-item-size, var(--font-ui-small));
+    font-weight: var(--nav-item-weight, inherit);
+    line-height: var(--line-height-tight);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ziminos-recent-row:hover {
+    background: var(--nav-item-background-hover, var(--background-modifier-hover));
+    color: var(--nav-item-color-hover, var(--text-normal));
+}
+
+/* ── 状态栏：当前笔记路径 ── */
+
+/*
+ * 路径可以很长，而状态栏是所有插件共用的一条。给它一个上限并自己截断，
+ * 而不是把别人的状态栏项挤出屏幕——完整路径在悬停提示里，也在点一下就到手的剪贴板里。
+ *
+ * 刻意**不**用 direction: rtl 把省略号挪到左边（那样能留下文件名，看着更划算）：
+ * 那是一个双向文字技巧，而库里的路径里全是中文书名号与括号——
+ * 这类中性字符落在字符串末尾时会被 bidi 算法搬到最前面，得到一个看着像坏了的路径。
+ * 一个偶尔截掉尾巴的路径只是少几个字，一个偶尔乱序的路径会让人怀疑插件在乱写。
+ */
+.ziminos-file-path {
+    max-width: 32ch;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ziminos-file-path:hover {
+    color: var(--text-normal);
+}

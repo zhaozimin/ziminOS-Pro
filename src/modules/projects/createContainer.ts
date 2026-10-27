@@ -5,11 +5,11 @@
  *          core/time 的 nowStampAndUid、core/types 的 ZiminosContext/ZiminosSettings，
  *          依赖同目录 moc 的 mocPathOf、nameConflict 的四根目录同名检索/同流程更名，
  *          以及 templates 的 mocContent/mocFrontmatter
- * [OUTPUT]: 对外提供 ContainerKind 契约、PROJECT_KIND/AREA_KIND/BOOK_KIND 三份规格、
+ * [OUTPUT]: 对外提供 ContainerKind 契约、PROJECT_KIND/AREA_KIND/RESOURCE_KIND/BOOK_KIND 四份规格、
  *           CreateContainerPreset 预设契约、PersonPicker 选人能力契约、createContainer
- * [POS]: 「一个文件夹 + 一篇 MOC」这件事的唯一实现，项目、领域与书籍共用它。
- *        三者的差别全部收在 ContainerKind 那张表里：落在哪个根目录、
- *        写什么 type、问不问归属、带不带小节骨架。三者的 Base 必须同源且只读
+ * [POS]: 「一个文件夹 + 一篇 MOC」这件事的唯一实现，项目、领域、资源与书籍共用它。
+ *        四类容器的差别全部收在 ContainerKind 那张表里：落在哪个根目录、
+ *        写什么 type、问不问归属、带不带小节骨架。四类容器的 Base 必须同源且只读
  *        this.file 实时上下文，不得把命名或路径再塞回容器规格。除此之外它们连一个字的提示文案都不该分叉——
  *        分叉的代价不是重复代码，是「新建领域」某天悄悄少了一道防覆盖校验。
  *        名称合法性、目标位置防覆盖、跨 PARA 同名提醒、光标落点这些规矩因此只在此处定义一次。
@@ -94,15 +94,14 @@ const OWNERSHIP: readonly OwnershipOption[] = [
 ];
 
 // ============================================================
-// 项目与领域的全部差别
+// 容器的规格
 // ============================================================
 
 /**
  * 一类容器的规格。
  *
- * 这张表存在的意义是把「项目和领域到底差在哪」摆成三行可读的事实，
- * 而不是散在流程里的三处 if。将来若再来第三类容器（比如「书籍」），
- * 它是这张表多一条，而不是这条流程多一个分支。
+ * 这张表集中声明各类容器的差别，不在流程中按身份分支。
+ * 资源使用固定 PARA 目录；项目、领域与书籍读取已有目录设置。
  */
 export interface ContainerKind {
     /** 中文名，出现在每一句提示里 */
@@ -115,9 +114,9 @@ export interface ContainerKind {
      * 而导航页那张「正在进行中」恰恰按 status 筛。
      */
     readonly status?: string;
-    /** 取哪个设置项当根目录 */
-    readonly folderKey: 'projectFolder' | 'areaFolder';
-    /** 该设置项为空或写错时回落到哪个默认目录 */
+    /** 根目录设置项；省略时直接使用固定目录 */
+    readonly folderKey?: 'projectFolder' | 'areaFolder';
+    /** 固定目录，或目录设置为空、写错时的回落值 */
     readonly folderFallback: string;
     /**
      * 要不要问「这是谁的」。
@@ -145,6 +144,14 @@ export const AREA_KIND: ContainerKind = {
     type: NOTE_TYPES.area,
     folderKey: 'areaFolder',
     folderFallback: FOLDERS.areas,
+    asksOwnership: false,
+};
+
+/** 资源沿用领域的问答与 MOC，不带生命周期，固定落在 PARA 资源目录。 */
+export const RESOURCE_KIND: ContainerKind = {
+    label: '资源',
+    type: NOTE_TYPES.resource,
+    folderFallback: FOLDERS.resources,
     asksOwnership: false,
 };
 
@@ -243,7 +250,7 @@ async function resolveContainerName(
 }
 
 /**
- * 新建一个项目或领域：建文件夹、写 MOC、打开并把光标停在正文起点。
+ * 新建一个容器：建文件夹、写 MOC、打开并把光标停在正文起点。
  * 返回新建的 MOC 文件；用户取消、名称非法、同名 MOC 已存在或过程出错时返回 null。
  * 任何一步失败都不留半成品之外的痕迹，也绝不覆盖已有文件。
  */
@@ -263,7 +270,10 @@ export async function createContainer(
         // ============================================================
 
         const settings: ZiminosSettings = ctx.settings;
-        const baseFolder = normalizeFolderPath(settings[kind.folderKey], kind.folderFallback);
+        const baseFolder = normalizeFolderPath(
+            kind.folderKey ? settings[kind.folderKey] : kind.folderFallback,
+            kind.folderFallback,
+        );
 
         // ============================================================
         // 2. 获取名称

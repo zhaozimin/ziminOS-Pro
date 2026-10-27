@@ -1,6 +1,6 @@
 /**
- * [INPUT]: 依赖 node:test/assert/fs/os/path/child_process，实跑仓库 esbuild.config.mjs 与一个最小 CJS 依赖
- * [OUTPUT]: 验证本地依赖与跨目录中文/空格路径依赖构建得到逐字节相同的生产 JS
+ * [INPUT]: 依赖 node:test/assert/fs/os/path/child_process，实跑构建入口、真实样式与最小 CJS 依赖
+ * [OUTPUT]: 验证本地依赖与跨目录中文/空格路径依赖构建得到相同的 JS 与 CSS
  * [POS]: tests 的构建位置专项；不复制归一算法，通过真实构建入口验证输出中没有本机目录泄漏
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -26,6 +26,10 @@ test('本地依赖与跨目录的中文空格依赖构建得到同一份产物',
             const base = path.join(staging, name);
             for (const folder of ['src', 'eagle-companion', 'vault/.obsidian/plugins/ziminos']) mkdirSync(path.join(base, folder), { recursive: true });
             writeFileSync(path.join(base, 'src/main.ts'), 'export { value, literal } from "audit-dependency";');
+            for (const file of ['src/styles/views.css', 'src/styles/interface.css', 'src/styles/media.css', 'src/modules/planner/styles.css']) {
+                mkdirSync(path.dirname(path.join(base, file)), { recursive: true });
+                writeFileSync(path.join(base, file), readFileSync(path.join(ROOT, file)));
+            }
             writeFileSync(path.join(base, 'package.json'), '{"version":"0.39.1"}');
             for (const file of ['eagle-companion/manifest.json', 'vault/.obsidian/plugins/ziminos/manifest.json']) writeFileSync(path.join(base, file), '{"version":"0.39.1"}');
             return base;
@@ -41,6 +45,8 @@ test('本地依赖与跨目录的中文空格依赖构建得到同一份产物',
         const canonical = compile(local);
         const fromBorrowed = compile(borrowed);
         assert.equal(fromBorrowed, canonical);
+        assert.equal(readFileSync(path.join(local, 'vault/.obsidian/plugins/ziminos/styles.css'), 'utf8'),
+            readFileSync(path.join(borrowed, 'vault/.obsidian/plugins/ziminos/styles.css'), 'utf8'));
         assert.ok(!fromBorrowed.includes('// ../外部 依赖/'));
         assert.ok(fromBorrowed.includes('literal: "../\\u5916\\u90E8 \\u4F9D\\u8D56/node_modules/audit-dependency/index.cjs"'));
     } finally {

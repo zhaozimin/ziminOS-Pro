@@ -1,0 +1,516 @@
+/*
+ * [INPUT]: 依赖 Obsidian 语义变量与 ziminOS 视图类名。
+ * [OUTPUT]: 提供笔记内表格、任务与中国日历的隔离样式。
+ * [POS]: 正式样式事实源，由构建合并交付。
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+/* ── 三线表：顶线粗、栏目线细、底线粗，没有竖线也没有行线 ── */
+
+.ziminos-table-wrap {
+    /* 列多的时候（名录六列）让表格自己横向滚，而不是把整页撑宽 */
+    overflow-x: auto;
+    width: 100%;
+    margin: 0.6em 0 1.2em;
+
+    /*
+     * 表宽这件事改的是变量，不是宽度本身——理由值得写清楚，它是本文件最容易改错的一处。
+     *
+     * Minimal 把「表格多宽」整个接管了（theme.css 约 2198 行）：
+     *     .markdown-source-view.mod-cm6.is-readable-line-width … > .cm-content table,
+     *     .markdown-preview-view.is-readable-line-width .markdown-preview-sizer table {
+     *         width: var(--table-width);
+     *         min-width: var(--table-min-width);
+     *         max-width: var(--table-max-width);
+     *         margin-inline: var(--table-margin); }
+     * 编辑态那一条打头六个类，特异性 (0,6,1)；我们这条 (0,2,2)，class 数先比，压不住。
+     * 也就是说 width / min-width / max-width 三条全归它管，取的是 body 上的默认值：
+     * --table-width: auto，而 --table-min-width 干脆没定义（等于 auto）。
+     * auto 正是「按内容收缩」——于是同一页上两张表各算各的宽，宽窄不一。
+     *
+     * 出路不是把特异性堆得更高，更不是 !important：那条规则是主题的实现，
+     * 变量才是主题给出的接口。在包裹层上写这四个变量，主题自己那条规则算出来的
+     * 就是整行宽——不覆盖、不竞争，只是回答了它提出的那个问题。
+     * 认识这些变量的主题走这里，不认识的走下面那条 100%，两条路得到同一个结果。
+     */
+    --table-width: 100%;
+    --table-min-width: 100%;
+    --table-max-width: 100%;
+    --table-margin: 0;
+}
+
+/* ============================================================
+ * 中国日历 · ItemView
+ * ============================================================ */
+
+.workspace-leaf-content[data-type="ziminos-calendar"] .view-content {
+    padding: 0;
+}
+
+.ziminos-calendar {
+    overflow: auto;
+}
+
+.ziminos-calendar-shell {
+    min-width: 286px;
+    padding: 14px 12px 12px;
+    color: var(--text-normal);
+}
+
+.ziminos-calendar button {
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    font: inherit;
+}
+
+.ziminos-calendar-stepper,
+.ziminos-calendar-today,
+.ziminos-calendar-view-toggle,
+.ziminos-calendar-period,
+.ziminos-calendar-week,
+.ziminos-calendar-day {
+    cursor: pointer;
+}
+
+.ziminos-calendar-header {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 14px;
+}
+
+.ziminos-calendar-header-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+}
+
+.ziminos-calendar-coordinate {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 24px minmax(62px, 1fr) 24px;
+    align-items: center;
+    justify-content: center;
+}
+
+.ziminos-calendar-stepper {
+    display: inline-flex;
+    width: 24px;
+    height: 26px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-faint);
+    font-size: 20px;
+    line-height: 1;
+    opacity: 0.48;
+    transition: color 120ms ease, background-color 120ms ease, opacity 120ms ease;
+}
+
+.ziminos-calendar-coordinate:hover .ziminos-calendar-stepper,
+.ziminos-calendar-coordinate:focus-within .ziminos-calendar-stepper {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+.ziminos-calendar-stepper:hover {
+    background: var(--background-modifier-hover);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-coordinate > .ziminos-calendar-coordinate-label {
+    overflow: hidden;
+    min-width: 0;
+    min-height: 26px;
+    padding: 2px 4px;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 15px;
+    font-weight: 650;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ziminos-calendar-coordinate > .ziminos-calendar-coordinate-label:hover {
+    background: var(--background-modifier-hover);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-header-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+.ziminos-calendar-today,
+.ziminos-calendar-view-toggle {
+    display: inline-flex;
+    width: 25px;
+    height: 25px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 12px;
+}
+
+.ziminos-calendar-today {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.ziminos-calendar-today:hover {
+    background: var(--interactive-accent-hover);
+}
+
+.ziminos-calendar-today.is-current {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 24%, transparent);
+}
+
+.ziminos-calendar-view-toggle:hover {
+    background: var(--background-modifier-hover);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-grid {
+    display: grid;
+    grid-template-columns: 27px repeat(7, minmax(30px, 1fr));
+    gap: 2px 1px;
+}
+
+.ziminos-calendar-weekday {
+    padding: 2px 0 7px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 650;
+    text-align: center;
+}
+
+.ziminos-calendar-week {
+    min-height: 45px;
+    padding: 5px 0 0;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.ziminos-calendar-week:hover {
+    background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-day {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 45px;
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 4px 1px 3px;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-normal);
+    text-align: center;
+}
+
+.ziminos-calendar-day:hover {
+    background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+
+.ziminos-calendar-day.is-other-month {
+    opacity: 0.24;
+}
+
+/*
+ * 「写过了」与「今天」是两个互不排斥的事实，因此走两条视觉通道而不是三选一：
+ *
+ *   写过了 —— 内容的事实，一层淡绿底 + 绿色日期。它答的是「这一格已经有东西了」。
+ *   今  天 —— 此刻的事实，最重的一档：实心红块。它答的是「你在这儿」。
+ *
+ * 今天也可能已经写完，而那恰恰是最该一眼看见的一格。所以红块之上再补一枚绿点，
+ * 两句话同时说得出口。若做成三选一（今天 > 写过 > 普通），那一格就只剩一半信息。
+ */
+.ziminos-calendar-day.has-note,
+.ziminos-calendar-week.has-note {
+    color: var(--color-green, #16734a);
+    background: color-mix(in srgb, var(--color-green, #16734a) 14%, transparent);
+    font-weight: 600;
+}
+
+.ziminos-calendar-day.has-note:hover,
+.ziminos-calendar-week.has-note:hover {
+    background: color-mix(in srgb, var(--color-green, #16734a) 22%, transparent);
+}
+
+/* 排在 has-note 之后：同特异性下后来者胜，今天因此永远压过「写过了」那层底 */
+.ziminos-calendar-day.is-today {
+    position: relative;
+    background: var(--color-red, #b13939);
+    color: #fff;
+    font-weight: 700;
+}
+
+.ziminos-calendar-day.is-today:hover {
+    background: color-mix(in srgb, var(--color-red, #b13939) 85%, #000);
+}
+
+/* 今天又写过：红块保住「今天」，右上角那一点保住「写过了」 */
+.ziminos-calendar-day.is-today.has-note::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-green, #16734a);
+    /* 红底上的绿点对比不够，描一圈白边把它从底色里摘出来 */
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+
+.ziminos-calendar-day.is-special-day:not(.is-today) .ziminos-calendar-lunar {
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-day-top {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+}
+
+.ziminos-calendar-solar {
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.1;
+}
+
+.ziminos-calendar-badge {
+    display: inline-flex;
+    width: 13px;
+    height: 13px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    color: white;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.ziminos-calendar-badge.is-rest {
+    background: #C15449;
+}
+
+.ziminos-calendar-badge.is-work {
+    background: #4C8DD6;
+}
+
+.ziminos-calendar-lunar {
+    overflow: hidden;
+    width: 100%;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 9px;
+    line-height: 1.15;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ziminos-calendar-day.is-today .ziminos-calendar-lunar {
+    color: #fff;
+    opacity: 0.82;
+}
+
+/* 写过的那一格里，农历那行不跟着变绿——两行都绿会让日期数字失去重点 */
+.ziminos-calendar-day.has-note:not(.is-today) .ziminos-calendar-lunar {
+    color: var(--text-muted);
+}
+
+.ziminos-calendar-year-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 5px;
+}
+
+.ziminos-calendar-quarter {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.ziminos-calendar-quarter > .ziminos-calendar-period {
+    width: 100%;
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-quarter-months {
+    display: contents;
+}
+
+.ziminos-calendar-period {
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 3px;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.ziminos-calendar-period:hover,
+.ziminos-calendar-period.is-selected {
+    background: color-mix(in srgb, var(--interactive-accent) 13%, transparent);
+    color: var(--interactive-accent);
+}
+
+.ziminos-calendar-status {
+    margin-top: 10px;
+    color: var(--text-faint);
+    font-size: 9px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+@media (max-width: 360px) {
+    .ziminos-calendar-shell {
+        min-width: 270px;
+        padding: 8px;
+    }
+
+    .ziminos-calendar-grid {
+        grid-template-columns: 24px repeat(7, minmax(28px, 1fr));
+    }
+
+    .ziminos-calendar-day,
+    .ziminos-calendar-week {
+        min-height: 43px;
+    }
+}
+
+/*
+ * 选择器写成「元素.类 > 元素.类」两级，是为了把这张表与用户笔记里的普通表格分开，
+ * 而不是为了跟主题抢宽度——那场仗按特异性打是打不赢的，宽度已在上面用变量解决。
+ */
+div.ziminos-table-wrap > table.ziminos-table {
+    border-collapse: collapse;
+    table-layout: auto;
+    /*
+     * 给不认识上面那组变量的主题兜底：三条一起写，是因为「占满整行」这件事
+     * 只有 width 会被 max-width 夹、被 min-width 顶，三条同向才不会互相拆台。
+     * 列太多时 min-content 大于整行，表格照样溢出，由包裹层的 overflow-x 接住。
+     */
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    font-size: 0.92em;
+    line-height: 1.65;
+    border-top: 2px solid var(--text-normal);
+    border-bottom: 2px solid var(--text-normal);
+}
+
+div.ziminos-table-wrap > table.ziminos-table th,
+div.ziminos-table-wrap > table.ziminos-table td {
+    border: none;
+    padding: 7px 22px 7px 0;
+    text-align: left;
+    vertical-align: top;
+    white-space: normal;
+    word-break: break-word;
+}
+
+div.ziminos-table-wrap > table.ziminos-table th {
+    border-bottom: 1px solid var(--background-modifier-border);
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* 末列右侧不留悬空的内边距，底线才收得干净 */
+div.ziminos-table-wrap > table.ziminos-table th:last-child,
+div.ziminos-table-wrap > table.ziminos-table td:last-child {
+    padding-right: 0;
+}
+
+/*
+ * 列宽分配：定宽列各取所需，句子列吃掉全部余量。
+ * width:1px 配 nowrap 是让一列「刚好够用」的标准写法——
+ * 浏览器把它撑到内容宽度就停手，剩下的空间全归 auto 的那一列。
+ * 不这样做的话，浏览器会按内容比例摊给每一列，结果是每列都窄一点、每列都要换行。
+ */
+div.ziminos-table-wrap > table.ziminos-table th.ziminos-tight,
+div.ziminos-table-wrap > table.ziminos-table td.ziminos-tight {
+    width: 1px;
+    white-space: nowrap;
+}
+
+div.ziminos-table-wrap > table.ziminos-table th.ziminos-grow,
+div.ziminos-table-wrap > table.ziminos-table td.ziminos-grow {
+    width: auto;
+    white-space: normal;
+}
+
+div.ziminos-table-wrap > table.ziminos-table tbody tr:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* ── 待办：同样是三线表，复选框与事项同处一格 ── */
+
+/* 复选框与事项必须在同一格里，否则一个待办会被表格的列分成两半 */
+.ziminos-task {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5em;
+}
+
+.ziminos-task input[type='checkbox'] {
+    flex: none;
+    margin: 0;
+    cursor: pointer;
+}
+
+.ziminos-task-text {
+    flex: 1 1 auto;
+    /* flex 子项默认 min-width:auto，长句子会撑破单元格，必须显式放开 */
+    min-width: 0;
+}
+
+.ziminos-task.is-checked .ziminos-task-text {
+    color: var(--text-faint);
+    text-decoration: line-through;
+}
+
+/* ── 文字 ── */
+
+.ziminos-summary {
+    margin: 0.4em 0;
+}
+
+.ziminos-note,
+.ziminos-empty {
+    margin: 0.4em 0;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.ziminos-heading {
+    margin: 1.2em 0 0.3em;
+}

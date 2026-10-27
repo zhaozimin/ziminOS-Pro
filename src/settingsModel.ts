@@ -2,7 +2,7 @@
  * [INPUT]: 依赖 ./core/commands 的 COMMAND_ICONS（标签页图标与左侧边栏同源），
  *          依赖 ./core/constants 的 FolderCountTarget/RecentFilesSort 与 ./core/device 的 FilePathScope
  *          （计数口径、最近文件排法与复制口径的显示名各按它们建一张表）
- * [OUTPUT]: 对外提供设置页的注入契约 SettingActions（含 Eagle 配对/检测/断开/状态），
+ * [OUTPUT]: 对外提供设置页的注入契约 SettingActions（含大日历入口与 Eagle 配对/检测/断开/状态），
  *           与它的三张数据表——
  *           TABS（八张标签页的身份）、TEXTS（全部界面文案）、
  *           TEXT_FIELDS 与 BOOK_TAG_PREFIX_FIELD（文本框）、FOLDER_COUNT_LABELS、
@@ -134,7 +134,7 @@ export const TABS: readonly SettingsTab[] = [
         label: '复盘',
         icon: COMMAND_ICONS.daily,
         module: '复盘 v1',
-        status: '运行中 · 五级周期笔记、主题链与项目数据共五个视图',
+        status: '运行中 · 五级周期笔记、主题链、项目数据与大日历安排',
     },
     {
         id: 'contacts',
@@ -166,7 +166,7 @@ export const TABS: readonly SettingsTab[] = [
         label: '边栏',
         icon: COMMAND_ICONS.dock,
         module: '左侧边栏 v1',
-        status: '运行中 · 四十三条命令配 Pikaicons 图标，默认摆出七条',
+        status: '运行中 · 四十六条命令配 Pikaicons 图标，默认摆出八条',
     },
 ];
 
@@ -188,6 +188,9 @@ export const TABS: readonly SettingsTab[] = [
  * 已经画在屏幕上的 DOM 不会自己再问一次设置。
  */
 export interface SettingActions {
+    /** 大日历入口由 main 装配，设置页不依赖日历实现。 */
+    readonly showPlanner: () => Promise<void>;
+    readonly showPlannerRange: () => void;
     /** 执行一次开荒。名单住在装配点，设置页因此不认识参与开荒的模块 */
     readonly initialize: () => Promise<void>;
     /**

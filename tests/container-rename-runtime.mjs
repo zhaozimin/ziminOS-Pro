@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 node:test/assert、esbuild 与 renameContainer 公共命令，用受控宿主注入预览/写盘故障
- * [OUTPUT]: 验证改名确认后的字节与对象身份复核、跨 PARA 重名复核、MOC 目标冲突及独立逆序回滚
+ * [OUTPUT]: 验证改名确认后的字节与对象身份复核、跨 PARA 重名复核、MOC 查询预览/提交及独立逆序回滚
  * [POS]: tests 的容器改名事务专项；替身只实现文件系统与确认边界，直接执行生产事务
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -99,6 +99,52 @@ test('正常改名提交整棵目录、MOC 与外部双链，只记录一次语�
     assert.equal(f.card.path, '01-projects/新项目/卡片.md');
     assert.equal(f.reference.content, '[[01-projects/新项目/MOC-新项目]]');
     assert.equal(recorded.length, 1);
+});
+
+const legacyQuery = '```base\nfilters:\n  or:\n    - up == link("MOC-旧项目")\n    - file.folder == "01-projects/旧项目"\n```';
+
+test('MOC 查询进入同一预览和提交，取消时查询与路径都不变', async () => {
+    for (const confirmed of [false, true]) {
+        const f = fixture();
+        f.moc.content = legacyQuery;
+        f.ctx.app.preview = modal => {
+            const edit = modal.plan.edits.find(edit => edit.file === f.moc);
+            assert.equal(edit.replacements, 2);
+            assert.ok(edit.after.includes('link("01-projects/新项目/MOC-新项目")'));
+            modal.resolveResult(confirmed);
+        };
+        await runContainerRename(f.ctx);
+        assert.equal(f.moc.content, confirmed ? legacyQuery
+            .replace('link("MOC-旧项目")', 'link("01-projects/新项目/MOC-新项目")')
+            .replace('file.folder == "01-projects/旧项目"', 'file.folder == "01-projects/新项目"') : legacyQuery);
+        if (!confirmed) assert.equal(f.operations.length, 0);
+    }
+});
+
+test('MOC 查询写入后其他笔记提交失败，查询和名称一起回滚', async () => {
+    const f = fixture();
+    f.moc.content = legacyQuery;
+    const process = f.ctx.app.vault.process;
+    f.ctx.app.vault.process = async (file, transform) => {
+        if (file === f.reference) throw new Error('后续提交失败');
+        await process(file, transform);
+    };
+    await runContainerRename(f.ctx);
+    assert.equal(f.moc.content, legacyQuery);
+    assert.equal(f.moc.path, '01-projects/旧项目/MOC-旧项目.md');
+    assert.equal(f.folder.path, '01-projects/旧项目');
+    assert.equal(f.operations.filter(([action]) => action === 'process').length, 2);
+});
+
+test('预览期间用户修改 MOC 查询，旧计划停止且保留新查询', async () => {
+    const f = fixture();
+    f.moc.content = legacyQuery;
+    const edited = legacyQuery.replace('file.folder ==', 'file.folder !=');
+    f.ctx.app.preview = modal => { f.moc.content = edited; modal.resolveResult(true); };
+    await runContainerRename(f.ctx);
+    assert.equal(f.operations.length, 0);
+    assert.equal(f.moc.path, '01-projects/旧项目/MOC-旧项目.md');
+    assert.equal(f.moc.content, edited);
 });
 
 test('预览期间容器里的普通正文改变，未改链的卡片也使旧计划作废', async () => {

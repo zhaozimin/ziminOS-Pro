@@ -326,6 +326,7 @@ export const FIELDS = {
 export const NOTE_TYPES = {
     project: 'project',
     area: 'area',
+    resource: 'resource',
     /** 读书笔记：一本书就是一个项目，住项目目录，读完走「完成项目」归档 */
     book: 'book',
     /** 人脉档案：认识的人，有生日有脾气有人情往来 */

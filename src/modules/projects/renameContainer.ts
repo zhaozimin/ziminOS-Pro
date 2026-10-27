@@ -8,7 +8,7 @@
  * [POS]: projects 的容器身份变更编排层。从容器内任意笔记发起，第一窗预填当前名，
  *        第二窗展示整棵文件树、MOC、所有引用改写与 Eagle 影响面；确认后再次构建计划，
  *        现场与预览中受影响正文、文件对象或跨 PARA 名称占用不同就停；引用范围由公开元数据给出。
- *        本地事务包含文件夹、MOC 名、全库双链/属性/出库单，失败按磁盘事实逆序回滚，
+ *        本地事务包含文件夹、MOC 名与 Base 查询、全库双链/属性/出库单，失败按磁盘事实逆序回滚，
  *        一项恢复失败不阻断其余恢复；Eagle 是本地提交后的可选副作用，不能反向撤销已安全落盘的笔记
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -399,7 +399,7 @@ class RenamePreviewModal extends Modal {
             `${this.plan.facts.oldFolderPath} → ${this.plan.newFolderPath}`,
             ...this.plan.pathPairs.map((pair) => `${pair.oldPath} → ${pair.newPath}`),
         ]);
-        this.section('内容、属性与双链', this.plan.edits.length
+        this.section('内容、属性、双链与 MOC 查询', this.plan.edits.length
             ? this.plan.edits.map((edit) => `${edit.pathAtPreview}（${edit.replacements} 处）`)
             : ['无外部引用需要改写']);
         this.section('Eagle', [this.eagleEnabled

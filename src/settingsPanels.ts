@@ -5,13 +5,13 @@
  *          依赖 core/commands 的 GROUP_COLORS 与 CommandSpec 类型、
  *          core/constants 的 BOOK_TAG_COUNTS/灵感与文件夹计数/最近文件候选，
  *          core/device 的状态栏路径口径与 Eagle 本机参数，
- *          core/markdownStyle 的 FORMAT_RULES、core/types 的 ZiminosContext
+ *          core/markdownStyle 的 FORMAT_RULES、core/types 的 ZiminosContext，以及大日历注入入口
  * [OUTPUT]: 对外提供 PanelRenderer/PanelHost 两个契约与 SettingsPanels 一个类，
  *           后者交出 render 一张 Record<TabId, PanelRenderer> 表
  * [POS]: 设置页八张页**各自的控件**。隔壁 settings.ts 是骨架：标签栏怎么画、
  *        一页分哪四段、开关与文本框长什么样、折叠区怎么收；这里是每一页在那副骨架里
  *        塞进去的东西——开荒的那颗按钮、项目页的读书一段、编辑页的 Eagle/排版两段、
- *        边栏那四十三行、文件页的三段。
+ *        边栏那四十六行、文件页的三段。
  *        v0.17.0 从 settings.ts 分出来，判据与 v0.14.0 分出 settingsModel.ts 时同一条：
  *        变更理由不同。加一个设置项、给一页多一段，动的是这个文件；
  *        改标签栏样式、改滚动行为、改一页的四段先后，动的是那个文件。
@@ -43,6 +43,7 @@ import { EAGLE_DEFAULTS, EAGLE_PORT_RANGE, FILE_PATH_DEFAULTS, FILE_PATH_SCOPES 
 import type { FilePathScope } from './core/device';
 import { FORMAT_RULES } from './core/markdownStyle';
 import { DEFAULT_SETTINGS } from './core/types';
+import { normalizePlannerPreferences } from './core/plannerSettings';
 import type { ZiminosContext } from './core/types';
 import {
     BOOK_TAG_PREFIX_FIELD,
@@ -100,7 +101,7 @@ export class SettingsPanels {
      * 「已摆出 N / 38 条」那行字。
      *
      * 这是全文件唯一一处持有 DOM 引用的地方，理由很具体：勾选要即时更新这个数，
-     * 而重建整页会把滚动条弹回顶部——四十三行排下来，用户勾第二十行时页面一跳，
+     * 而重建整页会把滚动条弹回顶部——四十六行排下来，用户勾第二十行时页面一跳，
      * 他就得重新找回刚才那一行。持有的是一个渲染出来的节点，不是第二份状态：
      * 数字仍然现算自设置对象，每次重画也会把它换成新节点。
      */
@@ -129,7 +130,7 @@ export class SettingsPanels {
             },
             projects: (el) => this.renderProjectsPanel(el),
             inspiration: (el) => this.renderInspirationPanel(el),
-            review: FIELDS_ONLY,
+            review: (el) => this.renderPlannerPanel(el),
             contacts: FIELDS_ONLY,
             editing: (el) => this.renderEditingPanel(el),
             explorer: (el) => this.renderExplorerPanel(el),
@@ -137,6 +138,21 @@ export class SettingsPanels {
         };
     }
 
+    // ============================================================
+    // 大日历：与周期笔记共用复盘设置页
+    // ============================================================
+
+    private renderPlannerPanel(containerEl: HTMLElement): void {
+        new Setting(containerEl).setName('大日历').setDesc('连续显示七天。拖选空白创建安排，按住时间块即可移动；备注、MOC 任务与人脉检索相互联动。')
+            .addButton(button => button.setButtonText('打开大日历').onClick(() => { void this.actions.showPlanner(); }));
+        new Setting(containerEl).setName('显示时间区间').setDesc('默认全天与 100%；区间和比例也可直接在日历顶部调整。')
+            .addButton(button => button.setButtonText('设置区间').onClick(() => this.actions.showPlannerRange()));
+        new Setting(containerEl).setName('大日历卡片模板').setDesc('保留此模板的原字段与正文，再追加日历属性。')
+            .addText(text => text.setValue(this.ctx.settings.planner.cardTemplate).onChange(async value => {
+                this.ctx.settings.planner = normalizePlannerPreferences({ ...this.ctx.settings.planner, cardTemplate: value });
+                await this.ctx.saveSettings();
+            }));
+    }
     // ============================================================
     // 一、开荒页：一个按钮
     // ============================================================
@@ -415,7 +431,7 @@ export class SettingsPanels {
     }
 
     // ============================================================
-    // 六、边栏页：四十三行
+    // 六、边栏页：四十六行
     // ============================================================
 
     /**

@@ -1,0 +1,344 @@
+<!doctype html>
+<!--
+ [INPUT]: 内嵌项目、领域、人物与安排示例；依赖浏览器原生 DOM 与 dialog。
+ [OUTPUT]: v0.2 独立方案；演示长按移时、边缘缩放、原模板建卡、Markdown 任务与 Dataview。
+ [POS]: docs 的待确认交互原型；不进入插件构建，不读写真实笔记库。
+ [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ziminOS · 大日历设计方案 v0.2</title>
+<style>
+:root{--bg:#fff;--panel:#f7f7f9;--soft:#f1f1f5;--ink:#292831;--muted:#777580;--line:#e9e8ee;--accent:#7460bd;--accent-soft:#eee9fa;--green:#367c66;--green-soft:#eaf4ef;--blue:#426b9b;--blue-soft:#eaf1fa;--orange:#9d6d32;--orange-soft:#fbf2e6;--hour:66px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);font-size:14px}
+*{box-sizing:border-box}body{margin:0;background:var(--panel)}button,input,select,textarea{font:inherit;color:inherit}button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button{border:1px solid var(--line);background:var(--bg);border-radius:7px;min-height:33px;padding:6px 11px}button:hover{background:var(--soft)}button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}button:disabled{opacity:.45;cursor:default}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}input,select,textarea{border:1px solid #dcdbe3;background:var(--bg);border-radius:7px;padding:9px 10px;min-width:0;width:100%}input:focus,select:focus,textarea:focus{outline:2px solid #b4a5de;outline-offset:1px}textarea{resize:vertical;line-height:1.6}input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;margin:0;flex:none;cursor:pointer}button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button.primary:hover{background:#6351a4}.quiet{border-color:transparent;background:transparent}.icon{width:32px;padding:0;font-size:18px}.muted{color:var(--muted)}.small{font-size:12px}.row{display:flex;align-items:center;gap:9px}.wrap{flex-wrap:wrap}.spread{justify-content:space-between}.grow{flex:1;min-width:0}.badge{font-size:11px;padding:4px 7px;background:var(--soft);border-radius:5px;white-space:nowrap}.pending{background:var(--orange-soft);color:var(--orange)}.eyebrow{font-size:11px;letter-spacing:1.3px;color:var(--muted);margin-bottom:9px}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}.dot.green{background:var(--green)}.dot.blue{background:var(--blue)}.rule{height:1px;background:var(--line);margin:20px 0}h1,h2,h3,p{margin:0}h1{font-size:25px;font-weight:600;letter-spacing:-.7px}h2{font-size:18px;font-weight:600}h3{font-size:14px;font-weight:600}p{line-height:1.75}.app-top{height:43px;background:var(--panel);border-bottom:1px solid var(--line);padding:0 20px;display:flex;align-items:center;justify-content:space-between;font-size:12px}.brand-mark{width:23px;height:23px;border-radius:7px;background:var(--ink);color:white;text-align:center;line-height:23px;font-weight:600;margin-right:5px}.desktop{display:flex;height:calc(100vh - 43px);min-height:0;overflow:hidden}.rail{width:47px;background:#efeff3;border-right:1px solid var(--line);padding:14px 6px;display:flex;flex-direction:column;align-items:center;gap:14px;flex-shrink:0}.rail button{color:var(--muted);font-size:18px}.rail button.active{color:var(--accent);background:#e4def1}.rail-end{margin-top:auto}.sidebar{overflow:auto;width:210px;background:var(--panel);border-right:1px solid var(--line);padding:24px 17px;flex-shrink:0}.vault-title{font-size:16px;font-weight:600;margin-bottom:4px}.side-nav{display:grid;gap:5px;margin:24px -7px}.side-nav button{border:0;background:transparent;display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;min-height:38px}.side-nav button.active{background:var(--accent-soft);color:var(--accent)}.nav-symbol{width:19px;text-align:center;font-size:16px}.mini-calendar{margin:27px 0}.mini-grid{display:grid;grid-template-columns:repeat(7,1fr);margin-top:14px;gap:3px}.mini-grid span{text-align:center;font-size:11px;height:23px;line-height:23px}.mini-grid .weekday{color:var(--muted);height:19px}.mini-grid .in-week{background:var(--accent-soft);border-radius:4px}.mini-grid .today{background:var(--accent);color:white}.side-section{margin-top:22px}.side-caption{color:var(--muted);font-size:11px;margin-bottom:11px}.side-project{display:flex;gap:9px;align-items:center;font-size:12px;padding:8px 1px}.side-foot{margin-top:28px;color:var(--muted);font-size:11px;line-height:1.7}.workspace{background:var(--bg);flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}#calendar-page{display:flex;flex-direction:column;flex:1;min-height:0}.work-tab{flex-shrink:0;height:38px;background:var(--panel);border-bottom:1px solid var(--line);display:flex}.work-tab>span{background:var(--bg);padding:11px 20px;border-right:1px solid var(--line);font-size:12px;border-top:2px solid var(--accent)}.page-top{flex-shrink:0;padding:27px 28px 17px}.page-intro{color:var(--muted);margin-top:8px;font-size:12px}.toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:23px;flex-wrap:wrap}.week-label{font-size:16px;font-weight:500;margin-left:7px}.calendar-layout{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 276px;border-top:1px solid var(--line)}.calendar-panel{min-width:0;min-height:0;display:flex;flex-direction:column}.calendar-header{flex-shrink:0;display:grid;grid-template-columns:53px repeat(7,minmax(0,1fr));padding-right:12px;border-bottom:1px solid var(--line)}.time-zone{font-size:10px;color:var(--muted);align-self:end;padding:0 0 12px 12px}.day-head{text-align:center;padding:12px 0 10px;font-size:11px;color:var(--muted)}.day-head button{border:0;background:transparent;padding:0;min-height:0;font-size:20px;display:block;margin:6px auto 0;width:32px;height:32px;line-height:32px;border-radius:50%;color:var(--ink)}.day-head.today button{color:white;background:var(--accent)}.day-head.today{color:var(--accent)}.calendar-scroll{flex:1;height:0;min-height:0;overflow:auto;scrollbar-gutter:stable}.time-grid{display:flex;position:relative;min-height:400px}.time-axis{width:53px;flex:none;position:relative;background:var(--bg)}.time-label{position:absolute;right:9px;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;transform:translateY(-50%)}.time-label:first-child{transform:none}.time-label:last-child{transform:translateY(-100%)}.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));flex:1;min-width:0}.day-column{position:relative;border-left:1px solid var(--line);background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hour)/2 - 1px),#f2f1f6 calc(var(--hour)/2 - 1px),#f2f1f6 calc(var(--hour)/2),transparent calc(var(--hour)/2),transparent calc(var(--hour) - 1px),var(--line) calc(var(--hour) - 1px),var(--line) var(--hour));user-select:none;cursor:crosshair;touch-action:pan-y}.day-column.today{background-color:#fcfbff}.day-column.weekend{background-color:#fafafb}.event{position:absolute;display:flex;flex-direction:column;gap:5px;border-radius:5px;border:0;border-left:3px solid var(--accent);background:var(--accent-soft);padding:7px 6px;min-height:25px;overflow:hidden;cursor:pointer;text-align:left;color:#504475;line-height:1.4}.event:hover{filter:brightness(.98);background:#e8e0f6}.event.area{background:var(--green-soft);border-left-color:var(--green);color:#366452}.event.new{background:var(--blue-soft);border-left-color:var(--blue);color:#3a5c82}.event.selected{box-shadow:0 0 0 2px var(--accent) inset}.event.done{opacity:.65}.event.done .event-title{text-decoration:line-through}.event-time{font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}.event-title{font-size:12px;font-weight:500;overflow-wrap:anywhere}.event-project,.event-note{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.event-status{position:absolute;right:5px;top:5px;background:rgba(255,255,255,.75);border-radius:3px;line-height:17px;width:17px;min-height:17px;height:17px;padding:0;font-size:11px;color:var(--accent)}.event-time{padding-right:15px}.selection{position:absolute;left:3px;right:3px;background:#e4dcf5cc;border:1px dashed var(--accent);border-radius:5px;padding:7px;font-size:11px;color:var(--accent);pointer-events:none;z-index:5}.calendar-bottom{flex-shrink:0;padding:11px 18px;display:flex;gap:15px;flex-wrap:wrap;font-size:11px;color:var(--muted);border-top:1px solid var(--line)}.detail{border-left:1px solid var(--line);padding:23px 21px;background:#fdfcfe;overflow:auto;height:100%;min-height:0}.detail h2{font-size:18px;line-height:1.6;margin:18px 0 12px;overflow-wrap:anywhere}.detail-date{color:var(--muted);font-size:12px;margin:12px 0 7px}.detail-time{font-size:24px;letter-spacing:-.6px;font-variant-numeric:tabular-nums}.detail-duration{color:var(--muted);font-size:11px;margin-top:5px}.meta-label{color:var(--muted);font-size:11px;margin:19px 0 8px}.meta-value{font-size:13px;line-height:1.6}.note-block{font-size:12px;line-height:1.8;background:var(--panel);padding:11px;border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere}.check-label{display:flex;align-items:center;gap:9px;font-size:13px;cursor:pointer}.detail-actions{display:grid;gap:8px;margin-top:20px}.detail-actions button{text-align:left;font-size:12px}.hint{font-size:11px;line-height:1.7;color:var(--muted);margin-top:12px}.empty-note{padding:65px 18px;color:var(--muted);text-align:center;line-height:1.8;font-size:13px}.hidden-alert{margin:0 28px 12px;padding:8px 11px;background:var(--orange-soft);color:var(--orange);border-radius:6px;font-size:12px}.hidden-alert button{font-size:11px;padding:3px 7px;min-height:23px;margin-left:10px;background:transparent;border-color:#d8bc99}.document-page{width:100%;flex:1;overflow:auto;padding:30px 48px 65px;max-width:980px;margin:0 auto}.document-page h1{font-size:28px;line-height:1.5;margin-bottom:13px}.document-page h2{margin:30px 0 15px}.doc-breadcrumb{color:var(--muted);font-size:12px;margin-bottom:28px;overflow-wrap:anywhere}.properties{padding:10px 0 17px;border-bottom:1px solid var(--line);margin-bottom:24px;display:grid;gap:12px}.property{display:grid;grid-template-columns:125px 1fr;gap:15px;font-size:13px;line-height:1.6}.property-name{color:var(--muted)}.property>div{overflow-wrap:anywhere}.doc-lead{font-size:14px;color:var(--muted);line-height:1.8;margin-bottom:30px}.doc-callout{border-left:3px solid var(--accent);background:#f8f6fc;padding:13px 16px;font-size:13px;line-height:1.8;margin:22px 0}.schedule-day{font-size:12px;color:var(--muted);margin:21px 0 11px}.schedule-line{display:flex;align-items:flex-start;gap:11px;padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}.schedule-line input{margin-top:3px}.schedule-time{font-variant-numeric:tabular-nums;white-space:nowrap}.schedule-line .grow{line-height:1.65}.schedule-note{color:var(--muted);font-size:12px;margin-top:4px}.doc-table{width:100%;border-collapse:collapse;font-size:13px;margin:15px 0}.doc-table th,.doc-table td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:12px 9px;line-height:1.7}.doc-table th{font-weight:500;color:var(--muted);font-size:12px}.doc-table th:first-child,.doc-table td:first-child{padding-left:0}.doc-table td code{font-size:11px}.spec-flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:18px 0;font-size:13px}.spec-flow b{font-weight:500;background:var(--accent-soft);padding:9px 11px;border-radius:6px}.spec-list{padding-left:21px;font-size:13px;line-height:1.9}.spec-list li{margin:9px 0}.assumption{background:var(--orange-soft);padding:17px 19px;border-radius:8px;line-height:1.9;font-size:13px;margin-top:20px}.assumption ol{padding-left:20px;margin-bottom:0}.doc-empty{color:var(--muted);font-size:13px;padding:25px 0}.select-doc{max-width:320px;margin:16px 0 25px}.back-link{display:inline-block;margin-top:24px;font-size:12px}.preview-banner{flex-shrink:0;color:var(--muted);font-size:11px;padding:10px 28px;border-top:1px solid var(--line);background:var(--panel)}
+dialog{border:1px solid var(--line);border-radius:13px;padding:0;background:var(--bg);box-shadow:0 28px 100px #23203130;width:min(570px,calc(100vw - 24px));max-height:calc(100vh - 36px);overflow:auto}dialog::backdrop{background:#25233355;backdrop-filter:blur(2px)}.modal-head{padding:22px 25px 17px;border-bottom:1px solid var(--line)}.modal-head h2{font-size:19px}.modal-head p{font-size:12px;color:var(--muted);margin-top:8px}.modal-body{padding:20px 25px;display:grid;gap:17px}.field{display:grid;gap:8px;font-size:12px}.field-title{font-weight:500}.field-title span{font-weight:400;color:var(--muted);margin-left:5px}.time-fields{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:10px}.modes{display:grid;grid-template-columns:repeat(3,1fr);background:var(--panel);border:1px solid var(--line);padding:4px;border-radius:8px;gap:4px}.modes button{border:0;background:transparent;font-size:12px;padding:8px 2px}.modes button.active{background:var(--bg);color:var(--accent);box-shadow:0 1px 4px #25233414}.target-list{max-height:126px;overflow:auto;border:1px solid var(--line);border-radius:7px;margin-top:7px}.target-option{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;border:0;border-radius:0;font-size:12px;min-height:37px}.target-option.selected{background:var(--accent-soft);color:var(--accent)}.target-option .small{font-size:10px}.target-search{padding:8px 10px;font-size:12px}.people-fields{display:grid;grid-template-columns:1fr 1.3fr;gap:10px}.save-result{background:var(--panel);border-radius:7px;padding:11px 13px;font-size:11px;color:var(--muted);line-height:1.7}.save-result strong{color:var(--ink);font-weight:500}.modal-foot{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;padding:15px 25px;border-top:1px solid var(--line);background:var(--bg);gap:12px}.modal-foot .hint{margin:0;max-width:250px}.error{font-size:12px;color:#b34b4b;line-height:1.6}.conflict{font-size:11px;color:var(--orange)}[hidden]{display:none!important}.range-form{display:grid;grid-template-columns:1fr 1fr;gap:15px}.presets{display:flex;gap:7px;margin-bottom:5px}.presets button{font-size:12px}.toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 30px);background:var(--ink);color:#fff;padding:12px 17px;border-radius:8px;font-size:12px;box-shadow:0 8px 30px #0002;z-index:30;display:flex;gap:14px;align-items:center}.toast button{background:transparent;color:#e5d9ff;border-color:#ffffff40;font-size:11px;white-space:nowrap}.toast[hidden]{display:none}.jump-highlight{animation:jump 1.2s ease-out}@keyframes jump{0%{box-shadow:0 0 0 4px #a58cd5}100%{box-shadow:0 0 0 0 transparent}}
+@media(min-width:1600px){.sidebar{width:230px}.calendar-layout{grid-template-columns:minmax(0,1fr) 310px}.detail{padding:26px}.page-top{padding-left:34px;padding-right:34px}.event{padding:9px}.event-title{font-size:13px}}
+@media(max-width:1250px){.sidebar{width:176px;padding:23px 12px}.calendar-layout{grid-template-columns:minmax(0,1fr) 240px}.detail{padding:20px 16px}.page-top{flex-shrink:0;padding:24px 21px 16px}.event-project,.event-note{display:none}.event-title{font-size:11px}.calendar-header{padding-right:12px}}
+@media(max-width:1000px){.sidebar{display:none}.calendar-layout{grid-template-columns:minmax(0,1fr) 240px}.document-page{width:100%;flex:1;overflow:auto;padding:28px}.app-top{padding:0 12px}.event-note{display:block}}
+@media(max-width:720px){.desktop{height:auto;min-height:calc(100vh - 43px);overflow:visible}.workspace{overflow:visible}#calendar-page{display:block}.rail{display:none}.app-top .optional{display:none}.page-top{flex-shrink:0;padding:23px 16px 16px}h1{font-size:23px}.toolbar{gap:12px}.week-label{font-size:14px;margin-left:0}.calendar-layout{display:block}.calendar-panel{overflow-x:auto}.calendar-header,.calendar-scroll,.calendar-bottom{min-width:650px}.calendar-scroll{height:520px;flex:none;max-height:none}.detail{height:auto;max-height:none;min-height:0;border-left:0;border-top:1px solid var(--line);padding:22px}.detail-actions{grid-template-columns:1fr 1fr}.detail h2{margin-top:12px}.detail .rule{margin:16px 0}.document-page{width:100%;flex:1;overflow:auto;padding:25px 19px 45px}.document-page h1{font-size:24px}.work-tab{height:auto;flex-wrap:wrap;gap:0}.work-tab>span{padding:10px 13px;font-size:11px}.work-tab>button{border-radius:0;border:0;font-size:11px;background:transparent;padding:9px}.preview-banner{padding:11px 16px;line-height:1.7}.modal-body{padding:17px}.modal-head{padding:19px 17px 15px}.modal-foot{padding:13px 17px}.modal-foot .hint{max-width:135px;font-size:10px}.time-fields{grid-template-columns:1fr 1fr}.time-fields .date-field{grid-column:span 2}.property{grid-template-columns:90px 1fr;gap:10px}.schedule-line{flex-wrap:wrap}.schedule-line .grow{min-width:170px}.doc-table{font-size:12px}.hidden-alert{margin:0 16px 12px}.side-foot{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
+
+/* v0.2：手势与原生文档预览 */
+.event{touch-action:none;padding-top:12px;padding-bottom:12px;cursor:grab}.event.dragging{z-index:20;box-shadow:0 7px 24px #44346a44;cursor:grabbing;outline:2px solid var(--accent)}
+.resize-handle{position:absolute;left:15%;width:70%;height:11px;min-height:11px;padding:0;border:0;border-radius:4px;background:transparent;cursor:ns-resize;opacity:0;z-index:3}.resize-handle::after{content:'';display:block;width:24px;height:3px;border-radius:3px;background:currentColor;margin:auto;opacity:.5}.resize-handle.start{top:0}.resize-handle.end{bottom:0}.event:hover .resize-handle,.event.selected .resize-handle,.resize-handle:focus-visible{opacity:1}.resize-handle:hover{background:#ffffff66}.event-status{z-index:4;top:12px}.event-time{overflow:hidden;text-overflow:ellipsis}
+.gesture-feedback{position:fixed;bottom:50px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:11px 17px;border-radius:8px;box-shadow:0 8px 30px #0002;z-index:25;font-size:12px;pointer-events:none;white-space:nowrap}
+.view-switch{display:flex;gap:4px;padding:3px;background:var(--panel);border-radius:7px;width:fit-content;margin:15px 0 22px}.view-switch button{font-size:12px;border:0;background:transparent;min-height:29px;padding:5px 12px}.view-switch button.active{background:var(--bg);color:var(--accent);box-shadow:0 1px 4px #25233414}
+.template-section{margin:24px 0 12px;display:flex;align-items:center;justify-content:space-between;font-size:12px;gap:8px;color:var(--muted)}.template-section .badge{font-size:10px}.properties.original{margin-bottom:10px}.properties .empty-value{color:#aaa7b2}.properties.calendar-properties{border-bottom:0}
+.source-preview{margin:15px 0 24px;padding:17px 19px;background:var(--panel);border-radius:8px;font:12px/1.9 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2;color:var(--ink)}
+.markdown-tasks{list-style:none;padding:0;margin:18px 0 26px}.markdown-tasks li{display:flex;align-items:flex-start;gap:9px;margin:13px 0;line-height:1.9;font-size:14px}.markdown-tasks input{margin-top:5px}.markdown-task-text{min-width:0;overflow-wrap:anywhere}.markdown-tasks .task-complete .markdown-task-text{color:var(--muted)}.markdown-tasks .task-complete .task-card{text-decoration:line-through}.task-date{font-variant-numeric:tabular-nums;white-space:nowrap}.task-person{font-size:12px;color:var(--muted)}
+.dataview-source{font-size:13px;margin:23px 0 7px}.dataview-result{margin:19px 0}.dataview-result .markdown-tasks{margin-top:7px}.dataview-note{font-size:11px;color:var(--muted);line-height:1.8;margin:13px 0}.document-page .properties{gap:9px}.change-note{background:var(--green-soft);color:var(--green);padding:12px 15px;border-radius:7px;font-size:12px;line-height:1.8;margin:20px 0}
+@media(pointer:coarse){.resize-handle{height:18px;min-height:18px;opacity:1}.event{padding-top:19px;padding-bottom:19px}}@media(max-width:720px){.gesture-feedback{white-space:normal;width:calc(100vw - 28px);text-align:center}.markdown-tasks li{font-size:13px}.source-preview{padding:13px;font-size:11px}}
+</style>
+</head>
+<body>
+<header class="app-top"><div class="row"><span class="brand-mark">z</span><strong>ziminOS</strong><span class="muted">/</span><span>以人为本</span><span class="muted optional">/ 时间安排</span></div><div class="row"><span class="muted optional">交互设计方案 · 示例数据</span><span class="badge pending">v0.2 待确认</span></div></header>
+<div class="desktop">
+ <aside class="rail" aria-label="功能区"><button class="icon quiet" data-route="moc" aria-label="项目 MOC">▱</button><button class="icon quiet active" data-route="calendar" aria-label="大日历">▦</button><button class="icon quiet" data-route="note" aria-label="卡片笔记">▤</button><button class="icon quiet" data-route="person" aria-label="人物档案">♧</button><button class="icon quiet rail-end" data-route="spec" aria-label="方案说明">ⓘ</button></aside>
+ <aside class="sidebar">
+  <div class="vault-title">以人为本 <span class="muted small">⌄</span></div><div class="muted small">把时间用在在意的事情上</div>
+  <nav class="side-nav" aria-label="设计方案页面"><button data-route="calendar" class="active"><span class="nav-symbol">▦</span>周安排</button><button data-route="moc"><span class="nav-symbol">▱</span>项目 MOC</button><button data-route="note"><span class="nav-symbol">▤</span>卡片笔记</button><button data-route="person"><span class="nav-symbol">♧</span>人脉档案</button><button data-route="spec"><span class="nav-symbol">ⓘ</span>方案说明</button></nav>
+  <div class="mini-calendar"><div class="row spread"><strong class="small">2026 年 10 月</strong><span class="muted small">周一开始</span></div><div class="mini-grid" id="mini-grid"></div></div>
+  <section class="side-section"><div class="side-caption">进行中的项目</div><div id="side-projects"></div></section>
+  <section class="side-section"><div class="side-caption">长期关注的领域</div><div class="side-project"><span class="dot green"></span>产品设计</div><div class="side-project"><span class="dot green"></span>个人知识管理</div><div class="side-project"><span class="dot green"></span>身体与健康</div></section>
+  <div class="side-foot">一次安排，一张卡片。<br>日历、项目与人脉沿着它连接。</div>
+ </aside>
+ <main class="workspace">
+  <div class="work-tab"><span id="tab-label">▦　大日历</span><button class="quiet small" data-route="calendar">周安排</button><button class="quiet small" data-route="moc">项目 MOC</button><button class="quiet small" data-route="note">卡片笔记</button><button class="quiet small" data-route="person">人脉档案</button><button class="quiet small" data-route="spec">方案说明</button></div>
+  <div id="calendar-page">
+   <section class="page-top"><div class="row spread wrap"><div><div class="eyebrow">YOUR WEEK, WITH INTENTION</div><h1>给重要的事情，留一段时间</h1></div><button class="primary" id="add-event">＋ 新建安排</button></div><p class="page-intro">空白处拖选建安排；长按已有区间后拖动，调整时间与日期；拖动上下边缘，延长或缩短安排。</p>
+    <div class="toolbar"><div class="row wrap"><button id="previous-week" class="icon" aria-label="上一周">‹</button><button id="next-week" class="icon" aria-label="下一周">›</button><button id="this-week">本周</button><span class="week-label" id="week-label"></span><span class="muted small" id="week-number"></span></div><div class="row"><span class="badge">周视图</span><button id="range-button">◷　08:00 – 23:00</button></div></div>
+   </section>
+   <div id="hidden-alert" class="hidden-alert" hidden></div>
+   <div class="calendar-layout"><section class="calendar-panel" aria-label="一周时间安排"><div class="calendar-header" id="calendar-header"></div><div class="calendar-scroll" id="calendar-scroll"><div class="time-grid" id="time-grid"><div class="time-axis" id="time-axis"></div><div class="days" id="days"></div></div></div><div class="calendar-bottom"><span class="row"><i class="dot"></i>执行任务</span><span class="row"><i class="dot green"></i>领域深挖</span><span class="row"><i class="dot blue"></i>新项目</span><span class="grow"></span><span id="week-summary"></span></div></section><aside class="detail" id="detail" aria-label="安排详情"></aside></div>
+  </div>
+  <div id="document-page" class="document-page" hidden></div>
+  <div id="gesture-feedback" class="gesture-feedback" role="status" aria-live="polite" hidden></div><footer class="preview-banner">v0.2 设计预览 · 所有操作仅模拟在当前页面中，不会写入真实笔记库。可实测长按拖动、边缘缩放、保存与勾选；MOC 可查看 Markdown，人物档案可查看 Dataview 查询。</footer>
+ </main>
+</div>
+<dialog id="event-dialog" aria-labelledby="event-dialog-title">
+ <form id="event-form">
+  <header class="modal-head"><div class="row spread"><h2 id="event-dialog-title">安排这段时间</h2><button type="button" class="icon quiet" id="close-event" aria-label="关闭">×</button></div><p>选一件要推进的事，保存为它的一张卡片笔记。</p></header>
+  <div class="modal-body">
+   <div class="time-fields"><label class="field date-field"><span class="field-title">日期</span><input type="date" id="event-date" required></label><label class="field"><span class="field-title">开始时间</span><input type="time" id="event-start" step="900" required></label><label class="field"><span class="field-title">结束时间</span><input type="text" id="event-end" inputmode="numeric" pattern="([01][0-9]|2[0-3]):[0-5][0-9]|24:00" placeholder="HH:MM" aria-label="结束时间，允许 24:00" required></label></div>
+   <div class="field"><span class="field-title">这段时间用来做什么？</span><div class="modes" role="group" aria-label="安排类型"><button type="button" data-kind="task" class="active">执行任务</button><button type="button" data-kind="area">领域深挖</button><button type="button" data-kind="new">新建项目</button></div></div>
+   <div id="existing-target"><label class="field" for="target-search"><span class="field-title" id="target-label">选择进行中的项目</span><input class="target-search" type="search" id="target-search" placeholder="查找项目…" autocomplete="off"></label><div class="target-list" id="target-list" aria-label="可关联的项目或领域"></div></div>
+   <div id="new-target" hidden><label class="field"><span class="field-title">新项目名称</span><input id="new-project-name" placeholder="例如：建立我的每周复盘习惯" maxlength="80"></label><label class="field" style="margin-top:12px"><span class="field-title">项目简介<span>可选，留空时沿用本次备注</span></span><input id="new-project-description" placeholder="这个项目想做成什么？"></label></div>
+   <label class="field" id="task-field"><span class="field-title">执行哪个任务？<span>可选</span></span><select id="task-select"></select></label>
+   <label class="field"><span class="field-title">安排名称<span>也是生成的卡片笔记名</span></span><input id="event-title" placeholder="例如：大日历交互设计" maxlength="100" required></label>
+   <label class="field"><span class="field-title">备注<span>保存为卡片笔记的简介 description</span></span><textarea id="event-notes" rows="3" placeholder="这段时间具体要做什么？有什么需要记住的？"></textarea></label>
+   <div class="people-fields"><label class="field"><span class="field-title">与谁有关？</span><select id="event-relation"><option value="self">自己做</option><option value="with">与他人一起做</option><option value="client">客户委托</option></select></label><label class="field"><span class="field-title">关联人物<span>人脉 / 客户</span></span><select id="event-person" disabled></select></label></div>
+   <div class="save-result" id="save-result"></div><p class="conflict" id="conflict-warning" hidden></p><p class="error" id="event-error" role="alert" hidden></p>
+  </div>
+  <footer class="modal-foot"><span class="hint">保存后可在日历中手动勾选完成。</span><div class="row"><button type="button" id="cancel-event">取消</button><button type="submit" class="primary" id="save-event">保存安排</button></div></footer>
+ </form>
+</dialog>
+<dialog id="range-dialog" aria-labelledby="range-title"><form id="range-form"><header class="modal-head"><div class="row spread"><h2 id="range-title">日历显示时间</h2><button type="button" class="icon quiet" id="close-range" aria-label="关闭">×</button></div><p>只展示你想看的时段。已有安排会完整保留。</p></header><div class="modal-body"><div class="presets"><button type="button" data-range="8,23">08:00 – 23:00</button><button type="button" data-range="9,18">09:00 – 18:00</button><button type="button" data-range="0,24">全天</button></div><div class="range-form"><label class="field"><span>开始显示</span><select id="range-start"></select></label><label class="field"><span>结束显示</span><select id="range-end"></select></label></div><p class="hint">此方案按整点设置可见区间；创建安排按 15 分钟吸附，也可在弹窗输入精确时间。</p><p id="range-error" class="error" role="alert" hidden></p></div><footer class="modal-foot"><span></span><button class="primary" type="submit">应用显示区间</button></footer></form></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>
+/* ============================================================
+ * 示例状态：模拟卡片属性与 MOC 原生任务行；完成状态只对应 MOC 的任务勾选。
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ * ============================================================ */
+const $=id=>document.getElementById(id);
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TODAY='2026-10-08',HOUR_HEIGHT=66;
+const projects=[{id:'p1',name:'ziminOS 产品迭代',description:'让个人知识管理系统更顺手。',kind:'project',tasks:['完成大日历交互设计','整理用户反馈','核对项目联动流程']},{id:'p2',name:'Obsidian 入门课程',description:'让初学者独立搭好自己的工作台。',kind:'project',tasks:['写第三节课逐字稿','准备课程演示素材']},{id:'p3',name:'创作者访谈计划',description:'和创作者聊聊他们的工作方法。',kind:'project',tasks:['整理第一期访谈提纲','确认下周访谈时间']},{id:'a1',name:'产品设计',description:'持续打磨产品判断与交互设计。',kind:'area',tasks:[]},{id:'a2',name:'个人知识管理',description:'探索更可持续的知识积累方法。',kind:'area',tasks:[]},{id:'a3',name:'身体与健康',description:'照顾身体，保持长期行动的能力。',kind:'area',tasks:[]}];
+const people=[{id:'u1',name:'王明',description:'一起打磨产品体验的设计伙伴。',type:'人脉'},{id:'u2',name:'李然',description:'课程共创伙伴，关注初学者体验。',type:'人脉'},{id:'u3',name:'陈老师',description:'知识管理工作坊的委托客户。',type:'客户'}];
+let events=[
+ {id:'s1',date:'2026-10-05',start:540,end:660,title:'整理本轮用户反馈',kind:'task',target:'p1',task:'整理用户反馈',notes:'把高频问题整理成下一轮迭代清单，优先看新用户的使用阻碍。',person:'',relation:'self',done:true},
+ {id:'s2',date:'2026-10-05',start:840,end:960,title:'课程第三节逐字稿',kind:'task',target:'p2',task:'写第三节课逐字稿',notes:'围绕“项目是怎样长出来的”写一个完整示例。',person:'u2',relation:'with',done:false},
+ {id:'s3',date:'2026-10-06',start:570,end:690,title:'探索知识的复用方式',kind:'area',target:'a2',task:'',notes:'比较卡片之间的连接与项目成果的提炼，记下可用于课程的例子。',person:'',relation:'self',done:true},
+ {id:'s4',date:'2026-10-07',start:600,end:690,title:'第一期访谈提纲',kind:'task',target:'p3',task:'整理第一期访谈提纲',notes:'重点聊选题如何积累，以及什么时候决定发布。',person:'',relation:'self',done:false},
+ {id:'s5',date:'2026-10-08',start:540,end:660,title:'大日历交互设计',kind:'task',target:'p1',task:'完成大日历交互设计',notes:'和王明一起确认周视图、拖选建卡和项目联动。\n先走通一条完整流程，再检查用户会在哪一步犹豫。',person:'u1',relation:'with',done:false},
+ {id:'s6',date:'2026-10-08',start:840,end:930,title:'课程演示素材准备',kind:'task',target:'p2',task:'准备课程演示素材',notes:'准备三张真实项目卡片，让演示能从日历走到笔记。',person:'u2',relation:'with',done:false},
+ {id:'s7',date:'2026-10-09',start:570,end:690,title:'梳理工作坊目标',kind:'new',target:'p4',task:'',notes:'与陈老师对齐参加者的基础、当天目标与交付物。',person:'u3',relation:'client',done:false},
+ {id:'s8',date:'2026-10-10',start:900,end:1020,title:'读一篇交互设计案例',kind:'area',target:'a1',task:'',notes:'从案例里找出值得借鉴的选择，记录它成立的条件。',person:'',relation:'self',done:false},
+ {id:'s9',date:'2026-10-11',start:1200,end:1260,title:'下一周的产品安排',kind:'task',target:'p1',task:'',notes:'看这一周实际推进了什么，给下一周最重要的事留出时间。',person:'',relation:'self',done:false}
+];
+projects.push({id:'p4',name:'知识管理工作坊',description:'为陈老师的团队设计一次实用工作坊。',kind:'project',tasks:[]});
+let weekStart='2026-10-05',rangeStart=8,rangeEnd=23,selectedId='s5',route='calendar',viewTarget='p1',viewPerson='u1',formKind='task',formTarget='p1',editingId=null,drag=null,toastTimer,eventGesture=null,suppressEventClick=0,documentMode='read',personIncludeDone=false,personQueryVisible=false;
+const targetOf=e=>projects.find(p=>p.id===e.target);
+const personOf=e=>people.find(p=>p.id===e.person);
+const selectedEvent=()=>events.find(e=>e.id===selectedId)||events[0];
+const pad=n=>String(n).padStart(2,'0');
+const clock=m=>`${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const minutes=text=>{const a=text.split(':').map(Number);return a[0]*60+a[1]};
+const dateOf=s=>new Date(`${s}T12:00:00`);
+const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+function addDays(s,n){const d=dateOf(s);d.setDate(d.getDate()+n);return iso(d)}
+function monday(s){const d=dateOf(s);return addDays(s,-((d.getDay()+6)%7))}
+function dateLabel(s){const d=dateOf(s);return `${d.getFullYear()} 年 ${d.getMonth()+1} 月 ${d.getDate()} 日 · 周${'日一二三四五六'[d.getDay()]}`}
+function duration(e){const m=e.end-e.start;return `${m%60?`${Math.floor(m/60)?Math.floor(m/60)+' 小时 ':''}${m%60} 分钟`:m/60+' 小时'}`}
+function kindLabel(e){return {task:'执行任务',area:'领域深挖',new:'新项目'}[e.kind]}
+function pathOf(p){return `${p.kind==='area'?'02-areas':'01-projects'}/${p.name}`}
+function cardPath(e){return `${pathOf(targetOf(e))}/${e.title}.md`}
+function calendarUri(e){return `obsidian://ziminos-calendar?date=${e.date}&event=${encodeURIComponent(e.id)}`}
+function showToast(message,noteId){clearTimeout(toastTimer);$('toast').innerHTML=`<span>${esc(message)}</span>${noteId?`<button data-open-note="${esc(noteId)}">查看卡片 →</button>`:''}`;$('toast').hidden=false;toastTimer=setTimeout(()=>{$('toast').hidden=true},5000)}
+function syncNav(){document.querySelectorAll('[data-route]').forEach(b=>b.classList.toggle('active',b.dataset.route===route));$('tab-label').textContent={calendar:'▦　大日历',moc:'▱　项目 MOC',note:'▤　卡片笔记',person:'♧　人物档案',spec:'ⓘ　方案说明'}[route]}
+function navigate(next){route=next;$('calendar-page').hidden=route!=='calendar';$('document-page').hidden=route==='calendar';syncNav();if(route==='calendar')renderCalendar();else renderDocument()}
+function renderSidebar(){ $('side-projects').innerHTML=projects.filter(p=>p.kind==='project').map(p=>`<div class="side-project"><span class="dot${p.id==='p4'?' blue':''}"></span>${esc(p.name)}</div>`).join('');$('mini-grid').innerHTML='一二三四五六日'.split('').map(d=>`<span class="weekday">${d}</span>`).join('')+Array.from({length:3},()=>'<span></span>').join('')+Array.from({length:31},(_,i)=>`<span class="${i>=4&&i<=10?'in-week ':''}${i===7?'today':''}">${i+1}</span>`).join('')}
+/* ============================================================
+ * 周视图：区间裁剪只改变显示，不改变卡片里的时间。
+ * ============================================================ */
+function eventLanes(items){let active=[],group=[],max=0;const result=new Map();function flush(){group.forEach(e=>result.set(e.id,{lane:e._lane,count:max}));group=[];max=0}for(const source of [...items].sort((a,b)=>a.start-b.start||a.end-b.end)){const e={...source};active=active.filter(a=>a.end>e.start);if(!active.length&&group.length)flush();const used=new Set(active.map(a=>a._lane));let lane=0;while(used.has(lane))lane++;e._lane=lane;active.push(e);group.push(e);max=Math.max(max,lane+1)}flush();return result}
+function renderCalendar(){
+ const days=Array.from({length:7},(_,i)=>addDays(weekStart,i)),first=dateOf(weekStart),last=dateOf(days[6]);
+ $('week-label').textContent=`${first.getFullYear()} 年 ${first.getMonth()+1} 月 ${first.getDate()} 日 — ${first.getMonth()===last.getMonth()?'':last.getMonth()+1+' 月 '}${last.getDate()} 日`;
+ const thursday=dateOf(addDays(weekStart,3)),jan4=new Date(thursday.getFullYear(),0,4,12);$('week-number').textContent=`W${pad(1+Math.round((dateOf(weekStart)-dateOf(monday(iso(jan4))))/604800000))}`;
+ $('range-button').textContent=`◷　${clock(rangeStart*60)} – ${clock(rangeEnd*60)}`;
+ $('calendar-header').innerHTML='<span class="time-zone">本地时间</span>'+days.map((d,i)=>`<div class="day-head${d===TODAY?' today':''}">周${'一二三四五六日'[i]}<button data-day="${d}" aria-label="查看 ${d} 的安排">${dateOf(d).getDate()}</button></div>`).join('');
+ const height=(rangeEnd-rangeStart)*HOUR_HEIGHT;$('time-grid').style.height=`${height}px`;
+ $('time-axis').innerHTML=Array.from({length:rangeEnd-rangeStart+1},(_,i)=>`<span class="time-label" style="top:${i*HOUR_HEIGHT}px">${clock((rangeStart+i)*60)}</span>`).join('');
+ $('days').innerHTML=days.map((day,index)=>{const items=events.filter(e=>e.date===day&&e.end>rangeStart*60&&e.start<rangeEnd*60),lanes=eventLanes(items);return `<div class="day-column${day===TODAY?' today':''}${index>4?' weekend':''}" data-date="${day}" aria-label="${day}，拖动选择时间">${items.map(e=>{const layout=lanes.get(e.id),top=(Math.max(e.start,rangeStart*60)-rangeStart*60)/60*HOUR_HEIGHT,h=(Math.min(e.end,rangeEnd*60)-Math.max(e.start,rangeStart*60))/60*HOUR_HEIGHT;return `<div role="button" tabindex="0" class="event ${e.kind}${e.done?' done':''}${e.id===selectedId?' selected':''}" data-event="${esc(e.id)}" style="top:${top+2}px;height:${Math.max(23,h-4)}px;left:calc(${layout.lane/layout.count*100}% + 3px);width:calc(${100/layout.count}% - 6px)" aria-label="${esc(e.title)}，${clock(e.start)} 至 ${clock(e.end)}，${e.done?'已完成':'未完成'}"><button type="button" class="resize-handle start" data-resize="start" aria-label="调整开始时间：${esc(e.title)}"></button><button type="button" class="resize-handle end" data-resize="end" aria-label="调整结束时间：${esc(e.title)}"></button><span class="event-time">${clock(e.start)}–${clock(e.end)}</span><button class="event-status" data-toggle="${esc(e.id)}" aria-label="${e.done?'取消完成':'标记完成'}：${esc(e.title)}" aria-pressed="${e.done}">${e.done?'✓':'□'}</button><span class="event-title">${esc(e.title)}</span>${h>72?`<span class="event-project">${esc(targetOf(e).name)}</span>`:''}${h>100?`<span class="event-note">${esc(e.notes.split('\n')[0])}</span>`:''}${h>120&&personOf(e)?`<span class="event-project">♧ ${esc(personOf(e).name)}</span>`:''}</div>`}).join('')}</div>`}).join('');
+ const weekly=events.filter(e=>days.includes(e.date)),hours=weekly.reduce((s,e)=>s+(e.end-e.start)/60,0);$('week-summary').textContent=`${weekly.length} 段安排 · ${Number(hours.toFixed(2))} 小时 · ${weekly.filter(e=>e.done).length} 段已完成`;
+ const clipped=weekly.filter(e=>e.start<rangeStart*60||e.end>rangeEnd*60);$('hidden-alert').hidden=!clipped.length;$('hidden-alert').innerHTML=`${clipped.length} 段安排超出当前显示区间，原安排完整保留。<button id="show-all-hours">查看全天</button>`;renderDetail();
+}
+function renderDetail(){const e=selectedEvent();if(!e){$('detail').innerHTML='<div class="empty-note">选择一段安排查看详情，<br>或在空白处拖选时间。</div>';return}const p=targetOf(e),person=personOf(e);$('detail').innerHTML=`<div class="row spread"><span class="eyebrow" style="margin:0">安排详情</span><span class="badge">${kindLabel(e)}</span></div><h2>${esc(e.title)}</h2><div class="detail-date">${dateLabel(e.date)}</div><div class="detail-time">${clock(e.start)} <span class="muted">—</span> ${clock(e.end)}</div><div class="detail-duration">预留 ${duration(e)}</div><div class="rule"></div><label class="check-label"><input type="checkbox" data-toggle="${esc(e.id)}" ${e.done?'checked':''}><span>${e.done?'本次安排已完成':'标记本次安排完成'}</span></label><p class="hint">同步勾选项目 MOC 中的同一条 Markdown 任务。</p><div class="meta-label">关联${p.kind==='area'?'领域':'项目'}</div><div class="meta-value"><a href="#moc" data-moc="${esc(p.id)}">▱ ${esc(p.name)} ↗</a></div>${e.task?`<div class="meta-label">正在执行的任务</div><div class="meta-value">${esc(e.task)}</div>`:''}<div class="meta-label">与谁有关</div><div class="meta-value">${person?`<a href="#person" data-person="${esc(person.id)}">♧ ${esc(person.name)} ↗</a><span class="muted small"> · ${e.relation==='client'?'客户委托':'一起做'}</span>`:'自己做'}</div><div class="meta-label">备注 / 卡片简介</div><div class="note-block">${esc(e.notes||'未填写备注')}</div><div class="detail-actions"><button data-open-note="${esc(e.id)}">▤　打开卡片笔记 ↗</button><button data-edit="${esc(e.id)}">✎　编辑这段安排</button></div><p class="hint">长按区间可移动到另一时段或另一天。<br>拖动上下边缘可调整起止时间。</p>`}
+function toggleDone(id){const e=events.find(e=>e.id===id);if(!e)return;e.done=!e.done;if(route==='calendar')renderCalendar();else renderDocument();showToast(e.done?'本次安排已完成，所有视图已同步。':'已取消本次安排的完成状态。')}
+function jumpToCalendar(id){const e=events.find(e=>e.id===id);if(!e)return;selectedId=id;weekStart=monday(e.date);if(e.start<rangeStart*60)rangeStart=Math.floor(e.start/60);if(e.end>rangeEnd*60)rangeEnd=Math.ceil(e.end/60);navigate('calendar');requestAnimationFrame(()=>{const node=document.querySelector(`[data-event="${CSS.escape(id)}"]`);if(node){$('calendar-scroll').scrollTop=Math.max(0,(e.start-rangeStart*60)/60*HOUR_HEIGHT-35);node.classList.add('jump-highlight')}})}
+/* ============================================================
+ * 直接操作：新建拖选、长按移时、上下边缘缩放共用坐标口径。
+ * 松开才提交；Esc 或 pointercancel 取消本次改动。
+ * ============================================================ */
+const HOLD_MS=350,MIN_EVENT_MINUTES=15;
+function gridMinute(event,column){const y=event.clientY-column.getBoundingClientRect().top;return Math.max(rangeStart*60,Math.min(rangeEnd*60,Math.round(y/HOUR_HEIGHT*4)*15+rangeStart*60))}
+function selectionBounds(){const a=Math.min(drag.anchor,drag.current),b=Math.max(drag.anchor,drag.current);if(a===b)return {start:Math.min(a,rangeEnd*60-15),end:Math.min(a+15,rangeEnd*60)};return {start:a,end:b}}
+function paintSelection(){const r=selectionBounds();drag.node.style.top=`${(r.start-rangeStart*60)/60*HOUR_HEIGHT}px`;drag.node.style.height=`${(r.end-r.start)/60*HOUR_HEIGHT}px`;drag.node.textContent=`${clock(r.start)} – ${clock(r.end)}`}
+function activateGesture(){const g=eventGesture;if(!g)return;g.active=true;g.node.classList.add('dragging');suppressEventClick=Date.now()+1000;$('gesture-feedback').hidden=false;updateGesturePreview()}
+function updateGesturePreview(){
+ const g=eventGesture;if(!g||!g.active)return;
+ const delta=Math.round((g.y-g.originY+$('calendar-scroll').scrollTop-g.scrollTop)/HOUR_HEIGHT*4)*15;
+ const before=g.original,duration=before.end-before.start;
+ let start=before.start,end=before.end,date=before.date;
+ if(g.type==='move'){
+  start=Math.max(0,Math.min(1440-duration,before.start+delta));end=start+duration;
+  const column=[...$('days').children].find(col=>{const r=col.getBoundingClientRect();return g.x>=r.left&&g.x<r.right});
+  if(column)date=column.dataset.date;
+ }else if(g.type==='start')start=Math.max(0,Math.min(before.end-MIN_EVENT_MINUTES,before.start+delta));
+ else end=Math.min(1440,Math.max(before.start+MIN_EVENT_MINUTES,before.end+delta));
+ g.preview={date,start,end};
+ const source=g.column.getBoundingClientRect(),destination=document.querySelector(`[data-date="${date}"]`).getBoundingClientRect();
+ g.node.style.transform=`translateX(${destination.left-source.left}px)`;
+ g.node.style.top=`${(Math.max(start,rangeStart*60)-rangeStart*60)/60*HOUR_HEIGHT+2}px`;
+ g.node.style.height=`${Math.max(23,(Math.min(end,rangeEnd*60)-Math.max(start,rangeStart*60))/60*HOUR_HEIGHT-4)}px`;
+ g.node.querySelector('.event-time').textContent=`${clock(start)}–${clock(end)}`;
+ const action=g.type==='move'?'移动安排':g.type==='start'?'调整开始':'调整结束';
+ const message=`${action} · ${date} ${clock(start)}–${clock(end)} · 松开应用，Esc 取消`;
+ if($('gesture-feedback').textContent!==message)$('gesture-feedback').textContent=message;
+}
+function stopGesture(commit){
+ const g=eventGesture;if(!g)return;clearTimeout(g.timer);eventGesture=null;$('gesture-feedback').hidden=true;
+ if(!g.active){renderCalendar();return}
+ suppressEventClick=Date.now()+400;
+ const changed=g.preview.date!==g.original.date||g.preview.start!==g.original.start||g.preview.end!==g.original.end;
+ if(commit&&changed){const e=events.find(item=>item.id===g.id);Object.assign(e,g.preview);selectedId=e.id;renderCalendar();showToast(`${g.type==='move'?'已移动安排':'已调整时长'}，卡片属性与 MOC 任务行同步。`)}
+ else renderCalendar();
+}
+$('days').addEventListener('pointerdown',event=>{
+ if(event.button!==0||event.target.closest('[data-toggle]'))return;
+ const item=event.target.closest('[data-event]');
+ if(item){
+  event.preventDefault();const e=events.find(itemData=>itemData.id===item.dataset.event);selectedId=e.id;renderDetail();
+  const type=event.target.closest('[data-resize]')?.dataset.resize||'move';
+  eventGesture={id:e.id,node:item,column:item.parentElement,type,original:{date:e.date,start:e.start,end:e.end},preview:{date:e.date,start:e.start,end:e.end},originY:event.clientY,x:event.clientX,y:event.clientY,scrollTop:$('calendar-scroll').scrollTop,active:false,pointer:event.pointerId};
+  $('days').setPointerCapture(event.pointerId);
+  if(type==='move')eventGesture.timer=setTimeout(activateGesture,HOLD_MS);else activateGesture();
+  return;
+ }
+ if(event.pointerType==='touch')return;
+ const column=event.target.closest('.day-column');if(!column)return;event.preventDefault();
+ const minute=gridMinute(event,column),node=document.createElement('div');node.className='selection';column.appendChild(node);
+ drag={column,node,anchor:minute,current:minute,pointer:event.pointerId};$('days').setPointerCapture(event.pointerId);paintSelection();
+});
+$('days').addEventListener('pointermove',event=>{
+ if(eventGesture){eventGesture.x=event.clientX;eventGesture.y=event.clientY;if(eventGesture.active){const r=$('calendar-scroll').getBoundingClientRect();if(event.clientY<r.top+25)$('calendar-scroll').scrollTop-=8;else if(event.clientY>r.bottom-25)$('calendar-scroll').scrollTop+=8;updateGesturePreview()}return}
+ if(drag){drag.current=gridMinute(event,drag.column);paintSelection()}
+});
+$('days').addEventListener('pointerup',event=>{
+ if(eventGesture){eventGesture.x=event.clientX;eventGesture.y=event.clientY;updateGesturePreview();stopGesture(true);return}
+ if(!drag)return;drag.current=gridMinute(event,drag.column);const r=selectionBounds(),date=drag.column.dataset.date;drag.node.remove();drag=null;openEvent({date,start:r.start,end:r.end});
+});
+$('days').addEventListener('pointercancel',()=>{stopGesture(false);if(drag){drag.node.remove();drag=null}});
+$('days').addEventListener('contextmenu',event=>{if(event.target.closest('[data-event]'))event.preventDefault()});
+$('days').addEventListener('keydown',event=>{
+ const handle=event.target.closest('[data-resize]');if(!handle||!['ArrowUp','ArrowDown'].includes(event.key))return;
+ event.preventDefault();event.stopPropagation();const e=events.find(item=>item.id===handle.closest('[data-event]').dataset.event),delta=event.key==='ArrowDown'?15:-15;
+ if(handle.dataset.resize==='start')e.start=Math.max(0,Math.min(e.end-MIN_EVENT_MINUTES,e.start+delta));else e.end=Math.min(1440,Math.max(e.start+MIN_EVENT_MINUTES,e.end+delta));
+ const id=e.id,type=handle.dataset.resize;renderCalendar();document.querySelector(`[data-event="${CSS.escape(id)}"] [data-resize="${type}"]`).focus();showToast('时间已调整，MOC 任务行同步。');
+});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&eventGesture){event.preventDefault();stopGesture(false)}});
+/* ============================================================
+ * 创建与编辑：一次提交同时改变日历、卡片、MOC 和人物投影。
+ * ============================================================ */
+function updateMode(){document.querySelectorAll('[data-kind]').forEach(b=>b.classList.toggle('active',b.dataset.kind===formKind));$('existing-target').hidden=formKind==='new';$('new-target').hidden=formKind!=='new';$('task-field').hidden=formKind!=='task';$('new-project-name').required=formKind==='new';$('target-label').textContent=formKind==='area'?'从所有领域中查找':'选择进行中的项目';$('target-search').placeholder=formKind==='area'?'查找领域…':'查找进行中的项目…';const candidates=projects.filter(p=>p.kind===(formKind==='area'?'area':'project'));if(!candidates.some(p=>p.id===formTarget))formTarget=candidates[0]?.id||'';renderTargetList();updateTasks();updateSaveResult()}
+function renderTargetList(){const q=$('target-search').value.trim().toLowerCase(),list=projects.filter(p=>p.kind===(formKind==='area'?'area':'project')&&p.name.toLowerCase().includes(q));$('target-list').innerHTML=list.map(p=>`<button type="button" class="target-option${p.id===formTarget?' selected':''}" data-target="${esc(p.id)}"><span>${esc(p.name)}</span><span class="small">${p.id===formTarget?'✓':p.kind==='area'?'领域':'进行中'}</span></button>`).join('')||'<div class="hint" style="padding:9px;margin:0">没有匹配结果。可切换「新建项目」。</div>'}
+function updateTasks(){const current=$('task-select').value,p=projects.find(p=>p.id===formTarget);$('task-select').innerHTML='<option value="">仅推进项目，不关联具体任务</option>'+(p?.tasks||[]).map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');if((p?.tasks||[]).includes(current))$('task-select').value=current}
+function updateSaveResult(){const p=projects.find(p=>p.id===formTarget),name=formKind==='new'?$('new-project-name').value.trim()||'新项目':p?.name||'所选项目';$('save-result').innerHTML=`<strong>${editingId?'更新这张卡片':'保存后生成'}</strong> → ${esc(name)} / ${esc($('event-title').value.trim()||'安排名称')}.md<br>备注成为简介 · 属性可跳回当天大日历 · ${formKind==='area'?'领域':'项目'} MOC 写入「日期 时间段：卡片名称」任务行${$('event-relation').value!=='self'?' · 人物档案显示本次安排':''}`}
+function updateConflict(){const date=$('event-date').value,start=minutes($('event-start').value),end=minutes($('event-end').value),items=events.filter(e=>e.id!==editingId&&e.date===date&&e.start<end&&e.end>start);$('conflict-warning').hidden=!items.length;$('conflict-warning').textContent=`此时间与「${items.map(e=>e.title).join('、')}」重叠。你仍可保存，日历会并排显示。`}
+function openEvent(preset={}){editingId=preset.id||null;formKind=preset.kind||'task';formTarget=preset.target||'p1';$('event-form').reset();$('event-dialog-title').textContent=editingId?'编辑这段安排':'安排这段时间';$('save-event').textContent=editingId?'保存修改':'保存安排';$('event-date').value=preset.date||TODAY;$('event-start').value=clock(preset.start??600);$('event-end').value=clock(preset.end??660);$('event-start').step='60';$('event-title').value=preset.title||'';$('event-notes').value=preset.notes||'';$('event-relation').value=preset.relation||'self';$('event-person').innerHTML='<option value="">选择人物…</option>'+people.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.type)} · ${esc(p.description)}</option>`).join('');$('event-person').value=preset.person||'';$('event-person').disabled=$('event-relation').value==='self';$('event-error').hidden=true;$('target-search').value='';updateMode();if(preset.task)$('task-select').value=preset.task;if(editingId&&formKind==='new'){formKind='task';updateMode()}updateConflict();$('event-dialog').showModal();$('event-title').focus()}
+function closeEvent(){$('event-dialog').close()}
+$('event-form').addEventListener('submit',event=>{event.preventDefault();const title=$('event-title').value.trim(),date=$('event-date').value,start=minutes($('event-start').value),end=minutes($('event-end').value),notes=$('event-notes').value,relation=$('event-relation').value,person=relation==='self'?'':$('event-person').value;let error='';if(!title)error='请填写安排名称。';else if(/[\\/:*?"<>|]/.test(title))error='安排名称将用作文件名，请移除斜杠、冒号等特殊字符。';else if(!date||!Number.isFinite(start)||!Number.isFinite(end)||end<=start||end>1440)error='结束时间必须晚于开始时间；此方案一次安排限在同一天内。';else if(relation!=='self'&&!person)error='请选择关联人物，或改为「自己做」。';let target=formTarget,newProject;
+ if(!error&&formKind==='new'){const name=$('new-project-name').value.trim();if(!name||/[\\/:*?"<>|]/.test(name))error='请填写可用的新项目名称。';else if(projects.some(p=>p.name===name))error='已有同名项目或领域。请换个名称，或选择已有项目。';else{target='p'+crypto.randomUUID();newProject={id:target,name,description:$('new-project-description').value.trim()||notes,kind:'project',tasks:[]}}}
+ if(!error&&events.some(e=>e.id!==editingId&&e.target===target&&e.title===title))error='此项目或领域已有同名卡片。请给这次安排换一个名称。';if(error){$('event-error').textContent=error;$('event-error').hidden=false;return}
+ const old=events.find(e=>e.id===editingId),entry={id:editingId||'s'+crypto.randomUUID(),date,start,end,title,kind:old?.kind==='new'?'new':formKind,target,task:formKind==='task'?$('task-select').value:'',notes,relation,person,done:old?.done||false};if(newProject)projects.push(newProject);entry.card=old?{...old.card,description:notes,up:[mocLink(targetOf(entry))]}:initialCard(entry,events.length,new Date());if(old)events[events.indexOf(old)]=entry;else events.push(entry);selectedId=entry.id;viewTarget=target;if(person)viewPerson=person;closeEvent();renderSidebar();jumpToCalendar(entry.id);showToast(editingId?'安排已更新，仍是同一张卡片。':'安排已保存，卡片与关联视图已生成。',entry.id)
+});
+$('target-search').addEventListener('input',renderTargetList);$('event-title').addEventListener('input',updateSaveResult);$('new-project-name').addEventListener('input',updateSaveResult);$('task-select').addEventListener('change',()=>{if($('task-select').value&&!$('event-title').value)$('event-title').value=$('task-select').value;updateSaveResult()});$('event-relation').addEventListener('change',()=>{$('event-person').disabled=$('event-relation').value==='self';updateSaveResult()});['event-date','event-start','event-end'].forEach(id=>$(id).addEventListener('input',updateConflict));
+/* ============================================================
+ * 原模板十字段完整保留；MOC 存原生任务；人物用 Dataview 检索。
+ * ============================================================ */
+const ORIGINAL_CARD_FIELDS=['aliases','description','created','updated','tags','UID','rating','author','source','up'];
+const FENCE=String.fromCharCode(96).repeat(3);
+const mocPath=p=>`${pathOf(p)}/MOC-${p.name}`;
+const mocLink=p=>`[[${mocPath(p)}|${p.name}]]`;
+const personPath=p=>`02-areas/${p.type==='客户'?'客户':'人脉'}/${p.name}`;
+const personLink=p=>`[[${personPath(p)}|${p.name}]]`;
+const taskBlock=e=>`schedule-${e.id}`;
+const taskLink=e=>`[[${mocPath(targetOf(e))}#^${taskBlock(e)}|预设任务]]`;
+function localStamp(d){return `${iso(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`}
+function initialCard(e,index,at=null){const stamp=at?localStamp(at):'2026-10-05 08:00:00';return {aliases:null,description:e.notes,created:stamp,updated:null,tags:null,UID:at?Number(stamp.replace(/[^0-9]/g,'')):20261005080000+index+1,rating:null,author:null,source:null,up:[mocLink(targetOf(e))]}}
+function scheduleTimestamp(e,end=false){const value=end?e.end:e.start;return `${value===1440?addDays(e.date,1):e.date}T${value===1440?'00:00':clock(value)}:00`}
+function calendarFields(e){const fields={schedule_id:e.id,schedule_start:scheduleTimestamp(e),schedule_end:scheduleTimestamp(e,true),calendar:calendarUri(e),schedule_task:taskLink(e)};if(personOf(e))fields[e.relation]=[personLink(personOf(e))];return fields}
+function yamlEntry(key,value){if(value===null||value===undefined||value==='')return `${key}:`;if(Array.isArray(value))return `${key}:\n`+value.map(item=>`  - ${JSON.stringify(item)}`).join('\n');return `${key}: ${typeof value==='number'?value:JSON.stringify(value)}`}
+function cardYaml(e){return ['---',...ORIGINAL_CARD_FIELDS.map(key=>yamlEntry(key,e.card[key])),...Object.entries(calendarFields(e)).map(([key,value])=>yamlEntry(key,value)),'---'].join('\n')}
+function taskMarkdown(e){const person=personOf(e);return `- [${e.done?'x':' '}] ${e.date} ${clock(e.start)}–${clock(e.end)}：[[${cardPath(e).slice(0,-3)}|${e.title}]]${person?' · '+personLink(person):''} ^${taskBlock(e)}`}
+function sortedEvents(list){return [...list].sort((a,b)=>a.date.localeCompare(b.date)||a.start-b.start)}
+function mocMarkdown(target){return '## 时间安排\n\n'+sortedEvents(events.filter(e=>e.target===target.id)).map(taskMarkdown).join('\n')}
+function sourcePreview(text){return `<pre class="source-preview"><code>${esc(text)}</code></pre>`}
+function viewSwitch(first='阅读预览',second='Markdown 源码'){return `<div class="view-switch" role="group" aria-label="文档展示方式"><button data-document-mode="read" class="${documentMode==='read'?'active':''}">${first}</button><button data-document-mode="source" class="${documentMode==='source'?'active':''}">${second}</button></div>`}
+function markdownTasks(list){if(!list.length)return '<p class="doc-empty">没有匹配的预设任务。</p>';return `<ul class="markdown-tasks">${sortedEvents(list).map(e=>{const person=personOf(e);return `<li class="${e.done?'task-complete':''}"><input type="checkbox" data-toggle="${esc(e.id)}" aria-label="完成 ${esc(e.title)}" ${e.done?'checked':''}><span class="markdown-task-text"><span class="task-date">${e.date} ${clock(e.start)}–${clock(e.end)}</span>：<a class="task-card" href="#note" data-open-note="${esc(e.id)}">${esc(e.title)}</a>${person?`<span class="task-person"> · <a href="#person" data-person="${esc(person.id)}">${esc(person.name)}</a></span>`:''}</span></li>`}).join('')}</ul>`}
+function propertyHtml(key,value,e){let html=value===null||value===''?'<span class="empty-value">—</span>':esc(Array.isArray(value)?value.join('、'):value);if(key==='up')html=`<a href="#moc" data-moc="${esc(e.target)}">${esc(targetOf(e).name)}</a>`;if(key==='calendar')html=`<a href="${esc(calendarUri(e))}" data-jump="${esc(e.id)}">▦ ${e.date} · ${clock(e.start)} · 回到当天大日历 ↗</a>`;if(key==='schedule_task')html=`<a href="#moc" data-moc="${esc(e.target)}">${esc(targetOf(e).name)} · MOC 原始任务行 ↗</a>`;if((key==='with'||key==='client')&&personOf(e))html=`<a href="#person" data-person="${esc(e.person)}">${esc(personOf(e).name)}</a>`;return `<div class="property"><span class="property-name">${esc(key)}</span><div style="white-space:pre-wrap">${html}</div></div>`}
+function dataviewQuery(){return `TASK FROM "01-projects" OR "02-areas"\nWHERE meta(section).subpath = "时间安排"\n  AND contains(outlinks, this.file.link)${personIncludeDone?'':'\n  AND !completed'}\nSORT text ASC`}
+function renderDocument(){
+ const e=selectedEvent(),p=targetOf(e);let html='';
+ if(route==='note'){
+  html=`<div class="doc-breadcrumb">${esc(cardPath(e))}</div><div class="eyebrow">标准卡片模板 + 大日历属性</div><h1>${esc(e.title)}</h1>${viewSwitch('属性预览','YAML 源码')}`;
+  if(documentMode==='source')html+=sourcePreview(cardYaml(e));
+  else html+=`<div class="template-section"><span>原始卡片笔记属性</span><span class="badge">10 个字段 · 顺序保留</span></div><div class="properties original">${ORIGINAL_CARD_FIELDS.map(key=>propertyHtml(key,e.card[key],e)).join('')}</div><div class="template-section"><span>追加的大日历属性</span><span class="badge">不占用 source / UID</span></div><div class="properties calendar-properties">${Object.entries(calendarFields(e)).map(([key,value])=>propertyHtml(key,value,e)).join('')}</div>`;
+  html+=`<p class="doc-lead">备注原文写入 description。正文继续保留给本次安排的工作记录。</p><h2>工作记录</h2><p class="muted">在这里写下过程、结论和下一步。</p><div class="doc-callout">完成状态来自 MOC 中的原始任务行。日历、人脉 Dataview 与 MOC 勾选的是同一项。</div><button data-edit="${esc(e.id)}">编辑时间与备注</button>`;
+ }
+ if(route==='moc'){
+  const target=projects.find(x=>x.id===viewTarget)||p;
+  html=`<div class="doc-breadcrumb">${esc(mocPath(target))}.md</div><div class="eyebrow">${target.kind==='area'?'领域':'项目'} MOC · Markdown 原生任务</div><h1>${esc(target.name)}</h1><p class="doc-lead">${esc(target.description)}</p><label class="field select-doc"><span class="muted small">预览项目 / 领域</span><select id="document-target">${projects.map(x=>`<option value="${esc(x.id)}" ${x.id===target.id?'selected':''}>${esc(x.name)}${x.kind==='area'?' · 领域':''}</option>`).join('')}</select></label>${viewSwitch()}`;
+  html+=documentMode==='source'?sourcePreview(mocMarkdown(target)):`<h2>时间安排</h2>${markdownTasks(events.filter(x=>x.target===target.id))}`;
+  html+=`<div class="doc-callout">MOC 正文保存原生 Markdown 任务列表。每行带完整日期、起止时间与卡片双链。移动或缩放后，更新对应行的时间。</div><h2>${target.kind==='area'?'领域':'项目'}文件</h2><p class="muted small">原有数据库与其他正文照常保留。</p>`;
+ }
+ if(route==='person'){
+  const person=people.find(x=>x.id===viewPerson)||people[0];
+  const list=events.filter(x=>x.person===person.id&&(personIncludeDone||!x.done)),targets=[...new Set(list.map(x=>x.target))];
+  html=`<div class="doc-breadcrumb">${esc(personPath(person))}.md</div><div class="eyebrow">人物档案 · Dataview 预设任务检索</div><h1>${esc(person.name)}</h1><p class="doc-lead">${esc(person.description)}</p><label class="field select-doc"><span class="muted small">切换人物</span><select id="document-person">${people.map(x=>`<option value="${esc(x.id)}" ${x.id===person.id?'selected':''}>${esc(x.name)} · ${x.type}</option>`).join('')}</select></label><div class="row spread wrap"><h2 style="margin:5px 0">预设任务 <span class="badge">Dataview · TASK</span></h2><button id="toggle-query" class="small">${personQueryVisible?'隐藏查询':'查看 Dataview 查询'}</button></div><div class="row spread wrap" style="margin:18px 0"><span class="muted small">检索 MOC「时间安排」中链接到此人的任务 · ${list.length} 条</span><label class="check-label small"><input type="checkbox" id="person-include-done" ${personIncludeDone?'checked':''}>包含已完成</label></div>`;
+  if(personQueryVisible)html+=sourcePreview(FENCE+'dataview\n'+dataviewQuery()+'\n'+FENCE);
+  html+=`<div class="dataview-result">${list.length?targets.map(id=>{const target=projects.find(x=>x.id===id);return `<div class="dataview-source"><a href="#moc" data-moc="${esc(id)}">${esc(target.name)}</a></div>${markdownTasks(list.filter(x=>x.target===id))}`}).join(''):'<p class="doc-empty">暂无未完成的预设任务。可切换「包含已完成」。</p>'}</div><p class="dataview-note">此处模拟 Dataview 渲染结果；查询源码可直接检查。勾选时写回源 MOC 的任务行，日历同步显示。</p><div class="doc-callout">预设任务表示计划。它不会被算作已经发生的联系，也不会提前刷新人物的最近联系时间。</div><h2>相关项目</h2><p class="muted small">沿用人物档案现有项目视图。</p>`;
+ }
+ if(route==='spec')html=specMarkup();
+ $('document-page').innerHTML=html+'<a class="back-link" href="#calendar" data-route="calendar">← 返回大日历</a>';
+ $('document-target')?.addEventListener('change',event=>{viewTarget=event.target.value;renderDocument()});
+ $('document-person')?.addEventListener('change',event=>{viewPerson=event.target.value;renderDocument()});
+ $('person-include-done')?.addEventListener('change',event=>{personIncludeDone=event.target.checked;renderDocument()});
+ $('toggle-query')?.addEventListener('click',()=>{personQueryVisible=!personQueryVisible;renderDocument()});
+}
+function specMarkup(){
+ const sample=events.find(e=>e.id==='s5');
+ return `
+ <div class="eyebrow">DESIGN PROPOSAL / 02</div><h1>能移动的时间，能追溯的任务</h1>
+ <p class="doc-lead">新增长按移时与边缘缩放；卡片完整继承原模板；MOC 保存 Markdown 任务；人物档案用 Dataview 检索预设任务。</p>
+ <div class="change-note">当前仅更新 HTML 设计原型。浏览器内模拟拖拽与联动，不写入真实笔记库，未改动插件。</div>
+ <h2>一、直接在日历上调整时间</h2>
+ <ul class="spec-list">
+ <li><strong>长按区间后拖动：</strong>保持原时长，可以上下移时，也可以移动到本周另一日。短按只打开详情。</li>
+ <li><strong>拖动上边缘：</strong>改变开始时间；下边缘改变结束时间。按 15 分钟吸附，最短 15 分钟。</li>
+ <li><strong>松开应用：</strong>更新原卡片属性与 MOC 任务行。保留同一张卡片和任务身份，不生成重复笔记。</li>
+ <li><strong>取消与精确输入：</strong>Esc 取消拖动；弹窗可输入分钟；边缘聚焦后用方向键微调。</li></ul>
+ <h2>二、原始卡片模板完整保留</h2>
+ <p class="muted small">顺序核对自 CARD_FIELDS 与 cardTemplateFile。十字段保留，日历属性追加在 up 之后。</p>
+ ${sourcePreview(cardYaml(sample))}
+ <ul class="spec-list">
+ <li>备注进入 description。up 保持列表双链；created 与 UID 沿用原始创建规则。</li>
+ <li>aliases、updated、tags、rating、author、source 保留原值或原模板空值。修改安排不重置它们。</li>
+ <li>追加 schedule_id、schedule_start、schedule_end、calendar、schedule_task。人物用 with 或 client 双链。</li>
+ <li>完成状态以 MOC 任务勾选为准，不再另存 schedule_done 布尔值。</li></ul>
+ <h2>三、MOC 保存 Markdown 任务列表</h2>
+ ${sourcePreview('## 时间安排\n\n'+taskMarkdown(sample))}
+ <p>每行写完整日期、时间段，冒号后是卡片名称。人物双链让 Dataview 识别本次参与人。</p>
+ <div class="doc-callout">行尾块标识定位同一条任务，阅读视图不显示它。改时间只改对应日期与区间；勾选只改这一行的 [ ] / [x]。</div>
+ <h2>四、人物档案增加 Dataview</h2>
+ ${sourcePreview(FENCE+'dataview\n'+dataviewQuery()+'\n'+FENCE)}
+ <ul class="spec-list">
+ <li>TASK 检索 MOC「时间安排」中的任务，要求任务本身链接到当前人物。</li>
+ <li>默认只显示未完成任务。包含已完成时移除 !completed。按日期开头的文本排序。</li>
+ <li>查询复选框回写源 MOC 的同一行，日历读取这条任务的完成状态。</li>
+ <li>使用标准 Dataview 查询。目录范围随用户项目 / 领域设置生成。</li></ul>
+ <p class="small muted">依据 <a href="https://blacksmithgu.github.io/obsidian-dataview/annotation/metadata-tasks/" target="_blank" rel="noreferrer">Dataview 任务字段文档</a>与 <a href="https://blacksmithgu.github.io/obsidian-dataview/queries/query-types/#task" target="_blank" rel="noreferrer">TASK 查询文档</a>。本页模拟渲染，未加载真实 Dataview。</p>
+ <h2>建议的同步边界</h2>
+ <ul class="spec-list">
+ <li>时间属性存于卡片。MOC 日期与区间是正文中的可读映射；移动或缩放时两处一起更新。</li>
+ <li>完成状态只存于 MOC 任务行。日历、MOC 与人物查询回写同一个任务。</li>
+ <li>用户直接改 MOC 时间时，实施版先核对日期、区间与任务身份，再同步卡片。解析失败时保留原文并提示。</li>
+ <li>领域卡片落在对应领域，领域 MOC 使用相同的 Markdown 任务格式。</li>
+ <li>勾选预设任务不结束整个项目，也不自动勾掉另外关联的原任务。</li>
+ <li>拖拽保留正文、备注、人物与原始卡片字段，只更新日历时间属性和对应任务行。</li></ul>
+ <h2>这一版怎样检查</h2>
+ <ol class="spec-list">
+ <li>长按周四「大日历交互设计」拖到周五，核对时长保持不变。</li>
+ <li>拖动上下边缘，再打开卡片检查时间属性。</li>
+ <li>在项目 MOC 切换「阅读预览 / Markdown 源码」。</li>
+ <li>在人物档案展开查询并勾选任务；回 MOC 和日历核对。</li>
+ <li>在卡片 YAML 中核对十个原始字段与追加属性。</li></ol>`;
+}
+events.forEach((e,index)=>{e.card=initialCard(e,index)});
+/* ============================================================
+ * 显示区间与入口事件。
+ * ============================================================ */
+function openRange(){$('range-start').value=rangeStart;$('range-end').value=rangeEnd;$('range-error').hidden=true;$('range-dialog').showModal()}
+for(let h=0;h<24;h++)$('range-start').add(new Option(clock(h*60),h));for(let h=1;h<=24;h++)$('range-end').add(new Option(clock(h*60),h));
+$('range-form').addEventListener('submit',event=>{event.preventDefault();const start=Number($('range-start').value),end=Number($('range-end').value);if(end<=start){$('range-error').hidden=false;$('range-error').textContent='结束显示时间必须晚于开始显示时间。';return}rangeStart=start;rangeEnd=end;$('range-dialog').close();renderCalendar();$('calendar-scroll').scrollTop=0;showToast(`显示区间已设为 ${clock(start*60)}–${clock(end*60)}。`)});
+document.addEventListener('click',event=>{const button=event.target.closest('button,a');if(!button)return;const data=button.dataset;if(data.documentMode){documentMode=data.documentMode;renderDocument()}else if(data.route){event.preventDefault();documentMode='read';navigate(data.route)}else if(data.toggle){event.preventDefault();event.stopPropagation();toggleDone(data.toggle)}else if(data.openNote){event.preventDefault();selectedId=data.openNote;navigate('note')}else if(data.moc){event.preventDefault();viewTarget=data.moc;navigate('moc')}else if(data.person){event.preventDefault();viewPerson=data.person;navigate('person')}else if(data.jump){event.preventDefault();jumpToCalendar(data.jump)}else if(data.edit){openEvent(events.find(e=>e.id===data.edit))}else if(data.kind){formKind=data.kind;$('target-search').value='';updateMode()}else if(data.target){formTarget=data.target;renderTargetList();updateTasks();updateSaveResult()}else if(data.range){const r=data.range.split(',');$('range-start').value=r[0];$('range-end').value=r[1]}else if(data.day){const e=events.filter(e=>e.date===data.day).sort((a,b)=>a.start-b.start)[0];if(e)jumpToCalendar(e.id);else openEvent({date:data.day,start:rangeStart*60,end:Math.min(rangeStart*60+60,rangeEnd*60)})}});
+document.addEventListener('change',event=>{if(event.target.matches('input[type=checkbox][data-toggle]'))toggleDone(event.target.dataset.toggle)});
+$('days').addEventListener('click',event=>{if(event.target.closest('[data-toggle]')||Date.now()<suppressEventClick)return;const node=event.target.closest('[data-event]');if(node){selectedId=node.dataset.event;renderCalendar()}});
+$('days').addEventListener('keydown',event=>{if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-event]')){event.preventDefault();selectedId=event.target.dataset.event;renderCalendar()}});
+$('add-event').addEventListener('click',()=>openEvent());$('range-button').addEventListener('click',openRange);$('close-event').addEventListener('click',closeEvent);$('cancel-event').addEventListener('click',closeEvent);$('close-range').addEventListener('click',()=>$('range-dialog').close());$('previous-week').addEventListener('click',()=>{weekStart=addDays(weekStart,-7);renderCalendar()});$('next-week').addEventListener('click',()=>{weekStart=addDays(weekStart,7);renderCalendar()});$('this-week').addEventListener('click',()=>{weekStart=monday(TODAY);renderCalendar();$('calendar-scroll').scrollTop=0});$('hidden-alert').addEventListener('click',event=>{if(event.target.id==='show-all-hours'){rangeStart=0;rangeEnd=24;renderCalendar()}});
+renderSidebar();renderCalendar();syncNav();
+</script>
+</body>
+</html>

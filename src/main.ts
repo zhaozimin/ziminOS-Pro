@@ -2,8 +2,8 @@
  * [INPUT]: 依赖 obsidian 的 Plugin 基类；依赖 core 的 SelfWriteGuard、CommandRegistry、
  *          INIT_VAULT_COMMAND、DEFAULT_SETTINGS/normalizeSettings、
  *          ZiminosSettings/ZiminosContext/VaultSeed 契约、PERIODS 与 registerViewCodeBlock；
- *          依赖 modules/setup 的 initializeVault/applySeed，以及项目管理（含容器改名与存量 Bases 迁移）、读书笔记、灵感收集、
- *          日历、复盘、人脉与客户等业务模块各自的 seed、register 函数与视图数组，
+ *          依赖 modules/setup 的 initializeVault/applySeed，以及项目管理（含新建资源、容器改名与存量 Bases 迁移）、读书笔记、灵感收集、
+ *          日历、大日历、复盘、人脉与客户等业务模块各自的 seed、register 函数与视图数组，
  *          其中读书笔记那三条命令还要 modules/projects/createContainer 的 createContainer/BOOK_KIND
  *          来填「建一个书籍容器」那个洞，设置页那颗「扫码连接」还要 modules/books/sourceWeread
  *          的 loginWeread/disconnectWeread/disposeWereadSession 来管理登录窗口、断开与卸载清理；
@@ -15,7 +15,8 @@
  *          modules/projects/location 向它注入“当前笔记应归入哪个容器/日记”的唯一判定、
  *          modules/editing 的 registerPasteLink/registerCursorMemory、
  *          modules/export 的 registerExportCommand、
- *          modules/explorer 的 registerFolderCount/registerRecentFiles/registerFilePath、
+ *          modules/explorer 的 registerFolderCount/registerRecentFiles/registerFilePath/registerMocFirst，
+ *          MOC 置顶由 modules/projects/moc 的 resolveMocPath 注入新旧命名规则、
  *          modules/legacy 的 registerLegacyDock
  *          与 modules/about 的 aboutViews/renderAboutPanel
  * [OUTPUT]: 默认导出 ZiminosPlugin，即 Obsidian 加载 main.js 时实例化的插件入口类
@@ -42,7 +43,7 @@
 import { Plugin, TFile } from 'obsidian';
 import { titleOfDay } from './core/time';
 import { registerViewCodeBlock } from './core/codeblock';
-import { CommandRegistry, INIT_VAULT_COMMAND } from './core/commands';
+import { CommandRegistry, INIT_VAULT_COMMAND, PLANNER_COMMANDS } from './core/commands';
 import { readEdition } from './core/edition';
 import { PERIODS } from './core/constants';
 import { SelfWriteGuard } from './core/guard';
@@ -71,12 +72,15 @@ import { registerCursorMemory } from './modules/editing/cursorMemory';
 import { registerPasteLink } from './modules/editing/pasteLink';
 import { registerEagleBridge } from './modules/eagle';
 import { registerFolderCount } from './modules/explorer/badge';
+import { registerMocFirst } from './modules/explorer/mocFirst';
 import { registerFilePath } from './modules/explorer/filePath';
 import { registerRecentFiles } from './modules/explorer/recentFiles';
 import { registerExportCommand } from './modules/export/exporter';
 import { registerFormatter } from './modules/format/formatter';
 import { registerLegacyDock } from './modules/legacy/vaultDock';
 import { registerCalendar } from './modules/calendar/view';
+import { registerWeekPlanner } from './modules/planner/runtime';
+import { inheritTrialPlannerSettings } from './modules/planner/migration';
 import { circleViews } from './modules/contacts/circleViews';
 import { clientViews } from './modules/contacts/clientViews';
 import { clientSeed, registerClientCommands } from './modules/contacts/client';
@@ -92,9 +96,12 @@ import { BOOK_KIND, createContainer } from './modules/projects/createContainer';
 import { createExportHook } from './modules/eternal/export';
 import { eternalRawViews, humanEternalViews } from './modules/eternal/views';
 import { registerCreateProjectCommand } from './modules/projects/createProject';
+import { registerCreateResourceCommand } from './modules/projects/createResource';
 import { attachmentRouteOfNotePath } from './modules/projects/location';
+import { resolveMocPath } from './modules/projects/moc';
 import { registerBaseMigrationCommand } from './modules/projects/migrateBases';
 import { projectsSeed } from './modules/projects/seed';
+import { cardTemplateFile, mocContent } from './modules/projects/templates';
 import { registerTransitionCommands } from './modules/projects/transitions';
 import { registerUpdatedMaintainer } from './modules/projects/updatedMaintainer';
 import { registerContainerRenameCommand } from './modules/projects/renameContainer';
@@ -184,6 +191,7 @@ export default class ZiminosPlugin extends Plugin {
         // 建项目要问「这是谁委托的」，候选人住在人脉模块——用同一套注入把两者接上
         registerCreateProjectCommand(ctx, (title) => pickPerson(ctx, title));
         registerCreateAreaCommand(ctx);
+        registerCreateResourceCommand(ctx);
         let renameEagleContainer: EagleContainerRenamer | undefined;
         registerContainerRenameCommand(ctx, (oldName, newName) =>
             renameEagleContainer ? renameEagleContainer(oldName, newName) : Promise.resolve('skipped'),
@@ -244,6 +252,11 @@ export default class ZiminosPlugin extends Plugin {
             },
         );
 
+        const planner = registerWeekPlanner(ctx, {
+            card: cardTemplateFile,
+            project: options => mocContent({ ...options, type: 'project', status: 'active' }),
+        });
+
         // 打开命令只管「打开」，主题模块只管「有没有主题」；
         // 这里把两者接上，于是首次打开会问，已有主题再打开就安静
         registerPeriodicCommands(ctx, (file) => promptThemeIfMissing(ctx, file));
@@ -298,6 +311,7 @@ export default class ZiminosPlugin extends Plugin {
         // 这也让装配顺序重新等于设置页那八张标签的先后：编辑（含排版）→ 文件 → 边栏
         // 导出只在用户按命令时渲染一次，不持有视图状态，因此无需交回同步函数。
         registerExportCommand(ctx);
+        registerMocFirst(ctx, folder => resolveMocPath(ctx.app, folder.path, folder.name));
         const syncFolderCount = registerFolderCount(ctx);
         const syncRecentFiles = registerRecentFiles(ctx);
         const syncFilePath = registerFilePath(ctx);
@@ -360,6 +374,8 @@ export default class ZiminosPlugin extends Plugin {
                 syncAppearanceSwitch,
                 syncRibbon,
                 syncExplorer,
+                showPlanner: () => planner.showPlanner(),
+                showPlannerRange: () => planner.showRange(),
                 ...eagleActions,
                 // 设置页的「关于作者」区与导航页尾的视图块画同一张名片，实现只有 about 一份
                 renderAbout: renderAboutPanel,
@@ -373,6 +389,13 @@ export default class ZiminosPlugin extends Plugin {
      * 因此损坏或手改过的 data.json 不会把错误形态带进模块。首次安装仍得到纯默认值。
      */
     private async loadSettings(): Promise<void> {
-        this.settings = normalizeSettings(await this.loadData());
+        const saved: unknown = await this.loadData();
+        const inherited = await inheritTrialPlannerSettings(this.app, saved);
+        this.settings = normalizeSettings(saved);
+        if (!saved || typeof saved !== 'object' || !Object.prototype.hasOwnProperty.call(saved, 'planner')) {
+            if (inherited) this.settings.planner = inherited;
+            this.settings.ribbonCommands = [...new Set([...this.settings.ribbonCommands, PLANNER_COMMANDS.open.id])];
+            await this.saveData(this.settings);
+        }
     }
 }

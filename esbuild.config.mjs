@@ -1,8 +1,8 @@
 /**
  * [INPUT]: 依赖 esbuild 的打包能力、builtin-modules 的 Node 内建模块清单、
- *          node:fs/promises 的版本镜像同步、process 的命令行参数与 esbuild metafile 的输入身份
+ *          node:fs/promises 的版本与样式同步、process 的命令行参数与 esbuild metafile 的输入身份
  * [OUTPUT]: 以 package.json 版本为唯一事实源，同步 Obsidian/Eagle 两份 manifest 后把 src/main.ts
- *           打包为 CommonJS 单文件，直接落位到 vault 内的插件目录
+ *           打包为 CommonJS 单文件，并合并样式事实源，直接落位到 vault 内的插件目录
  * [POS]: 构建链的唯一出口。产物路径即 vault 模板区的插件目录，构建完成即就位，
  *        因此不需要任何同步脚本；dev 模式常驻 watch，production 模式一次性构建并退出。
  *        产物与「在哪个目录构建」无关：依赖路径一律归一成 node_modules/ 开头，
@@ -78,6 +78,16 @@ async function syncManifestVersion() {
 }
 
 await syncManifestVersion();
+
+// 样式只在 src 中维护，交付时保持 Obsidian 要求的单文件。
+const styleSources = ['src/styles/views.css', 'src/styles/interface.css', 'src/styles/media.css', 'src/modules/planner/styles.css'];
+const styleBanner = `/*
+ * [INPUT]: 依赖 src/styles/ 与 src/modules/planner/styles.css。
+ * [OUTPUT]: 提供 ziminOS 唯一交付样式表。
+ * [POS]: 构建产物；修改对应事实源后运行 npm run build。
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */\n`;
+await writeFile('vault/.obsidian/plugins/ziminos/styles.css', styleBanner + (await Promise.all(styleSources.map(path => readFile(path, 'utf8')))).join('\n'), 'utf8');
 
 /*
  * 依赖路径归一。

@@ -3,7 +3,7 @@
  *          FOLDER_COUNT_DEFAULTS/FOLDER_COUNT_TARGETS 与 FolderCountTarget 类型、
  *          core/types 的 ZiminosContext；依赖 ./count 的 tallyFolders/pickCount 与 FolderTally
  * [OUTPUT]: 对外提供 registerFolderCount，返回一个「按当前设置重画一次」的同步函数
- * [POS]: 文件浏览器计数模块的呈现层，也是本模块与 Obsidian 宿主之间唯一的接触面。
+ * [POS]: 文件浏览器计数模块的呈现层，也是文件夹计数与 Obsidian 文件树 DOM 的接触面。
  *        它做三件事：找到文件浏览器那块 DOM、把 count.ts 数出来的那个数挂到每个文件夹右侧、
  *        在文件增删改名或树展开收起时重挂一次。
  *        全库唯一依赖「文件浏览器渲染出来长什么样」的地方就是本文件顶部那四个常量，

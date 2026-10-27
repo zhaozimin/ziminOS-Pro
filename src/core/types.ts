@@ -5,7 +5,7 @@
  *          依赖 ./commands 的 DEFAULT_RIBBON_COMMANDS/normalizeRibbonCommands 与 CommandRegistry 类型，
  *          依赖 ./markdownStyle 的 DEFAULT_FORMAT_RULES/normalizeFormatRules，
  *          依赖 ./exportStyle 的 DEFAULT_EXPORT_STYLE/normalizeExportStyle，依赖 ./guard 的 SelfWriteGuard 类型，
- *          依赖 ./edition 的 EditionInfo 类型
+ *          依赖 ./edition 的 EditionInfo 类型、./plannerSettings 的大日历偏好验形
  * [OUTPUT]: 对外提供 ZiminosSettings 设置契约、DEFAULT_SETTINGS 默认值、normalizeSettings 持久化边界验形、
  *           ZiminosContext 运行时上下文、开荒贡献契约 VaultSeed/VaultSeedNote，
  *           以及归档移交契约 ArchivedContainer/ArchivedHook（projects 交出、eternal 接住）
@@ -46,6 +46,8 @@ import type { EditionInfo } from './edition';
 import { DEFAULT_EXPORT_STYLE, normalizeExportStyle } from './exportStyle';
 import type { ExportStyle } from './exportStyle';
 import type { SelfWriteGuard } from './guard';
+import { DEFAULT_PLANNER_PREFERENCES, normalizePlannerPreferences } from './plannerSettings';
+import type { PlannerPreferences } from './plannerSettings';
 
 /** 插件设置，持久化在 vault/.obsidian/plugins/ziminos/data.json */
 export interface ZiminosSettings {
@@ -61,6 +63,8 @@ export interface ZiminosSettings {
     archiveFolder: string;
     /** created / updated 字段的时间格式（moment 语法） */
     dateTimeFormat: string;
+    /** 大日历显示范围、比例与原卡片模板路径；目录复用全局字段 */
+    planner: PlannerPreferences;
     /** 灵感笔记所在目录，相对于笔记库根目录 */
     inspirationFolder: string;
     /** 灵感笔记文件名；运行时会自动补齐 .md */
@@ -233,6 +237,7 @@ export const DEFAULT_SETTINGS: ZiminosSettings = {
     areaFolder: FOLDERS.areas,
     archiveFolder: FOLDERS.archives,
     dateTimeFormat: DEFAULT_DATETIME_FORMAT,
+    planner: DEFAULT_PLANNER_PREFERENCES,
     inspirationFolder: INSPIRATION_DEFAULTS.folder,
     inspirationFileName: INSPIRATION_DEFAULTS.fileName,
     inspirationHeading: INSPIRATION_DEFAULTS.heading,
@@ -309,6 +314,7 @@ export function normalizeSettings(input: unknown): ZiminosSettings {
         areaFolder: stringValue('areaFolder'),
         archiveFolder: stringValue('archiveFolder'),
         dateTimeFormat: stringValue('dateTimeFormat'),
+        planner: normalizePlannerPreferences(stored.planner),
         inspirationFolder: stringValue('inspirationFolder'),
         inspirationFileName: stringValue('inspirationFileName'),
         inspirationHeading: stringValue('inspirationHeading'),

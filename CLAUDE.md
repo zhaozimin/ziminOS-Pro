@@ -28,6 +28,14 @@ TypeScript 7.0 + esbuild 0.28 + Obsidian API 1.13（manifest minAppVersion 1.13.
 
 **v0.39.2 修复 Eagle 大视频预览与属性跳转。** 旧渲染器经 Obsidian `requestUrl` 把附件整段搬进主进程 ArrayBuffer；2.4 GB 视频会在 IPC 解码时耗尽连续内存。现在图片与视频先领取单附件临时票据，再由浏览器媒体元素按 HTTP Range 直连本机伴侣；配对令牌仍只在 `SecretStorage`，临时票据随 DOM、配对与伴侣寿命撤销。视频嵌入生成原生播放器，普通单击播放，修饰键单击或右键打开 Eagle。YAML 属性值可跨深层控件命中唯一 URI。实现与验收见规格 §76。
 
+**v0.40.0 正式合并大日历。** src/modules/planner 沿用独立试用的视图身份、calendar 协议、卡片属性与 MOC 任务。首次升级继承显示范围和比例；正式偏好存在后不再读取试用值。目录复用全局设置，命令进入统一命令台，入口可在边栏页隐藏，设置住复盘页。样式事实源拆到 src/styles，构建仍交付一份 styles.css。详见规格 §78。
+
+**容器改名同时更新存量 MOC Base 查询。** 当前模板以 `this.file` 读取宿主身份，存量查询仍会写死名称和路径。改名只更新宿主 MOC 内 filters/formulas 的精确引用，保留视图配置与普通文字。查询共用既有预览、并发校验和失败回滚，详见规格 §79。
+
+**新增「新建资源」入口。** 与新建项目、领域同组，紧随新建领域。复用容器创建流程，固定写入 `03-resources/名称/MOC-名称.md`；`type` 为 `resource`，不问归属，不写生命周期状态。详见规格 §80。
+
+**容器 MOC 固定在文件树首行。** 项目、领域、资源与归档容器沿用统一的新旧命名。main 将命名解析注入 explorer/mocFirst；原生排序后只前移 MOC，不改文件和排序偏好。宿主排序适配单独备案于第 13 处例外，详见规格 §81。
+
 <directory>
 docs/ - 设计规格与第三方组件锁定记录；代码、交付物与规格必须同步
 eagle-companion/ - 第一方 Eagle 后台伴侣；以官方 item/folder/app API 执行 `项目/容器名` 与 `日记` 归档、容器改名、附件导入、单附件票据与 Range 预览、当前文件夹打开与附件选中，只监听本机回环，与 src/modules/eagle 共同组成一个产品的两个运行时
@@ -104,11 +112,11 @@ vault-pro/ - 第二版特有的笔记库成品 (3子目录: 兼收并蓄 进料�
 
 **一篇复盘笔记不再因为诞生方式不同而变成两种东西（v0.23.1）。** 套模板原本焊在 `openPeriodNote` 那条链上，而那条链只有五条打开命令与日历点击够得着；学员在 `05-diary/01-daily` 里右键新建一篇改成今天日期，或者点开导航行里那条还没有目标的双链，拿到的都是一张白纸。这不是模板坏了，是**判据挂错了地方**——同一篇日记，谁把它建出来决定了它长什么样。projects 模块早就答过同一道题（`registerCardAutoInit` 把出生登记从命令里摘出来挂到 vault 事件上），复盘缺的正是那一半。现在它挂回「一篇复盘笔记诞生」这件事本身：**入口不决定结果，名字与位置才决定身份。** 同时修掉的是一个没人点名的漏洞——导航行里的上级双链只写标题不写路径，Obsidian 按「新笔记位置＝当前目录」落盘，于是点一下「本周」，周记被建进了日记目录；`periodFolderOf` 既然是「哪一级住哪儿」的唯一事实源，认领时就按它归位。不改模板去写全路径，是因为存量笔记的裸标题救不回来、认领这一半无论如何都得做，再加一套就是同一个结果的第二套机制。五道闸守住边界：非 Markdown 不碰、插件自己刚写过不碰、**有内容不碰**（零字节才算刚诞生）、复盘目录之外不碰、名字严格解析不出周期不碰。它不提问也不新增开关——建一篇笔记不是一次复盘，点开明天的日记更不是。
 
-vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，Obsidian/Eagle 两份 manifest 都由构建链同步，main.js 是刻意入库的构建产物（四十枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 服务二十四个笔记内视图、中国日历与最近文件两个 ItemView、Eagle 附件呈现、外观开关浮层、文件夹计数、状态栏当前路径、导出预览弹窗（连同会被拍进 PNG/PDF 的页眉页脚）、八张设置页与作者名片（手工维护，不经 esbuild），ziminOS-Eagle-Bridge.eagleplugin 是同版伴侣的可安装 ZIP 产物；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
+vault/.obsidian/plugins/ziminos/ - 插件安装位；package.json 的 version 才是版本唯一事实源，Obsidian/Eagle 两份 manifest 都由构建链同步，main.js 是刻意入库的构建产物（四十枚命令图标、三枚设置页专用图标与六个品牌 logo 的 SVG 也在里面），styles.css 由 src/styles 与 planner 样式生成，服务二十四个笔记内视图、中国日历与最近文件两个 ItemView、Eagle 附件呈现、外观开关浮层、文件夹计数、状态栏当前路径、导出预览弹窗（连同会被拍进 PNG/PDF 的页眉页脚）、八张设置页与作者名片（构建合并），ziminOS-Eagle-Bridge.eagleplugin 是同版伴侣的可安装 ZIP 产物；三份状态文件（holiday-cache / recent-files / cursor-positions）由插件在运行时自建，升级一律不碰
 vault/.obsidian/snippets/ - 十三个 CSS 片段，外观包的可拆装部分；十一个默认启用，全部由右下角外观开关逐个开关。第十三个「突出废弃内容」把 Markdown 删除线收成系统语义：编辑/阅读两态同时弱化文字、铺淡警示色背景、画 2px 警示色线；段内双链另加风险底色、边界与下划线，已断双链升为红色双边界，不插标签打断原句。appearance.json 的 enabledCssSnippets 是它们开着还是关着的唯一事实源。片段吃的是宿主的 DOM，宿主改结构它就会无声失效：v0.35.3 的「图片居中显示」即是——Obsidian 1.14 把实时预览的图片从 `.cm-content` 的块级 widget 改成住在 `.cm-line` 里的行内原子区间（方向键可进出、空格看大图），行内盒子吃不到 auto 外边距，于是居中的对象从图片本身变成收着它的那一行
 installer/ - 全新安装的可执行事实源（v0.33.0 · 不改插件，规格 §57）：Python 标准库写的核心 ziminos_install.py 负责判工作区、铺库、装字体、逐字节自检与失败回滚，install.ps1（纯 ASCII，Windows PowerShell 5.1）与 install.sh（macOS/Linux）只负责准备 Python 与从发行版下载包；两份契约的全新安装先交给它，智能体只剩「运行一条命令、读 .ziminos-install-result.json、告诉用户」。升级暂时仍走契约里的升级分支
 tests/ - 两版共用的审计与回归入口；直接编译 src 事实源，并以专项测试钉住微信单一路由、客户答疑双闸、导出画布/PDF 尺寸、手动安装包与说明同构、版本同构、后台写入的时机与值（writes.mjs：按真机顺序喂事件，验写没写、写到哪一篇、写了什么值）、侧栏叶子的唯一性（calendar-leaf.mjs：按宿主重载语义喂事件，验多没多出一个标签页）与既有业务行为
-src/ - 插件源码 (2子目录: core 无业务基础设施与命令/视图/版次闸门；modules 含 setup、projects、books、inspiration、calendar、review、contacts、appearance、format、editing、eagle、export 当前笔记导出、explorer、legacy、ribbon、eternal、about)
+src/ - 插件源码 (3子目录: styles 样式事实源； core 无业务基础设施与命令/视图/版次闸门；modules 含 setup、projects、books、inspiration、calendar、planner 大日历、review、contacts、appearance、format、editing、eagle、export 当前笔记导出、explorer、legacy、ribbon、eternal、about)
 </directory>
 
 <commands>
@@ -153,7 +161,7 @@ AGENTS.md - 智能体任务路由，**桌面智能体自动读到的第一份指
 README.md - GitHub / Gitee 共用的公开首页与安装入口。默认可复制的两段安装、升级口令指向 GitHub：第一版 `zhaozimin/ziminOS`、第二版 `zhaozimin/ziminOS-Pro`；折叠区保留 Gitee `ziminzhao/zimin-os-v1` / `ziminzhao/ziminos-pro` 国内镜像。首页不复制施工逻辑，只把两个版次导向各自契约；免 Git 安装包目前仍明确指向 Gitee `releases/latest`，不把源码镜像写成已经存在的双 Release。v0.21.0 的手机口令解决远程窗口读不到系统根认路文件的问题，并以 `notectl.py status` 自证连接；v0.22.0 的 Eagle 入口则只把学员导向单文件 HTML 手册，不在首页再造一份安装契约
 package.json - 依赖与六条脚本：dev 常驻 watch，test 跑插件审计回归，build 先 tsc 严格检查、esbuild 打 Obsidian 主包再调用 package-eagle.sh，package:eagle 可单独重建伴侣包，demo 由 docs/export-demo/ 的四份源重新生成那份交互演示页，check 串行构建与测试
 package-eagle.sh - Eagle 伴侣唯一打包出口；核对两端版本后以固定白名单、权限与时间戳组装可复现的 `.eagleplugin` ZIP，产物原子落进 vault 的 ziminOS 插件目录，不安装、不读取 Eagle 用户数据
-publish-v1.sh - Pro 事实源到第一版 GitHub / Gitee 两个公开镜像之间**唯一**的同步通道，方向只有 pro → v1 一条。它把两版共享的 src / vault / eagle-companion / fonts / skill / tests 与构建配置单向发布；README / AGENTS / CLAUDE / docs 不在同步范围，两个版次各自说给各自的读者听。方向不能反：pro 的 src/ 是 v1 的**严格超集**，从 v1 往回同步会删掉第二版。它存在的理由是一次事故——两个仓库曾各自能改同一份 src/，分叉出 editing/explorer/legacy 与 eternal/edition 两批改动，最后靠一次 23 个文件的三方合并才收回来。发布前先对 GitHub / Gitee 两个目标做非强制 dry-run，任一边分叉或无权限就不写；随后推的是同一提交。其余四道闸不变：工作区必须干净、`npm run check` 必须过、构建后 main.js 不许再变、同步后的目标仓库必须自己跑得过回归。防泄漏是硬断言：目标里出现 skill-pro / vault-pro / edition.json 一律中止
+publish-v1.sh - Pro 事实源到第一版 GitHub / Gitee 两个公开镜像之间**唯一**的同步通道，方向只有 pro → v1 一条。它把两版共享的 src / vault / eagle-companion / fonts / skill / tests 与构建配置单向发布；README / AGENTS / CLAUDE / docs 不在同步范围，两个版次各自说给各自的读者听。方向不能反：pro 的 src/ 是 v1 的**严格超集**，从 v1 往回同步会删掉第二版。它存在的理由是一次事故——两个仓库曾各自能改同一份 src/，分叉出 editing/explorer/legacy 与 eternal/edition 两批改动，最后靠一次 23 个文件的三方合并才收回来。发布前先对 GitHub / Gitee 两个目标做非强制 dry-run，任一边分叉或无权限就不写；随后推的是同一提交。大日历已进入共享 src 与正式发布。其余四道闸不变：工作区必须干净、`npm run check` 必须过、构建后 main.js 不许再变、同步后的目标仓库必须自己跑得过回归。防泄漏是硬断言：目标里出现 skill-pro / vault-pro / edition.json 一律中止
 make-pro-package.sh - 第二版的打包出口，也是第二版 Gitee 发行版上那个附件的来源：没有 Git 的机器上，智能体就靠它取施工源。工作区干净、`npm run check` 通过且构建后无改动才动手，交付物只从 HEAD 取（`git archive`）并断言私有状态不出门——它现在是谁都能下载的公开物；包名 `ziminOS-pro-v{版本}.zip` 只用 ASCII、不带日期，时间戳取提交时刻，同一个提交重打得到同一个 zip。第二版源码的两个同步镜像是 Gitee `ziminzhao/ziminos-pro` 与 GitHub `zhaozimin/ziminOS-Pro`；分发包暂时只挂 Gitee，clone 则按用户入口选择任一同版镜像。GitHub `zhaozimin/ziminOS` 属于第一版，不能因主机相同就混用
 upload-release.py - 发行版的唯一上传出口：经 Gitee OpenAPI 建（或复用）发行版、上传附件，再从学员走的公开下载通道逐个核对字节数。令牌取自 macOS 钥匙串（service `ziminos-gitee-token`，用户在终端存一次），不进命令行参数、不进输出、不进文件；附件名必须是 ASCII。它存在是因为发版最后一步原本要人手拖文件，而发行版上没有包，没有 Git 的机器就只剩克隆那条慢路
 make-v1-package.sh - 第一版面向「人」的分发出口：不用智能体、不用装 Git，下载解压照《安装说明》自己装。三条判据：清单不另写（「装完该有什么」「升级换什么」从 skill/SKILL.md 解析，解析不出 main.js 或升级分支开始替换 data.json 就中止）；包是第一版仓库 main 的另一种形态（`git archive HEAD` 取料，被 .gitignore 挡住的开发库状态带不出门，精确放行受 Git 跟踪的默认配色与左栏种子；再经公开 HTTPS Git 只取第一版仓库 main 的提交与树（`--filter=blob:none`，不走限流的开放接口）比对 vault/ 与 fonts/ 的树哈希，对不上就先 publish-v1.sh；不重复构建，因为 esbuild 会把 node_modules 的相对位置写进注释）；布局给人看（ziminOS 笔记库 / 只放字体的「字体」/ 只放程序、按 Obsidian 三枚「打开…文件夹」按钮分组的「升级文件」/ 许可证 / 安装说明.html）。产物 `ziminOS-v{版本}-setup.zip` 挂第一版仓库的 Gitee 发行版：匿名可下，单附件 ≤100MB、全仓附件 ≤1GB，旧版附件要定期删；它同时是 skill/SKILL.md 取法一的施工源，包名只用 ASCII 就是为了让智能体用 Python 拿得下来
@@ -168,14 +176,14 @@ esbuild.config.mjs - Obsidian 构建出口；打包前把 package.json 版本同
 .gitignore - 忽略依赖、系统杂项、历史发布压缩包、常见凭据、开发库私有状态与发布/Eagle 打包暂存；main.js、`.eagleplugin` 与公共 vault 资产不忽略，学员浅克隆即可用
 .gitattributes - 锁定 Dataview、Minimal、Style Settings、fonts/ 字体及 Eagle 图标/安装包等二进制发布资产的原始字节，防止 Git 换行/格式化破坏 SHA-256
 docs/第三方组件.md - 运行依赖、独立交付资产与外部设计参照的版本/上游/许可真源；v0.23.0 增加 dom-to-image-more、jsPDF 及两款导出参考插件边界
-docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26–§42 记录既有演进，§43–§63 追加微信快捷收集、导出、客户、安装发布、写入安全与重名纠错，§64 定义 GitHub / Gitee 双镜像及「源码双镜像、发行包仍在 Gitee」的边界，§65–§72 记图片居中、整架导入、日历叠页、安全审计、功能区、建档简介、礼尚往来与客户相关项目，§73–§74 记日记内的持久修改历史与项目/领域全量改名，§75 补齐两条链的审计安全边界及依赖补丁。与 V1 规格并存，交集处以 V2 为准
+docs/设计规格书-V2.md - v0.4.0 起的唯一设计事实源；§26–§42 记录既有演进，§43–§63 追加微信快捷收集、导出、客户、安装发布、写入安全与重名纠错，§64 定义 GitHub / Gitee 双镜像及「源码双镜像、发行包仍在 Gitee」的边界，§65–§72 记图片居中、整架导入、日历叠页、安全审计、功能区、建档简介、礼尚往来与客户相关项目，§73–§74 记日记内的持久修改历史与项目/领域全量改名，§75 补齐两条链的审计安全边界及依赖补丁。§77 留存大日历独立试用，§78 定义正式合并与设置继承。与 V1 规格并存，交集处以 V2 为准
 docs/导出预览交互演示.html - 导出弹窗的单文件交互演示，**生成物**（`npm run demo`，真源在 docs/export-demo/）。它存在的理由是一条判据：**示意图会撒谎，生成物不会**——手抄的仿真页在代码改过之后仍然一动不动地讲旧故事，而且没人会在那一刻发现。因此页内的导出样式逐字取自插件 styles.css、几何与装饰由 esbuild 从 src/ 直接打包、控件清单运行时读 EXPORT_SLIDERS，改了插件却忘了重新生成会被回归当场拦下。可离线打开、可转发，读者能直接拿自己的 logo 试
 docs/第一版手动安装指南.html - 由 make-v1-package.sh 原样复制成包里的「安装说明.html」；全新安装五步、验收、手动升级与常见问题，覆盖 Windows/macOS，零脚本（带网络标记解压出来的文件脚本不一定跑得起来）。它翻译契约不另造做法：升级只换契约点名的程序文件，唯一铁律是「只拖文件，不拖文件夹」——macOS 访达把文件夹拖到同名文件夹上选「替换」会连同 data.json 整个换掉
 docs/Eagle附件桥接安装与使用指南.html - 面向学员的单文件安装说明；把三库升级口令、Eagle 伴侣安装/配对、无本地副本验收、四类内容容器/日记分流、图片/视频呈现、移动附件语义与端口/换库/图床冲突排障收成一份 macOS/Windows 可转发手册
 </delivery>
 
 <deviations>
-十二处偏离，在此备案，不是疏漏：
+十三处偏离，在此备案，不是疏漏：
 1. tsconfig 的 moduleResolution 取 bundler 而非规格书 §2 写的 node —— 实际装到的 TypeScript 7.0.2 已移除 node10 解析模式（TS5108），规格的 node 与规格的「依赖用最新稳定版」自相冲突；bundler 是 esbuild 打包场景下的等价现代取值，其余编译选项全按规格保留。
 2. src/core/time.ts 存在全仓库唯一一处类型断言 —— obsidian 把 moment 作为命名空间导出，其类型不携带调用签名，断言只还原类型不改变运行时行为。
 4. 读书笔记模块联网 —— 见开头那段：用户明令放宽第二条红线。落地上只有两个出口：`modules/books/douban.ts`（豆瓣搜索页与详情页，走 Obsidian **公开** API requestUrl）与 `modules/books/sourceWeread.ts`（微信读书：书架走 Cookie 的 /api/user/notebook，划线与想法走取数网关 i.weread.qq.com/api/agent/gateway，令牌在 /api/skills/apikeyGet 用登录态换，全部经 requestUrl）。两处都不碰账号密码；豆瓣不需要登录，微读的登录态由用户扫码后从会话里取。删掉 modules/books 即让零网络重新成立。
@@ -188,4 +196,5 @@ docs/Eagle附件桥接安装与使用指南.html - 面向学员的单文件安�
 10. src/modules/appearance/reveal.ts 运行时 `require('electron')` 取 shell —— 「只用官方公开 API」这条红线的第四处缺口，也是**第二次直接向 Electron 伸手**（第一次是第 5 条那个扫码窗口）。为的是让外观开关从「只能开关」变成「能改」：面板列得出十三个片段，此前却没有任何办法把其中一个交到用户的编辑器手上，而从「看见它」到「改到它」中间隔着退出面板、找到笔记库文件夹、打开系统默认隐藏的 `.obsidian`、进 `snippets`、在十三个中文文件名里认出刚才那一个。`obsidian.d.ts`（1.13.1，8482 行）全文搜不到 shell、openPath 与 showInFolder，App 的十个公开成员也没有一个沾边，不碰就不成为功能——判据与第 3、8 两条同源。**借的只有最后一步**：绝对路径走公开的 `FileSystemAdapter.getBasePath()`（标着 @public 的导出类），因此「文件在哪」全程由 Obsidian 回答，Electron 哪天没了，坏掉的是两个按钮而不是路径、清单与开关。三条纪律逐条对齐第 5 条：只借「打开」这一个动作（清单、状态、路径全部走公开 API）、先验 Platform.isDesktopApp 再 require 且全程 try/catch 返回可空（手机端与换掉运行时都只让按钮消失或说一句人话，绝不让插件加载失败）、声明与调用同处一个文件，删掉 modules/appearance 即让本条消失。「画不画」与「点了会怎样」刻意分开答：前者只认公开且稳定的事实（桌面端 + 本机文件系统），手机上静默缺席；后者在点下去的那一刻才验形，桌面上按钮照画，探不到时给一句为什么而不是让按钮凭空少掉。
 11. src/modules/eagle 的桌面附件边界按需使用 Electron `webUtils.getPathForFile`、`shell.showItemInFolder`、`shell.openExternal` 与 Node 临时文件 API —— 前两者分别用于取得拖入 File 原路径与显示随包交付的 `.eagleplugin`；`openExternal` 只在用户点击链接且回环伴侣根本不在线时，把经严格验形的 `eagle://item/{itemId}` 交给操作系统唤起 Eagle，随后仅在这次点击里做最长约 10 秒的有界回环重连，不存安装路径、不启动后台轮询，也不处理 HTTP 发来的业务报错。截图等无原路径的内存 File 才短暂落入系统临时目录，导入后立即清理。v0.39.2 的媒体描述仍走公开 `requestUrl`，附件字节则由浏览器媒体元素以单附件临时票据按 Range 直连回环伴侣；票据不含配对令牌，绑定客户、item 与实体库路径，随 DOM/配对/伴侣寿命撤销。Eagle 端只调用官方 `eagle.item.addFromPath/getById/open/select`、`eagle.folder.getAll/create/createSubfolder/open`（容器改名只设置官方 folder 对象的 `name` 并 `save`）与 `eagle.app.show`；删掉 modules/eagle 与 eagle-companion 即让本条及本机回环/唤起出口一起消失。
 12. src/modules/export 在桌面端动态探测 Electron 的两个系统对话框与对应的 Node 文件调用：`exporter.ts` 用 `dialog.showSaveDialog` + `fs.writeFile` 让用户把导出文件存到库外任意位置；`logoImport.ts`（v0.25.0）用 `dialog.showOpenDialog` + `fs.readFile` 让用户直接从电脑上挑品牌标志，读进来之后立刻经公开的 `vault.createBinary` 落进 `90-system/导出标志`——**本机绝对路径一个字都不进设置**，存的仍是库内路径。两处同一姿态：探不到即降级（保存回落 Vault API，选图回落「从库里选」），移动端加载阶段不解析 Node/Electron，声明与调用同处一个文件。Obsidian 公开 API 没有系统级“另存为”；探不到时回落到官方 Vault API 保存到当前笔记旁边，取消则零写入，移动端加载阶段不解析 Node/Electron。Markdown 渲染、资源读取与库内回落全部走公开 API；删掉 modules/export 即让本条与 dom-to-image-more/jsPDF 两个运行依赖一起消失。
+13. src/modules/explorer/mocFirst.ts 适配非公开 getSortedFolderItems 与 requestSort。公开 API 没有排序扩展点，DOM/CSS 排序会脱离虚拟滚动的完整节点顺序，因此仅包裹每个文件浏览器的原生排序结果。运行时验形，命名由 main 注入。关闭视图与卸载时恢复原属性描述；其他插件后续包裹时只停用自身逻辑。接口缺席时保持宿主原样。不读取 fileItems，不改磁盘、排序偏好或工作区文件。
 </deviations>
